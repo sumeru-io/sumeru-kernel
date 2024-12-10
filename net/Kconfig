@@ -499,6 +499,15 @@ config PAGE_POOL_STATS
 
 	  If unsure, say N.
 
+config PAGE_POOL_FIXED_SIZE
+	default n
+	bool "Fixed size page pool"
+	depends on PAGE_POOL
+	help
+	  Enable fixed size page pool that allocates a fixed number of pages.
+
+	  If unsure, say N.
+
 config FAILOVER
 	tristate "Generic failover module"
 	help

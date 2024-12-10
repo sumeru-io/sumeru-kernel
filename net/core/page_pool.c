@@ -187,6 +187,10 @@ static void page_pool_struct_check(void)
 				    PAGE_POOL_FRAG_GROUP_ALIGN);
 }
 
+#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+static noinline void __page_pool_fill_ptr_ring(struct page_pool *pool);
+#endif
+
 static int page_pool_init(struct page_pool *pool,
 			  const struct page_pool_params *params,
 			  int cpuid)
@@ -296,6 +300,12 @@ static int page_pool_init(struct page_pool *pool,
 
 		static_branch_inc(&page_pool_mem_providers);
 	}
+#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+	if (pool->slow.flags & PP_FLAG_FIXED_SIZE) {
+		pool->fixed_size = 1;
+		__page_pool_fill_ptr_ring(pool);
+	}
+#endif
 
 	return 0;
 
@@ -571,6 +581,25 @@ static noinline netmem_ref __page_pool_alloc_pages_slow(struct page_pool *pool,
 	return netmem;
 }
 
+#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+static noinline void __page_pool_fill_ptr_ring(struct page_pool *pool)
+{
+	netmem_ref netmem;
+	int i, ret;
+
+	for (i = 0; i < pool->ring.size; i++) {
+		netmem = page_to_netmem(__page_pool_alloc_page_order(pool, GFP_ATOMIC));
+		if (unlikely(!netmem))
+			break;
+		ret = ptr_ring_produce_any(&pool->ring, (__force void *)netmem);
+		if (unlikely(ret)) {
+			page_pool_return_page(pool, netmem);
+			break;
+		}
+	}
+}
+#endif
+
 /* For using page_pool replace: alloc_pages() API calls, but provide
  * synchronization guarantee for allocation side.
  */
@@ -586,7 +615,8 @@ netmem_ref page_pool_alloc_netmem(struct page_pool *pool, gfp_t gfp)
 	/* Slow-path: cache empty, do real allocation */
 	if (static_branch_unlikely(&page_pool_mem_providers) && pool->mp_priv)
 		netmem = mp_dmabuf_devmem_alloc_netmems(pool, gfp);
-	else
+	/* We do not allocate new page for a fixed size page pool */
+	else if(!page_pool_fixed_size(pool))
 		netmem = __page_pool_alloc_pages_slow(pool, gfp);
 	return netmem;
 }
@@ -670,7 +700,7 @@ static __always_inline void __page_pool_release_page_dma(struct page_pool *pool,
  * a regular page (that will eventually be returned to the normal
  * page-allocator via put_page).
  */
-void page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
+static void __page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 {
 	int count;
 	bool put;
@@ -695,6 +725,20 @@ void page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 	 * knowing page is not part of page-cache (thus avoiding a
 	 * __page_cache_release() call).
 	 */
+}
+
+void page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
+{
+	if (page_pool_fixed_size(pool)) {
+		printk(KERN_ERR "page_pool: fixed_size pool %p can't return pages\n", pool);
+	}
+
+	__page_pool_return_page(pool, netmem);
+}
+
+static void page_pool_release_return_page(struct page_pool *pool, netmem_ref netmem)
+{
+	__page_pool_return_page(pool, netmem);
 }
 
 static bool page_pool_recycle_in_ring(struct page_pool *pool, netmem_ref netmem)
@@ -894,7 +938,7 @@ void page_pool_put_page_bulk(struct page_pool *pool, void **data,
 	/* Hopefully all pages was return into ptr_ring */
 	if (likely(i == bulk_len))
 		return;
-
+	
 	/* ptr_ring cache full, free remaining pages outside producer lock
 	 * since put_page() with refcnt == 1 can be an expensive operation
 	 */
@@ -998,7 +1042,7 @@ static void page_pool_empty_ring(struct page_pool *pool)
 			pr_crit("%s() page_pool refcnt %d violation\n",
 				__func__, netmem_ref_count(netmem));
 
-		page_pool_return_page(pool, netmem);
+		page_pool_release_return_page(pool, netmem);
 	}
 }
 
@@ -1031,7 +1075,7 @@ static void page_pool_empty_alloc_cache_once(struct page_pool *pool)
 	 */
 	while (pool->alloc.count) {
 		netmem = pool->alloc.cache[--pool->alloc.count];
-		page_pool_return_page(pool, netmem);
+		page_pool_release_return_page(pool, netmem);
 	}
 }
 
