@@ -843,6 +843,8 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 	rq->buff.headroom = mlx5e_get_rq_headroom(mdev, params, xsk);
 	pool_size = 1 << params->log_rq_mtu_frames;
 
+	pr_warn("mlx5e: pool size=%u, headroom=%u\n", pool_size, rq->buff.headroom);
+
 	rq->mkey_be = cpu_to_be32(mdev->mlx5e_res.hw_objs.mkey);
 
 	switch (rq->wq_type) {
@@ -925,8 +927,8 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		struct page_pool_params pp_params = { 0 };
 
 		pp_params.order     = 0;
-		pp_params.flags     = PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV;
-		pp_params.pool_size = pool_size;
+		pp_params.flags     = PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV | PP_FLAG_FIXED_SIZE;
+		pp_params.pool_size = pool_size * 4;
 		pp_params.nid       = node;
 		pp_params.dev       = rq->pdev;
 		pp_params.napi      = rq->cq.napi;
