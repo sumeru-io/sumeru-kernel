@@ -155,6 +155,34 @@ EXPORT_SYMBOL(page_pool_ethtool_stats_get);
 #define recycle_stat_add(pool, __stat, val)
 #endif
 
+#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+/* `pages_state_hold_cnt` stores the number of pages the page pool allocates from
+ * the global page allocator, so it accounts both pages in the array cache, the 
+ * `ptr_ring` cache, and currently allocated to the user.
+ */
+static inline void page_pool_alloc_page_accout(struct page_pool *pool,
+						netmem_ref netmem)
+{
+	if (likely(netmem)) {
+		pool->used_pages++;
+		pool->free_pages--;
+	}
+
+}
+
+static inline void page_pool_free_page_accout(struct page_pool *pool,
+						netmem_ref netmem)
+{
+	if (likely(netmem)) {
+		pool->used_pages--;
+		pool->free_pages++;
+	}
+}
+#else
+#define page_pool_alloc_page_accout(pool, netmem)
+#define page_pool_free_page_accout(pool, netmem)
+#endif
+
 static bool page_pool_producer_lock(struct page_pool *pool)
 	__acquires(&pool->ring.producer_lock)
 {
@@ -304,6 +332,10 @@ static int page_pool_init(struct page_pool *pool,
 	if (pool->slow.flags & PP_FLAG_FIXED_SIZE) {
 		pool->fixed_size = 1;
 		__page_pool_fill_ptr_ring(pool);
+		pool->free_pages = pool->ring.size;
+		pool->used_pages = 0;
+		pr_warn("page_pool: create fixed size pool with %u pages\n",
+			pool->ring.size);
 	}
 #endif
 
@@ -609,6 +641,7 @@ netmem_ref page_pool_alloc_netmem(struct page_pool *pool, gfp_t gfp)
 
 	/* Fast-path: Get a page from cache */
 	netmem = __page_pool_get_cached(pool);
+	page_pool_alloc_page_accout(pool, netmem);
 	if (netmem)
 		return netmem;
 
@@ -618,6 +651,8 @@ netmem_ref page_pool_alloc_netmem(struct page_pool *pool, gfp_t gfp)
 	/* We do not allocate new page for a fixed size page pool */
 	else if(!page_pool_fixed_size(pool))
 		netmem = __page_pool_alloc_pages_slow(pool, gfp);
+
+	page_pool_alloc_page_accout(pool, netmem);
 	return netmem;
 }
 EXPORT_SYMBOL(page_pool_alloc_netmem);
@@ -867,6 +902,9 @@ void page_pool_put_unrefed_netmem(struct page_pool *pool, netmem_ref netmem,
 
 	netmem =
 		__page_pool_put_page(pool, netmem, dma_sync_size, allow_direct);
+
+	page_pool_free_page_accout(pool, netmem);
+
 	if (netmem && !page_pool_recycle_in_ring(pool, netmem)) {
 		/* Cache full, fallback to free pages */
 		recycle_stat_inc(pool, ring_full);

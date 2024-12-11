@@ -195,6 +195,11 @@ struct page_pool {
 #endif
 	u32 xdp_mem_id;
 
+#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+	u32 free_pages;
+	u32 used_pages;
+#endif
+
 	/*
 	 * Data structure for allocation side
 	 *
