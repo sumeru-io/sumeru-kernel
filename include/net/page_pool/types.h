@@ -148,6 +148,16 @@ struct page_pool_stats {
 };
 #endif
 
+#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#define PAGE_POOL_NAME_MAX_LEN (64)
+struct page_pool_proc {
+	char page_pool_name[PAGE_POOL_NAME_MAX_LEN];
+	struct page_pool *pool;
+    	struct proc_dir_entry *proc_dir;
+    	struct proc_dir_entry *stats_file;
+};
+#endif
+
 /* The whole frag API block must stay within one cacheline. On 32-bit systems,
  * sizeof(long) == sizeof(int), so that the block size is ``3 * sizeof(long)``.
  * On 64-bit systems, the actual size is ``2 * sizeof(long) + sizeof(int)``.
@@ -198,6 +208,7 @@ struct page_pool {
 #ifdef CONFIG_PAGE_POOL_FIXED_SIZE
 	u32 free_pages;
 	u32 used_pages;
+	struct page_pool_proc *proc;
 #endif
 
 	/*

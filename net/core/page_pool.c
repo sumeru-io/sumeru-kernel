@@ -5,6 +5,7 @@
  *	Copyright (C) 2016 Red Hat, Inc.
  */
 
+#include "linux/printk.h"
 #include <linux/error-injection.h>
 #include <linux/types.h>
 #include <linux/kernel.h>
@@ -22,6 +23,10 @@
 #include <linux/poison.h>
 #include <linux/ethtool.h>
 #include <linux/netdevice.h>
+
+#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#include <linux/proc_fs.h>
+#endif
 
 #include <trace/events/page_pool.h>
 
@@ -156,6 +161,8 @@ EXPORT_SYMBOL(page_pool_ethtool_stats_get);
 #endif
 
 #ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+static struct proc_dir_entry *page_pool_root_dir;
+
 /* `pages_state_hold_cnt` stores the number of pages the page pool allocates from
  * the global page allocator, so it accounts both pages in the array cache, the 
  * `ptr_ring` cache, and currently allocated to the user.
@@ -164,6 +171,22 @@ static inline void page_pool_alloc_page_accout(struct page_pool *pool,
 						netmem_ref netmem)
 {
 	if (likely(netmem)) {
+#ifdef CONFIG_PAGE_POOL_FIXED_SIZE_DEBUG
+		if (pool->used_pages >= pool->ring.size) {
+			pr_err("page_pool (%s): used_pages(%u) >= ring.size(%u), free_pages(%u)\n",
+				pool->proc->page_pool_name, pool->used_pages, pool->ring.size, pool->free_pages);
+			BUG();
+		}
+
+		if (pool->free_pages == 0) {
+			pr_err("page_pool (%s): free_pages(%u) == 0, used_pages(%u)\n",
+				pool->proc->page_pool_name, pool->free_pages, pool->used_pages);
+			BUG();
+		}
+
+		pr_info_ratelimited("page_pool (%s): used_pages(%u) free_pages(%u)\n",
+			pool->proc->page_pool_name, pool->used_pages, pool->free_pages);
+#endif
 		pool->used_pages++;
 		pool->free_pages--;
 	}
@@ -174,9 +197,97 @@ static inline void page_pool_free_page_accout(struct page_pool *pool,
 						netmem_ref netmem)
 {
 	if (likely(netmem)) {
+#ifdef CONFIG_PAGE_POOL_FIXED_SIZE_DEBUG
+		if (pool->used_pages == 0) {
+			pr_err("page_pool (%s): used_pages(%u) == 0, free_pages: %u\n",
+				pool->proc->page_pool_name, pool->used_pages, pool->free_pages);
+			BUG();
+		}
+
+		if (pool->free_pages >= pool->ring.size) {
+			pr_err("page_pool (%s): free_pages(%u) >= ring.size(%u), used_pages: %u\n",
+				pool->proc->page_pool_name, pool->free_pages, pool->ring.size, pool->used_pages);
+			BUG();
+		}
+		pr_info_ratelimited("page_pool (%s): used_pages(%u) free_pages(%u)\n",
+			pool->proc->page_pool_name, pool->used_pages, pool->free_pages);
+#endif
 		pool->used_pages--;
 		pool->free_pages++;
 	}
+}
+
+static int pool_stats_show(struct seq_file *m, void *v) {
+	struct page_pool_proc *pool_proc = m->private;
+	struct page_pool *pool = pool_proc->pool;
+
+	seq_printf(m, "Pool Name: %s, ", pool_proc->page_pool_name);
+	seq_printf(m, "Pool Size: %u, ", pool->free_pages + pool->used_pages);
+	seq_printf(m, "Free Pages: %u, ", pool->free_pages);
+	seq_printf(m, "Used Pages: %u\n", pool->used_pages);
+
+	return 0;
+}
+
+static int pool_stats_open(struct inode *inode, struct file *file)
+{
+    return single_open(file, pool_stats_show, pde_data(inode));
+}
+
+static const struct proc_ops pool_stats_ops = {
+    .proc_open = pool_stats_open,
+    .proc_read = seq_read,
+    .proc_lseek = seq_lseek,
+    .proc_release = single_release,
+};
+
+static struct page_pool_proc* create_proc_entry(struct page_pool *pool) {
+	struct page_pool_proc *pool_proc;
+	char page_pool_name[PAGE_POOL_NAME_MAX_LEN];
+
+	if (!pool)
+		return NULL;
+
+	pool_proc = kzalloc(sizeof(*pool_proc), GFP_KERNEL);
+    	if (!pool_proc)
+        	return NULL;
+	
+	snprintf(page_pool_name, PAGE_POOL_NAME_MAX_LEN, "page_pool_%s_%d", dev_name(pool->p.dev), pool->p.napi->napi_id);
+	pool_proc->pool = pool;
+	strncpy(pool_proc->page_pool_name, page_pool_name, PAGE_POOL_NAME_MAX_LEN);
+	pool_proc->proc_dir = proc_mkdir(page_pool_name, page_pool_root_dir);
+
+	if (!pool_proc->proc_dir) {
+		goto err_free;
+	}
+
+	pool_proc->stats_file = proc_create_data("stats", 0444, pool_proc->proc_dir,
+						&pool_stats_ops, pool_proc);
+	if (!pool_proc->stats_file) {
+		goto err_remove_dir;
+	}
+
+	return pool_proc;
+
+err_remove_dir:
+    	proc_remove(pool_proc->proc_dir);
+err_free:
+    	kfree(pool_proc);
+    	return NULL;
+}
+
+static void free_proc_entry(struct page_pool *pool) {
+	struct page_pool_proc* proc = pool->proc;
+	if (!proc)
+		return;
+
+    	if (proc->stats_file)
+        	proc_remove(proc->stats_file);
+    	if (proc->proc_dir)
+        	proc_remove(proc->proc_dir);
+    
+    	kfree(proc);
+	pool->proc = NULL;
 }
 #else
 #define page_pool_alloc_page_accout(pool, netmem)
@@ -336,6 +447,13 @@ static int page_pool_init(struct page_pool *pool,
 		pool->used_pages = 0;
 		pr_warn("page_pool: create fixed size pool with %u pages\n",
 			pool->ring.size);
+
+		pool->proc = create_proc_entry(pool);
+		if (!pool->proc) {
+			pr_err("page_pool: failed to create the proc entry\n");
+			err = -ENOMEM;
+			goto free_ptr_ring;
+		}
 	}
 #endif
 
@@ -766,6 +884,7 @@ void page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 {
 	if (page_pool_fixed_size(pool)) {
 		printk(KERN_ERR "page_pool: fixed_size pool %p can't return pages\n", pool);
+		BUG();
 	}
 
 	__page_pool_return_page(pool, netmem);
@@ -845,8 +964,10 @@ __page_pool_put_page(struct page_pool *pool, netmem_ref netmem,
 
 		page_pool_dma_sync_for_device(pool, netmem, dma_sync_size);
 
-		if (allow_direct && page_pool_recycle_in_cache(netmem, pool))
+		if (allow_direct && page_pool_recycle_in_cache(netmem, pool)) {
+			page_pool_free_page_accout(pool, netmem);
 			return 0;
+		}
 
 		/* Page found as candidate for recycling */
 		return netmem;
@@ -1086,6 +1207,8 @@ static void page_pool_empty_ring(struct page_pool *pool)
 
 static void __page_pool_destroy(struct page_pool *pool)
 {
+	free_proc_entry(pool);
+
 	if (pool->disconnect)
 		pool->disconnect(pool);
 
@@ -1232,3 +1355,18 @@ void page_pool_update_nid(struct page_pool *pool, int new_nid)
 	}
 }
 EXPORT_SYMBOL(page_pool_update_nid);
+
+#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+static int __init page_pool_proc_init(void)
+{
+    /* Create the parent directory /proc/page_pool/ */
+    page_pool_root_dir = proc_mkdir("page_pool", NULL);
+    if (!page_pool_root_dir)
+        return -ENOMEM;
+
+    pr_info("page pool: proc filesystem initialized\n");
+    return 0;
+}
+
+module_init(page_pool_proc_init);
+#endif
