@@ -5,7 +5,6 @@
  *	Copyright (C) 2016 Red Hat, Inc.
  */
 
-#include "linux/printk.h"
 #include <linux/error-injection.h>
 #include <linux/types.h>
 #include <linux/kernel.h>
@@ -183,12 +182,10 @@ static inline void page_pool_alloc_page_accout(struct page_pool *pool,
 				pool->proc->page_pool_name, pool->free_pages, pool->used_pages);
 			BUG();
 		}
-
-		pr_info_ratelimited("page_pool (%s): used_pages(%u) free_pages(%u)\n",
-			pool->proc->page_pool_name, pool->used_pages, pool->free_pages);
 #endif
 		pool->used_pages++;
 		pool->free_pages--;
+		netmem_to_page(netmem)->pp_pressure = (unsigned long) pool->used_pages << 32 | pool->free_pages;
 	}
 
 }
@@ -209,11 +206,10 @@ static inline void page_pool_free_page_accout(struct page_pool *pool,
 				pool->proc->page_pool_name, pool->free_pages, pool->ring.size, pool->used_pages);
 			BUG();
 		}
-		pr_info_ratelimited("page_pool (%s): used_pages(%u) free_pages(%u)\n",
-			pool->proc->page_pool_name, pool->used_pages, pool->free_pages);
 #endif
 		pool->used_pages--;
 		pool->free_pages++;
+		netmem_to_page(netmem)->pp_pressure = (unsigned long) pool->used_pages << 32 | pool->free_pages;
 	}
 }
 
@@ -892,6 +888,12 @@ void page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 
 static void page_pool_release_return_page(struct page_pool *pool, netmem_ref netmem)
 {
+#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+	// clean pp_pressure before returning the page to pool
+	if (page_pool_fixed_size(pool)) {
+		netmem_to_page(netmem)->pp_pressure = 0;
+	}
+#endif
 	__page_pool_return_page(pool, netmem);
 }
 

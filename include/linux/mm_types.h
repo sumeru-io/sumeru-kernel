@@ -121,7 +121,7 @@ struct page {
 			 */
 			unsigned long pp_magic;
 			struct page_pool *pp;
-			unsigned long _pp_mapping_pad;
+			unsigned long pp_pressure;
 			unsigned long dma_addr;
 			atomic_long_t pp_ref_count;
 		};
