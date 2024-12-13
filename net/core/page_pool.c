@@ -1209,8 +1209,9 @@ static void page_pool_empty_ring(struct page_pool *pool)
 
 static void __page_pool_destroy(struct page_pool *pool)
 {
+#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
 	free_proc_entry(pool);
-
+#endif
 	if (pool->disconnect)
 		pool->disconnect(pool);
 
