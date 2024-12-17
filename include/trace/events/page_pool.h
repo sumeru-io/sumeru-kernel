@@ -113,6 +113,34 @@ TRACE_EVENT(page_pool_update_nid,
 		  __entry->pool, __entry->pool_nid, __entry->new_nid)
 );
 
+TRACE_EVENT(page_pool_page_move,
+
+	TP_PROTO(const struct page_pool *pool, netmem_ref netmem, 
+		 u8 action, u32 used, u32 free),
+
+	TP_ARGS(pool, netmem, action, used, free),
+
+	TP_STRUCT__entry(
+		__field(const struct page_pool *,	pool)
+		__field(unsigned long,			netmem)
+		__field(u8,				action)
+		__field(u32,				used)
+		__field(u32,				free)
+	),
+
+	TP_fast_assign(
+		__entry->pool	= pool;
+		__entry->netmem	= (__force unsigned long)netmem;
+		__entry->action	= action;
+		__entry->used	= used;
+		__entry->free	= free;
+	),
+
+	TP_printk("page_pool=%p netmem=%p action=%u used=%u free=%u",
+		  __entry->pool, (void *)__entry->netmem,
+		  __entry->action, __entry->used, __entry->free)
+)
+
 #endif /* _TRACE_PAGE_POOL_H */
 
 /* This part must be outside protection */

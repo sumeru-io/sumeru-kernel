@@ -56,15 +56,41 @@ static inline int page_pool_check_memory_provider(struct net_device *dev,
 #endif
 
 #if defined (CONFIG_NET_CACHEFLOW)
+extern int tcp_cacheflow_enable;
+
 static inline int page_pool_fixed_size(struct page_pool *pool)
 {
 	return pool->fixed_size;
+}
+
+static inline void page_pool_set_pressure(struct page_pool *pool,
+					 struct page* page)
+{
+	page->pp_pressure =
+		(unsigned long)pool->used_pages << 32 | pool->free_pages;
+}
+
+static inline void page_pool_clear_pressure(struct page_pool *pool,
+					 struct page* page)
+{
+	page->pp_pressure = 0;
+}
+
+static inline int page_pool_alloc_allowed(void)
+{
+	return tcp_cacheflow_enable == 1;
 }
 #else
 static inline int page_pool_fixed_size(struct page_pool *pool)
 {
 	return 0;
 }
+static inline void page_pool_set_pressure(struct page_pool *pool,
+					 struct page* page) {}
+static inline void page_pool_clear_pressure(struct page_pool *pool,
+					 struct page* page) {}
+
+static inline int page_pool_alloc_allowed(void) { return 1; }
 #endif
 
 #endif

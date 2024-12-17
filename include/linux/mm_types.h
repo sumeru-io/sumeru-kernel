@@ -121,7 +121,11 @@ struct page {
 			 */
 			unsigned long pp_magic;
 			struct page_pool *pp;
+#ifdef CONFIG_NET_CACHEFLOW
 			unsigned long pp_pressure;
+#else
+			unsigned long _pp_mapping_pad;
+#endif
 			unsigned long dma_addr;
 			atomic_long_t pp_ref_count;
 		};

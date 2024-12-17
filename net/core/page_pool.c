@@ -15,6 +15,10 @@
 #include <net/page_pool/helpers.h>
 #include <net/xdp.h>
 
+#ifdef CONFIG_NET_CACHEFLOW
+#include <net/cacheflow.h>
+#endif
+
 #include <linux/dma-direction.h>
 #include <linux/dma-mapping.h>
 #include <linux/page-flags.h>
@@ -162,14 +166,21 @@ EXPORT_SYMBOL(page_pool_ethtool_stats_get);
 #ifdef CONFIG_NET_CACHEFLOW
 static struct proc_dir_entry *page_pool_root_dir;
 
+enum {
+	PAGE_POOL_GET,
+	PAGE_POOL_PUT,
+	PAGE_POOL_ALLOC,
+	PAGE_POOL_FREE,
+};
+
 /* `pages_state_hold_cnt` stores the number of pages the page pool allocates from
  * the global page allocator, so it accounts both pages in the array cache, the 
  * `ptr_ring` cache, and currently allocated to the user.
  */
-static inline void page_pool_alloc_page_accout(struct page_pool *pool,
+static inline void page_pool_get_page_account(struct page_pool *pool,
 						netmem_ref netmem)
 {
-	if (likely(netmem)) {
+	if (page_pool_fixed_size(pool) && likely(netmem)) {
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
 		if (pool->used_pages >= pool->ring.size) {
 			pr_err("page_pool (%s): used_pages(%u) >= ring.size(%u), free_pages(%u)\n",
@@ -186,14 +197,15 @@ static inline void page_pool_alloc_page_accout(struct page_pool *pool,
 		pool->used_pages++;
 		pool->free_pages--;
 		netmem_to_page(netmem)->pp_pressure = (unsigned long) pool->used_pages << 32 | pool->free_pages;
+		trace_page_pool_page_move(pool, netmem, PAGE_POOL_GET, pool->used_pages, pool->free_pages);
 	}
 
 }
 
-static inline void page_pool_free_page_accout(struct page_pool *pool,
+static inline void page_pool_put_page_account(struct page_pool *pool,
 						netmem_ref netmem)
 {
-	if (likely(netmem)) {
+	if (page_pool_fixed_size(pool) && likely(netmem)) {
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
 		if (pool->used_pages == 0) {
 			pr_err("page_pool (%s): used_pages(%u) == 0, free_pages: %u\n",
@@ -209,7 +221,28 @@ static inline void page_pool_free_page_accout(struct page_pool *pool,
 #endif
 		pool->used_pages--;
 		pool->free_pages++;
+		netmem_to_page(netmem)->pp_pressure = 0;
+		trace_page_pool_page_move(pool, netmem, PAGE_POOL_PUT, pool->used_pages, pool->free_pages);
+	}
+}
+
+static inline void page_pool_alloc_page_account(struct page_pool *pool,
+						netmem_ref netmem)
+{
+	if (page_pool_fixed_size(pool) && likely(netmem)) {
+		pool->used_pages++;
 		netmem_to_page(netmem)->pp_pressure = (unsigned long) pool->used_pages << 32 | pool->free_pages;
+		trace_page_pool_page_move(pool, netmem, PAGE_POOL_ALLOC, pool->used_pages, pool->free_pages);
+	}
+}
+
+static inline void page_pool_return_page_account(struct page_pool *pool,
+						 netmem_ref netmem)
+{
+	if (page_pool_fixed_size(pool) && likely(netmem)) {
+		pool->used_pages--;
+		netmem_to_page(netmem)->pp_pressure = 0;
+		trace_page_pool_page_move(pool, netmem, PAGE_POOL_FREE, pool->used_pages, pool->free_pages);
 	}
 }
 
@@ -286,8 +319,11 @@ static void free_proc_entry(struct page_pool *pool) {
 	pool->proc = NULL;
 }
 #else
-#define page_pool_alloc_page_accout(pool, netmem)
-#define page_pool_free_page_accout(pool, netmem)
+#define page_pool_get_page_account(pool, netmem)
+#define page_pool_put_page_account(pool, netmem)
+#define page_pool_alloc_page_account(pool, netmem)
+#define page_pool_return_page_account(pool, netmem)
+
 #endif
 
 static bool page_pool_producer_lock(struct page_pool *pool)
@@ -755,7 +791,7 @@ netmem_ref page_pool_alloc_netmem(struct page_pool *pool, gfp_t gfp)
 
 	/* Fast-path: Get a page from cache */
 	netmem = __page_pool_get_cached(pool);
-	page_pool_alloc_page_accout(pool, netmem);
+	page_pool_get_page_account(pool, netmem);
 	if (netmem)
 		return netmem;
 
@@ -763,10 +799,10 @@ netmem_ref page_pool_alloc_netmem(struct page_pool *pool, gfp_t gfp)
 	if (static_branch_unlikely(&page_pool_mem_providers) && pool->mp_priv)
 		netmem = mp_dmabuf_devmem_alloc_netmems(pool, gfp);
 	/* We do not allocate new page for a fixed size page pool */
-	else if(!page_pool_fixed_size(pool))
+	else if(!page_pool_fixed_size(pool) || (page_pool_alloc_allowed()))
 		netmem = __page_pool_alloc_pages_slow(pool, gfp);
 
-	page_pool_alloc_page_accout(pool, netmem);
+	page_pool_alloc_page_account(pool, netmem);
 	return netmem;
 }
 EXPORT_SYMBOL(page_pool_alloc_netmem);
@@ -879,8 +915,13 @@ static void __page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 void page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 {
 	if (page_pool_fixed_size(pool)) {
-		printk(KERN_ERR "page_pool: fixed_size pool %p can't return pages\n", pool);
-		BUG();
+		page_pool_clear_pressure(pool, netmem_to_page(netmem));
+		page_pool_return_page_account(pool, netmem);
+		// when cacheflow works in the force mode, we can't return pages to the pool
+		if (!page_pool_alloc_allowed()) {
+			printk(KERN_ERR "page_pool: fixed_size pool %p can't return pages\n", pool);
+			BUG();
+		}
 	}
 
 	__page_pool_return_page(pool, netmem);
@@ -892,6 +933,7 @@ static void page_pool_release_return_page(struct page_pool *pool, netmem_ref net
 	// clean pp_pressure before returning the page to pool
 	if (page_pool_fixed_size(pool)) {
 		netmem_to_page(netmem)->pp_pressure = 0;
+		page_pool_return_page_account(pool, netmem);
 	}
 #endif
 	__page_pool_return_page(pool, netmem);
@@ -907,6 +949,7 @@ static bool page_pool_recycle_in_ring(struct page_pool *pool, netmem_ref netmem)
 		ret = ptr_ring_produce_bh(&pool->ring, (__force void *)netmem);
 
 	if (!ret) {
+		page_pool_put_page_account(pool, netmem);
 		recycle_stat_inc(pool, ring);
 		return true;
 	}
@@ -967,7 +1010,7 @@ __page_pool_put_page(struct page_pool *pool, netmem_ref netmem,
 		page_pool_dma_sync_for_device(pool, netmem, dma_sync_size);
 
 		if (allow_direct && page_pool_recycle_in_cache(netmem, pool)) {
-			page_pool_free_page_accout(pool, netmem);
+			page_pool_put_page_account(pool, netmem);
 			return 0;
 		}
 
@@ -1025,8 +1068,6 @@ void page_pool_put_unrefed_netmem(struct page_pool *pool, netmem_ref netmem,
 
 	netmem =
 		__page_pool_put_page(pool, netmem, dma_sync_size, allow_direct);
-
-	page_pool_free_page_accout(pool, netmem);
 
 	if (netmem && !page_pool_recycle_in_ring(pool, netmem)) {
 		/* Cache full, fallback to free pages */
@@ -1092,6 +1133,7 @@ void page_pool_put_page_bulk(struct page_pool *pool, void **data,
 			recycle_stat_inc(pool, ring_full);
 			break;
 		}
+		page_pool_put_page_account(pool, (netmem_ref) data[i]);
 	}
 	recycle_stat_add(pool, ring, i);
 	page_pool_producer_unlock(pool, in_softirq);
