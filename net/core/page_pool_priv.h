@@ -75,11 +75,6 @@ static inline void page_pool_clear_pressure(struct page_pool *pool,
 {
 	page->pp_pressure = 0;
 }
-
-static inline int page_pool_alloc_allowed(void)
-{
-	return cacheflow_enable == 1;
-}
 #else
 static inline int page_pool_fixed_size(struct page_pool *pool)
 {

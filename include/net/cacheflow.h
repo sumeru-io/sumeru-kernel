@@ -13,4 +13,8 @@ static inline bool is_cacheflow_enabled(void)
 	return READ_ONCE(cacheflow_enable) > 0;
 }
 
+static inline int page_pool_alloc_allowed(void)
+{
+	return READ_ONCE(cacheflow_enable) != 1;
+}
 #endif /* __CACHEFLOW_H */
