@@ -43,6 +43,11 @@
 #include <net/page_pool/types.h>
 #include <net/pkt_sched.h>
 #include <net/xdp_sock_drv.h>
+
+#ifdef CONFIG_NET_CACHEFLOW
+#include <net/cacheflow.h>
+#endif
+
 #include "eswitch.h"
 #include "en.h"
 #include "en/dim.h"
@@ -927,13 +932,16 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		struct page_pool_params pp_params = { 0 };
 
 		pp_params.order     = 0;
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
-		pp_params.flags     = PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV | PP_FLAG_FIXED_SIZE;
-		pp_params.pool_size = pool_size * 4;
-#else
 		pp_params.flags     = PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV;
 		pp_params.pool_size = pool_size;
+
+#ifdef CONFIG_NET_CACHEFLOW
+		if (tcp_cacheflow_enable) {
+			pp_params.flags |= PP_FLAG_FIXED_SIZE;
+			pp_params.pool_size = 4 * pool_size;
+		}
 #endif
+
 		pp_params.nid       = node;
 		pp_params.dev       = rq->pdev;
 		pp_params.napi      = rq->cq.napi;

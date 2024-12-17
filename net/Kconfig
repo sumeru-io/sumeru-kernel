@@ -431,6 +431,7 @@ endif # WIRELESS
 
 source "net/rfkill/Kconfig"
 source "net/9p/Kconfig"
+source "net/cacheflow/Kconfig"
 source "net/caif/Kconfig"
 source "net/ceph/Kconfig"
 source "net/nfc/Kconfig"
@@ -496,25 +497,6 @@ config PAGE_POOL_STATS
 	  and recycle paths and additional memory cost to store the statistics.
 	  These statistics are only available if this option is enabled and if
 	  the driver using the page pool supports exporting this data.
-
-	  If unsure, say N.
-
-config PAGE_POOL_FIXED_SIZE
-	default n
-	bool "Fixed size page pool"
-	depends on PAGE_POOL
-	help
-	  Enable fixed size page pool that allocates a fixed number of pages.
-
-	  If unsure, say N.
-
-config PAGE_POOL_FIXED_SIZE_DEBUG
-	default n
-	bool "Fixed size page pool debug"
-	depends on PAGE_POOL_FIXED_SIZE
-	help
-	  Enable fixed size page pool debug that provides additional debug
-	  information.
 
 	  If unsure, say N.
 

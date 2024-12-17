@@ -27,6 +27,10 @@
 #include <net/proto_memory.h>
 #include <net/rps.h>
 
+#ifdef CONFIG_NET_CACHEFLOW
+#include <net/cacheflow.h>
+#endif
+
 #include "dev.h"
 
 static int int_3600 = 3600;
@@ -429,6 +433,17 @@ static struct ctl_table net_core_table[] = {
 		.mode		= 0444,
 		.proc_handler	= proc_do_rss_key,
 	},
+#ifdef CONFIG_NET_CACHEFLOW
+	{
+		.procname	= "cacheflow_enable",
+		.data 		= &tcp_cacheflow_enable,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dou8vec_minmax,
+		.extra1		= SYSCTL_ZERO,
+		.extra2		= SYSCTL_ONE,
+	},
+#endif
 #ifdef CONFIG_BPF_JIT
 	{
 		.procname	= "bpf_jit_enable",

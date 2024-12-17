@@ -23,7 +23,7 @@
 #include <linux/ethtool.h>
 #include <linux/netdevice.h>
 
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#ifdef CONFIG_NET_CACHEFLOW
 #include <linux/proc_fs.h>
 #endif
 
@@ -159,7 +159,7 @@ EXPORT_SYMBOL(page_pool_ethtool_stats_get);
 #define recycle_stat_add(pool, __stat, val)
 #endif
 
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#ifdef CONFIG_NET_CACHEFLOW
 static struct proc_dir_entry *page_pool_root_dir;
 
 /* `pages_state_hold_cnt` stores the number of pages the page pool allocates from
@@ -170,7 +170,7 @@ static inline void page_pool_alloc_page_accout(struct page_pool *pool,
 						netmem_ref netmem)
 {
 	if (likely(netmem)) {
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE_DEBUG
+#ifdef CONFIG_NET_CACHEFLOW_DEBUG
 		if (pool->used_pages >= pool->ring.size) {
 			pr_err("page_pool (%s): used_pages(%u) >= ring.size(%u), free_pages(%u)\n",
 				pool->proc->page_pool_name, pool->used_pages, pool->ring.size, pool->free_pages);
@@ -194,7 +194,7 @@ static inline void page_pool_free_page_accout(struct page_pool *pool,
 						netmem_ref netmem)
 {
 	if (likely(netmem)) {
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE_DEBUG
+#ifdef CONFIG_NET_CACHEFLOW_DEBUG
 		if (pool->used_pages == 0) {
 			pr_err("page_pool (%s): used_pages(%u) == 0, free_pages: %u\n",
 				pool->proc->page_pool_name, pool->used_pages, pool->free_pages);
@@ -322,7 +322,7 @@ static void page_pool_struct_check(void)
 				    PAGE_POOL_FRAG_GROUP_ALIGN);
 }
 
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#ifdef CONFIG_NET_CACHEFLOW
 static noinline void __page_pool_fill_ptr_ring(struct page_pool *pool);
 #endif
 
@@ -435,7 +435,7 @@ static int page_pool_init(struct page_pool *pool,
 
 		static_branch_inc(&page_pool_mem_providers);
 	}
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#ifdef CONFIG_NET_CACHEFLOW
 	if (pool->slow.flags & PP_FLAG_FIXED_SIZE) {
 		pool->fixed_size = 1;
 		__page_pool_fill_ptr_ring(pool);
@@ -727,7 +727,7 @@ static noinline netmem_ref __page_pool_alloc_pages_slow(struct page_pool *pool,
 	return netmem;
 }
 
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#ifdef CONFIG_NET_CACHEFLOW
 static noinline void __page_pool_fill_ptr_ring(struct page_pool *pool)
 {
 	netmem_ref netmem;
@@ -888,7 +888,7 @@ void page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 
 static void page_pool_release_return_page(struct page_pool *pool, netmem_ref netmem)
 {
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#ifdef CONFIG_NET_CACHEFLOW
 	// clean pp_pressure before returning the page to pool
 	if (page_pool_fixed_size(pool)) {
 		netmem_to_page(netmem)->pp_pressure = 0;
@@ -1209,7 +1209,7 @@ static void page_pool_empty_ring(struct page_pool *pool)
 
 static void __page_pool_destroy(struct page_pool *pool)
 {
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#ifdef CONFIG_NET_CACHEFLOW
 	free_proc_entry(pool);
 #endif
 	if (pool->disconnect)
@@ -1359,7 +1359,7 @@ void page_pool_update_nid(struct page_pool *pool, int new_nid)
 }
 EXPORT_SYMBOL(page_pool_update_nid);
 
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#ifdef CONFIG_NET_CACHEFLOW
 static int __init page_pool_proc_init(void)
 {
     /* Create the parent directory /proc/page_pool/ */

@@ -55,7 +55,7 @@ static inline int page_pool_check_memory_provider(struct net_device *dev,
 }
 #endif
 
-#if defined (CONFIG_PAGE_POOL_FIXED_SIZE)
+#if defined (CONFIG_NET_CACHEFLOW)
 static inline int page_pool_fixed_size(struct page_pool *pool)
 {
 	return pool->fixed_size;

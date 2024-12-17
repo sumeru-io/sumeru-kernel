@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# CacheFlow buffer management
+#
+
+menuconfig NET_CACHEFLOW
+	tristate "CacheFlow buffer management"
+	select PAGE_POOL
+	help
+      This option enables the CacheFlow buffer management.
+
+      If unsure, say N.
+
+if NET_CACHEFLOW
+
+config NET_CACHEFLOW_DEBUG
+  	default n
+  	bool "Debug information"
+  	help
+      This option enables debug information for CacheFlow buffer management.
+
+endif

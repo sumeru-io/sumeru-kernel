@@ -148,7 +148,7 @@ struct page_pool_stats {
 };
 #endif
 
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#ifdef CONFIG_NET_CACHEFLOW
 #define PAGE_POOL_NAME_MAX_LEN (64)
 struct page_pool_proc {
 	char page_pool_name[PAGE_POOL_NAME_MAX_LEN];
@@ -184,7 +184,7 @@ struct page_pool {
 #ifdef CONFIG_PAGE_POOL_STATS
 	bool system:1;			/* This is a global percpu pool */
 #endif
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#ifdef CONFIG_NET_CACHEFLOW
 	bool fixed_size:1;		/* Fixed size page pool */
 #endif
 
@@ -205,7 +205,7 @@ struct page_pool {
 #endif
 	u32 xdp_mem_id;
 
-#ifdef CONFIG_PAGE_POOL_FIXED_SIZE
+#ifdef CONFIG_NET_CACHEFLOW
 	u32 free_pages;
 	u32 used_pages;
 	struct page_pool_proc *proc;
