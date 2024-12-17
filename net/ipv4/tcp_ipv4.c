@@ -71,6 +71,9 @@
 #include <net/secure_seq.h>
 #include <net/busy_poll.h>
 #include <net/rstreason.h>
+#ifdef CONFIG_NET_CACHEFLOW
+#include <net/cacheflow.h>
+#endif
 
 #include <linux/inet.h>
 #include <linux/ipv6.h>
@@ -2139,6 +2142,30 @@ int tcp_filter(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcphdr *th = (struct tcphdr *)skb->data;
 
+#ifdef CONFIG_NET_CACHEFLOW
+	if (skb->pp_recycle && is_cacheflow_enabled()) {
+		int i;
+		int ecn_mark = 0;
+		unsigned int used, free;
+		struct page* page;
+
+		for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+			page = netmem_to_page(skb_shinfo(skb)->frags[i].netmem);
+			used = (unsigned int)(page->pp_pressure >> 32);
+			free = (unsigned int)(page->pp_pressure);
+
+			if ((page->pp_pressure != 0) && (free <= used)) {
+				// set ECN bit on the IP header of the packet
+				ecn_mark = 1;
+				break;
+			}
+		}
+
+		if (ecn_mark) {
+			INET_ECN_set_ce(skb);
+		}
+	}
+#endif
 	return sk_filter_trim_cap(sk, skb, th->doff * 4);
 }
 EXPORT_SYMBOL(tcp_filter);

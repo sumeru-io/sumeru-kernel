@@ -936,7 +936,7 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		pp_params.pool_size = pool_size;
 
 #ifdef CONFIG_NET_CACHEFLOW
-		if (tcp_cacheflow_enable) {
+		if (cacheflow_enable) {
 			pp_params.flags |= PP_FLAG_FIXED_SIZE;
 			pp_params.pool_size = 4 * pool_size;
 		}

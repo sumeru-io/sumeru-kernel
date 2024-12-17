@@ -436,8 +436,8 @@ static struct ctl_table net_core_table[] = {
 #ifdef CONFIG_NET_CACHEFLOW
 	{
 		.procname	= "cacheflow_enable",
-		.data 		= &tcp_cacheflow_enable,
-		.maxlen		= sizeof(int),
+		.data 		= &cacheflow_enable,
+		.maxlen		= sizeof(u8),
 		.mode		= 0644,
 		.proc_handler	= proc_dou8vec_minmax,
 		.extra1		= SYSCTL_ZERO,

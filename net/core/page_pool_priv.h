@@ -56,7 +56,7 @@ static inline int page_pool_check_memory_provider(struct net_device *dev,
 #endif
 
 #if defined (CONFIG_NET_CACHEFLOW)
-extern int tcp_cacheflow_enable;
+extern u8 cacheflow_enable;
 
 static inline int page_pool_fixed_size(struct page_pool *pool)
 {
@@ -78,7 +78,7 @@ static inline void page_pool_clear_pressure(struct page_pool *pool,
 
 static inline int page_pool_alloc_allowed(void)
 {
-	return tcp_cacheflow_enable == 1;
+	return cacheflow_enable == 1;
 }
 #else
 static inline int page_pool_fixed_size(struct page_pool *pool)

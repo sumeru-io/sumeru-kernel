@@ -7,4 +7,4 @@
 
 #include <asm/cache.h>
 
-int tcp_cacheflow_enable __read_mostly = 0;
+u8 cacheflow_enable __read_mostly = 0;
