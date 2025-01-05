@@ -8,6 +8,7 @@
 #include <linux/skbuff.h>
 
 extern u8 cacheflow_enable;
+extern int cacheflow_buffer_size;
 
 static inline bool is_cacheflow_enabled(void)
 {
@@ -17,6 +18,10 @@ static inline bool is_cacheflow_enabled(void)
 static inline int page_pool_alloc_allowed(void)
 {
 	return READ_ONCE(cacheflow_enable) != 1;
+}
+
+static inline int get_cacheflow_pool_size(void) {
+	return READ_ONCE(cacheflow_buffer_size);
 }
 
 static inline int skb_with_pressure(const struct sk_buff *skb)

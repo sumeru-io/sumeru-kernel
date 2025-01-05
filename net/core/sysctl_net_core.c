@@ -443,6 +443,13 @@ static struct ctl_table net_core_table[] = {
 		.extra1		= SYSCTL_ZERO,
 		.extra2		= SYSCTL_TWO,
 	},
+	{
+		.procname 	= "cacheflow_buffer_size",
+		.data		= &cacheflow_buffer_size,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec
+	},
 #endif
 #ifdef CONFIG_BPF_JIT
 	{
