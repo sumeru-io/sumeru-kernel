@@ -116,6 +116,10 @@ struct page_pool_alloc_stats {
 	u64 empty;
 	u64 refill;
 	u64 waive;
+#ifdef CONFIG_NET_CACHEFLOW
+	u64 overcommit;
+	u64 pressure;
+#endif
 };
 
 /**
@@ -155,6 +159,7 @@ struct page_pool_proc {
 	struct page_pool *pool;
     	struct proc_dir_entry *proc_dir;
     	struct proc_dir_entry *stats_file;
+	struct proc_dir_entry *watermark_file;
 };
 #endif
 

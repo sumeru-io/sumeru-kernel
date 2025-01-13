@@ -197,6 +197,8 @@ static inline void page_pool_get_page_account(struct page_pool *pool,
 		pool->used_pages++;
 		pool->free_pages--;
 		netmem_to_page(netmem)->pp_pressure = (unsigned long) pool->used_pages << 32 | pool->free_pages;
+		if (pool->used_pages > pool->free_pages)
+			alloc_stat_inc(pool, pressure);
 		trace_page_pool_page_move(pool, netmem, PAGE_POOL_GET, pool->used_pages, pool->free_pages);
 	}
 
@@ -232,6 +234,8 @@ static inline void page_pool_alloc_page_account(struct page_pool *pool,
 	if (page_pool_fixed_size(pool) && likely(netmem)) {
 		pool->used_pages++;
 		netmem_to_page(netmem)->pp_pressure = (unsigned long) pool->used_pages << 32 | pool->free_pages;
+		if (pool->used_pages > pool->free_pages)
+			alloc_stat_inc(pool, pressure);
 		trace_page_pool_page_move(pool, netmem, PAGE_POOL_ALLOC, pool->used_pages, pool->free_pages);
 	}
 }
@@ -249,6 +253,33 @@ static inline void page_pool_return_page_account(struct page_pool *pool,
 static int pool_stats_show(struct seq_file *m, void *v) {
 	struct page_pool_proc *pool_proc = m->private;
 	struct page_pool *pool = pool_proc->pool;
+	struct page_pool_stats stats = { 0 };
+
+	if (!page_pool_get_stats(pool, &stats))
+		return -ENOMEM;
+
+	seq_printf(m, "Pool: %p, ", pool);
+	seq_printf(m, "Pool Name: %s, ", pool_proc->page_pool_name);
+	seq_printf(m, "Fast: %llu, ", stats.alloc_stats.fast);
+	seq_printf(m, "Slow: %llu, ", stats.alloc_stats.slow);
+	seq_printf(m, "Slow High Order: %llu, ", stats.alloc_stats.slow_high_order);
+	seq_printf(m, "Empty: %llu, ", stats.alloc_stats.empty);
+	seq_printf(m, "Refill: %llu, ", stats.alloc_stats.refill);
+	seq_printf(m, "Waive: %llu, ", stats.alloc_stats.waive);
+	seq_printf(m, "Overcommit: %llu, ", stats.alloc_stats.overcommit);
+	seq_printf(m, "Pressure: %llu, ", stats.alloc_stats.pressure);
+	seq_printf(m, "Cached: %llu, ", stats.recycle_stats.cached);
+	seq_printf(m, "Cache Full: %llu, ", stats.recycle_stats.cache_full);
+	seq_printf(m, "Ring: %llu, ", stats.recycle_stats.ring);
+	seq_printf(m, "Ring Full: %llu, ", stats.recycle_stats.ring_full);
+	seq_printf(m, "Released Refcnt: %llu\n", stats.recycle_stats.released_refcnt);
+
+	return 0;
+}
+
+static int pool_watermark_show(struct seq_file *m, void *v) {
+	struct page_pool_proc *pool_proc = m->private;
+	struct page_pool *pool = pool_proc->pool;
 
 	seq_printf(m, "Pool Name: %s, ", pool_proc->page_pool_name);
 	seq_printf(m, "Pool Size: %u, ", pool->free_pages + pool->used_pages);
@@ -263,8 +294,20 @@ static int pool_stats_open(struct inode *inode, struct file *file)
     return single_open(file, pool_stats_show, pde_data(inode));
 }
 
+static int pool_water_open(struct inode *inode, struct file *file)
+{
+    return single_open(file, pool_watermark_show, pde_data(inode));
+}
+
 static const struct proc_ops pool_stats_ops = {
     .proc_open = pool_stats_open,
+    .proc_read = seq_read,
+    .proc_lseek = seq_lseek,
+    .proc_release = single_release,
+};
+
+static const struct proc_ops watermark_stats_ops = {
+    .proc_open = pool_water_open,
     .proc_read = seq_read,
     .proc_lseek = seq_lseek,
     .proc_release = single_release,
@@ -281,7 +324,7 @@ static struct page_pool_proc* create_proc_entry(struct page_pool *pool) {
     	if (!pool_proc)
         	return NULL;
 	
-	snprintf(page_pool_name, PAGE_POOL_NAME_MAX_LEN, "page_pool_%s_%d", dev_name(pool->p.dev), pool->p.napi->napi_id);
+	snprintf(page_pool_name, PAGE_POOL_NAME_MAX_LEN, "pagepool_%s_%d", dev_name(pool->p.dev), pool->p.napi->napi_id);
 	pool_proc->pool = pool;
 	strncpy(pool_proc->page_pool_name, page_pool_name, PAGE_POOL_NAME_MAX_LEN);
 	pool_proc->proc_dir = proc_mkdir(page_pool_name, page_pool_root_dir);
@@ -296,8 +339,16 @@ static struct page_pool_proc* create_proc_entry(struct page_pool *pool) {
 		goto err_remove_dir;
 	}
 
+	pool_proc->watermark_file = proc_create_data("watermark", 0444, pool_proc->proc_dir,
+						&watermark_stats_ops, pool_proc);
+
+	if (!pool_proc->watermark_file) {
+		goto err_remove_stats;
+	}
 	return pool_proc;
 
+err_remove_stats:
+	proc_remove(pool_proc->stats_file);
 err_remove_dir:
     	proc_remove(pool_proc->proc_dir);
 err_free:
@@ -312,6 +363,8 @@ static void free_proc_entry(struct page_pool *pool) {
 
     	if (proc->stats_file)
         	proc_remove(proc->stats_file);
+	if (proc->watermark_file)
+		proc_remove(proc->watermark_file);
     	if (proc->proc_dir)
         	proc_remove(proc->proc_dir);
     
@@ -787,7 +840,7 @@ static noinline void __page_pool_fill_ptr_ring(struct page_pool *pool)
  */
 netmem_ref page_pool_alloc_netmem(struct page_pool *pool, gfp_t gfp)
 {
-	netmem_ref netmem;
+	netmem_ref netmem = 0;
 
 	/* Fast-path: Get a page from cache */
 	netmem = __page_pool_get_cached(pool);
@@ -798,9 +851,13 @@ netmem_ref page_pool_alloc_netmem(struct page_pool *pool, gfp_t gfp)
 	/* Slow-path: cache empty, do real allocation */
 	if (static_branch_unlikely(&page_pool_mem_providers) && pool->mp_priv)
 		netmem = mp_dmabuf_devmem_alloc_netmems(pool, gfp);
-	/* We do not allocate new page for a fixed size page pool */
-	else if(!page_pool_fixed_size(pool) || (page_pool_alloc_allowed()))
+	else if(!page_pool_fixed_size(pool))
 		netmem = __page_pool_alloc_pages_slow(pool, gfp);
+	/* We do not allocate new page for a fixed size page pool */
+	else if (page_pool_alloc_allowed()){
+		alloc_stat_inc(pool, overcommit);
+		netmem = __page_pool_alloc_pages_slow(pool, gfp);
+	}
 
 	page_pool_alloc_page_account(pool, netmem);
 	return netmem;
@@ -1404,8 +1461,8 @@ EXPORT_SYMBOL(page_pool_update_nid);
 #ifdef CONFIG_NET_CACHEFLOW
 static int __init page_pool_proc_init(void)
 {
-    /* Create the parent directory /proc/page_pool/ */
-    page_pool_root_dir = proc_mkdir("page_pool", NULL);
+    /* Create the parent directory /proc/pagepool/ */
+    page_pool_root_dir = proc_mkdir("pagepool", NULL);
     if (!page_pool_root_dir)
         return -ENOMEM;
 
