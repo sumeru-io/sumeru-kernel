@@ -187,15 +187,9 @@ static inline void page_pool_get_page_account(struct page_pool *pool,
 
 		spin_lock_irqsave(&pool->page_pressure_lock, flags);
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
-		if (pool->used_pages >= pool->ring.size && !page_pool_alloc_allowed()) {
-			pr_err("page_pool (%s): used_pages(%u) >= ring.size(%u), free_pages(%u)\n",
-				pool->proc->page_pool_name, pool->used_pages, pool->ring.size, pool->free_pages);
-			BUG();
-		}
-
 		if (pool->free_pages == 0) {
-			pr_err("page_pool (%s): free_pages(%u) == 0, used_pages(%u), linear array count: %u\n",
-				pool->proc->page_pool_name, pool->free_pages, pool->used_pages, pool->alloc.count);
+			pr_err("page_pool (%s): free_pages(%u) == 0, used_pages(%u), hold count: %u\n",
+				pool->proc->page_pool_name, pool->free_pages, pool->used_pages, pool->pages_state_hold_cnt);
 			BUG();
 		}
 #endif
@@ -229,12 +223,6 @@ static inline void page_pool_put_page_account(struct page_pool *pool,
 		if (pool->used_pages == 0) {
 			pr_err("page_pool (%s): used_pages(%u) == 0, free_pages: %u\n",
 				pool->proc->page_pool_name, pool->used_pages, pool->free_pages);
-			BUG();
-		}
-
-		if (pool->free_pages >= pool->ring.size && !page_pool_alloc_allowed()) {
-			pr_err("page_pool (%s): free_pages(%u) >= ring.size(%u), used_pages: %u\n",
-				pool->proc->page_pool_name, pool->free_pages, pool->ring.size, pool->used_pages);
 			BUG();
 		}
 #endif
@@ -603,8 +591,8 @@ static int page_pool_init(struct page_pool *pool,
 		pool->free_pages = pool->ring.size;
 		pool->used_pages = 0;
 		spin_lock_init(&pool->page_pressure_lock);
-		pr_warn("page_pool: create fixed size pool with %u pages, allocation is %s\n",
-			pool->ring.size, page_pool_alloc_allowed() ? "allowed" : "not allowed");
+		pr_warn("page_pool: create fixed size pool with %u pages",
+			pool->ring.size);
 
 		pool->proc = create_proc_entry(pool);
 		if (!pool->proc) {
@@ -932,16 +920,12 @@ netmem_ref page_pool_alloc_netmem(struct page_pool *pool, gfp_t gfp)
 	/* Slow-path: cache empty, do real allocation */
 	if (static_branch_unlikely(&page_pool_mem_providers) && pool->mp_priv)
 		netmem = mp_dmabuf_devmem_alloc_netmems(pool, gfp);
-	else if(!page_pool_fixed_size(pool))
-		netmem = __page_pool_alloc_pages_slow(pool, gfp);
-	/* We do not allocate new page for a fixed size page pool */
-	else if (page_pool_alloc_allowed()){
-		alloc_stat_inc(pool, overcommit);
-		netmem = __page_pool_alloc_pages_slow(pool, gfp);
-	} else {
-		pr_err("page_pool: fixed_size pool %p can't allocate new pages\n", pool);
-	}
+	else {
+		if(page_pool_fixed_size(pool))
+			alloc_stat_inc(pool, overcommit);
 
+		netmem = __page_pool_alloc_pages_slow(pool, gfp);
+	}
 	return netmem;
 }
 EXPORT_SYMBOL(page_pool_alloc_netmem);
@@ -1056,11 +1040,6 @@ void page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 	if (page_pool_fixed_size(pool)) {
 		page_pool_clear_pressure(pool, netmem_to_page(netmem));
 		page_pool_return_page_account(pool, netmem);
-		// when cacheflow works in the force mode, we can't return pages to the pool
-		if (!page_pool_alloc_allowed()) {
-			printk(KERN_ERR "page_pool: fixed_size pool %p can't return pages\n", pool);
-			BUG();
-		}
 	}
 
 	__page_pool_return_page(pool, netmem);

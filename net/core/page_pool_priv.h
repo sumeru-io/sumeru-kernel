@@ -84,8 +84,6 @@ static inline void page_pool_set_pressure(struct page_pool *pool,
 					 struct page* page) {}
 static inline void page_pool_clear_pressure(struct page_pool *pool,
 					 struct page* page) {}
-
-static inline int page_pool_alloc_allowed(void) { return 1; }
 #endif
 
 #endif

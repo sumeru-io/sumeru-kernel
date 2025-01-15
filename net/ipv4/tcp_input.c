@@ -5358,20 +5358,6 @@ drop:
 		goto queue_and_out;
 	}
 
-#ifdef CONFIG_NET_CACHEFLOW
-	// If we are not allowed to allocate new pages, we must take care that
-	// we have avialble pages in the page pool for data that fills the hole
-	// in the receive queue.
-	if (skb->pp_recycle && !page_pool_alloc_allowed()) {
-		struct sk_buff *new_skb = skb_copy(skb, GFP_ATOMIC);
-		if (!new_skb) {
-			pr_err("cacheflow: copy skb to recycle page failed\n");
-		}
-		kfree_skb(skb);
-		skb = new_skb;
-	}
-#endif
-
 	tcp_data_queue_ofo(sk, skb);
 }
 
