@@ -2154,7 +2154,7 @@ int tcp_filter(struct sock *sk, struct sk_buff *skb)
 			used = (unsigned int)(page->pp_pressure >> 32);
 			free = (unsigned int)(page->pp_pressure);
 
-			if ((page->pp_pressure != 0) && (free <= used)) {
+			if ((page->pp_pressure != 0) && (used >= 3072)) {
 				// set ECN bit on the IP header of the packet
 				ecn_mark = 1;
 				break;
