@@ -7296,3 +7296,34 @@ bool csum_and_copy_from_iter_full(void *addr, size_t bytes,
 	return false;
 }
 EXPORT_SYMBOL(csum_and_copy_from_iter_full);
+
+#ifdef CONFIG_NET_CACHEFLOW
+int skb_pp_pressure(struct sk_buff *skb, struct page_pool_mem_usage *usage) {
+	int i, ret = 1;
+	netmem_ref netmem;
+	struct page_pool* pool;
+	unsigned long flags;
+	usage->free_pages = 0;
+	usage->used_pages = 0;
+
+	if (skb->pp_recycle && is_cacheflow_enabled()) {
+		for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+			netmem = skb_frag_netmem(&skb_shinfo(skb)->frags[i]);
+			netmem = netmem_compound_head(netmem);
+
+			if (unlikely(!is_pp_netmem(netmem)))
+				continue;
+
+			pool = netmem_get_pp(skb_shinfo(skb)->frags[i].netmem);
+			spin_lock_irqsave(&pool->page_pressure_lock, flags);
+			usage->used_pages = pool->used_pages;
+			usage->free_pages = pool->free_pages;
+			spin_unlock_irqrestore(&pool->page_pressure_lock, flags);
+			ret = 0;
+			break;
+		}
+	}
+
+	return 0;
+}
+#endif

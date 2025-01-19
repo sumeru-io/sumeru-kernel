@@ -7,8 +7,16 @@
 #include <linux/compiler.h>
 #include <linux/skbuff.h>
 
+#include <net/page_pool/helpers.h>
+
+struct page_pool_mem_usage {
+	u32 used_pages;
+	u32 free_pages;
+};
+
 extern u8 cacheflow_enable;
 extern int cacheflow_buffer_size;
+extern int cacheflow_thresh;
 
 static inline bool is_cacheflow_enabled(void)
 {
@@ -38,5 +46,7 @@ static inline int skb_with_pressure(const struct sk_buff *skb)
 #endif
 	return 0;
 }
+
+int skb_pp_pressure(struct sk_buff *skb, struct page_pool_mem_usage *usage);
 
 #endif /* __CACHEFLOW_H */
