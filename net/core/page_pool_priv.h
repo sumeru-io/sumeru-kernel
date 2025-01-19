@@ -67,7 +67,7 @@ static inline void page_pool_set_pressure(struct page_pool *pool,
 					 struct page* page)
 {
 	page->pp_pressure =
-		(unsigned long)pool->used_pages << 32 | pool->free_pages;
+		(unsigned long)atomic_read(&pool->used_pages) << 32 | atomic_read(&pool->free_pages);
 }
 
 static inline void page_pool_clear_pressure(struct page_pool *pool,

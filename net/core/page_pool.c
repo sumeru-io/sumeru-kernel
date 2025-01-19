@@ -182,24 +182,18 @@ static inline void page_pool_get_page_account(struct page_pool *pool,
 						netmem_ref netmem)
 {
 	if (page_pool_fixed_size(pool) && likely(netmem)) {
-		unsigned long flags;
 		u32 used_pages, free_pages;
 
-		spin_lock_irqsave(&pool->page_pressure_lock, flags);
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
-		if (pool->free_pages == 0) {
+		if (atomic_read(&pool->free_pages) == 0) {
 			pr_err("page_pool (%s): free_pages(%u) == 0, used_pages(%u), hold count: %u\n",
-				pool->proc->page_pool_name, pool->free_pages, pool->used_pages, pool->pages_state_hold_cnt);
+				pool->proc->page_pool_name, atomic_read(&pool->free_pages), atomic_read(&pool->used_pages), pool->pages_state_hold_cnt);
 			BUG();
 		}
 #endif
-		pool->used_pages++;
-		pool->free_pages--;
 
-		used_pages = pool->used_pages;
-		free_pages = pool->free_pages;
-
-		spin_unlock_irqrestore(&pool->page_pressure_lock, flags);
+		used_pages = atomic_inc_return_relaxed(&pool->used_pages);
+		free_pages = atomic_dec_return_relaxed(&pool->free_pages);
 
 		netmem_to_page(netmem)->pp_pressure = (unsigned long) used_pages << 32 | free_pages;
 		if (used_pages > free_pages)
@@ -214,25 +208,17 @@ static inline void page_pool_put_page_account(struct page_pool *pool,
 						netmem_ref netmem)
 {
 	if (page_pool_fixed_size(pool) && likely(netmem)) {
-		unsigned long flags;
 		u32 used_pages, free_pages;
 
-		spin_lock_irqsave(&pool->page_pressure_lock, flags);
-
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
-		if (pool->used_pages == 0) {
+		if (atomic_read(&pool->used_pages) == 0) {
 			pr_err("page_pool (%s): used_pages(%u) == 0, free_pages: %u\n",
-				pool->proc->page_pool_name, pool->used_pages, pool->free_pages);
+				pool->proc->page_pool_name, atomic_read(&pool->used_pages), atomic_read(&pool->free_pages));
 			BUG();
 		}
 #endif
-		pool->used_pages--;
-		pool->free_pages++;
-
-		used_pages = pool->used_pages;
-		free_pages = pool->free_pages;
-
-		spin_unlock_irqrestore(&pool->page_pressure_lock, flags);
+		used_pages = atomic_dec_return_relaxed(&pool->used_pages);
+		free_pages = atomic_inc_return_relaxed(&pool->free_pages);
 
 		netmem_to_page(netmem)->pp_pressure = 0;
 		trace_page_pool_page_move(pool, netmem, PAGE_POOL_PUT, used_pages, free_pages);
@@ -243,17 +229,11 @@ static inline void page_pool_alloc_page_account(struct page_pool *pool,
 						netmem_ref netmem)
 {
 	if (page_pool_fixed_size(pool) && likely(netmem)) {
-		unsigned long flags;
 		u32 used_pages, free_pages;
 
-		spin_lock_irqsave(&pool->page_pressure_lock, flags);
 
-		pool->used_pages++;
-
-		used_pages = pool->used_pages;
-		free_pages = pool->free_pages;
-
-		spin_unlock_irqrestore(&pool->page_pressure_lock, flags);
+		used_pages = atomic_inc_return_relaxed(&pool->used_pages);
+		free_pages = atomic_read(&pool->free_pages);
 
 		netmem_to_page(netmem)->pp_pressure = (unsigned long) used_pages << 32 | free_pages;
 		if (used_pages > free_pages)
@@ -266,17 +246,10 @@ static inline void page_pool_prealloc_page_account(struct page_pool *pool,
 							netmem_ref netmem)
 {
 	if (page_pool_fixed_size(pool) && likely(netmem)) {
-		unsigned long flags;
 		u32 used_pages, free_pages;
 
-		spin_lock_irqsave(&pool->page_pressure_lock, flags);
-
-		pool->free_pages++;
-
-		used_pages = pool->used_pages;
-		free_pages = pool->free_pages;
-
-		spin_unlock_irqrestore(&pool->page_pressure_lock, flags);
+		used_pages = atomic_read(&pool->used_pages);
+		free_pages = atomic_inc_return_relaxed(&pool->free_pages);
 
 		trace_page_pool_page_move(pool, netmem, PAGE_POOL_PREALLOC, used_pages, free_pages);
 	}
@@ -286,24 +259,17 @@ static inline void page_pool_return_page_account(struct page_pool *pool,
 						 netmem_ref netmem)
 {
 	if (page_pool_fixed_size(pool) && likely(netmem)) {
-		unsigned long flags;
 		u32 used_pages, free_pages;
 
-		spin_lock_irqsave(&pool->page_pressure_lock, flags);
-
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
-		if (pool->used_pages == 0) {
+		if (atomic_read(&pool->used_pages) == 0) {
 			pr_err("page_pool (%s): used_pages(%u) == 0, free_pages: %u\n",
-				pool->proc->page_pool_name, pool->used_pages, pool->free_pages);
+				pool->proc->page_pool_name, atomic_read(&pool->used_pages), atomic_read(&pool->free_pages));
 			BUG();
 		}
 #endif
-		pool->used_pages--;
-
-		used_pages = pool->used_pages;
-		free_pages = pool->free_pages;
-
-		spin_unlock_irqrestore(&pool->page_pressure_lock, flags);
+		used_pages = atomic_dec_return_relaxed(&pool->used_pages);
+		free_pages = atomic_read(&pool->free_pages);
 
 		netmem_to_page(netmem)->pp_pressure = 0;
 		trace_page_pool_page_move(pool, netmem, PAGE_POOL_FREE, used_pages, free_pages);
@@ -342,9 +308,9 @@ static int pool_watermark_show(struct seq_file *m, void *v) {
 	struct page_pool *pool = pool_proc->pool;
 
 	seq_printf(m, "Pool Name: %s, ", pool_proc->page_pool_name);
-	seq_printf(m, "Pool Size: %u, ", pool->free_pages + pool->used_pages);
-	seq_printf(m, "Free Pages: %u, ", pool->free_pages);
-	seq_printf(m, "Used Pages: %u\n", pool->used_pages);
+	seq_printf(m, "Pool Size: %u, ", atomic_read(&pool->free_pages) + atomic_read(&pool->used_pages));
+	seq_printf(m, "Free Pages: %u, ", atomic_read(&pool->free_pages));
+	seq_printf(m, "Used Pages: %u\n", atomic_read(&pool->used_pages));
 
 	return 0;
 }
@@ -588,9 +554,8 @@ static int page_pool_init(struct page_pool *pool,
 	if (pool->slow.flags & PP_FLAG_FIXED_SIZE) {
 		pool->fixed_size = 1;
 		__page_pool_fill_ptr_ring(pool);
-		pool->free_pages = pool->ring.size;
-		pool->used_pages = 0;
-		spin_lock_init(&pool->page_pressure_lock);
+		atomic_set(&pool->free_pages, pool->ring.size);
+		atomic_set(&pool->used_pages, 0);
 		pr_warn("page_pool: create fixed size pool with %u pages",
 			pool->ring.size);
 

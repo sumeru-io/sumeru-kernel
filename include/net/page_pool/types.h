@@ -211,9 +211,8 @@ struct page_pool {
 	u32 xdp_mem_id;
 
 #ifdef CONFIG_NET_CACHEFLOW
-	spinlock_t page_pressure_lock;
-	u32 free_pages;
-	u32 used_pages;
+	atomic_t free_pages;
+	atomic_t used_pages;
 	struct page_pool_proc *proc;
 #endif
 
