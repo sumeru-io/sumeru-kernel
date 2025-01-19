@@ -62,19 +62,6 @@ static inline int page_pool_fixed_size(struct page_pool *pool)
 {
 	return pool->fixed_size;
 }
-
-static inline void page_pool_set_pressure(struct page_pool *pool,
-					 struct page* page)
-{
-	page->pp_pressure =
-		(unsigned long)atomic_read(&pool->used_pages) << 32 | atomic_read(&pool->free_pages);
-}
-
-static inline void page_pool_clear_pressure(struct page_pool *pool,
-					 struct page* page)
-{
-	page->pp_pressure = 0;
-}
 #else
 static inline int page_pool_fixed_size(struct page_pool *pool)
 {

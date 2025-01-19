@@ -195,7 +195,6 @@ static inline void page_pool_get_page_account(struct page_pool *pool,
 		used_pages = atomic_inc_return_relaxed(&pool->used_pages);
 		free_pages = atomic_dec_return_relaxed(&pool->free_pages);
 
-		netmem_to_page(netmem)->pp_pressure = (unsigned long) used_pages << 32 | free_pages;
 		if (used_pages > free_pages)
 			alloc_stat_inc(pool, pressure);
 
@@ -220,7 +219,6 @@ static inline void page_pool_put_page_account(struct page_pool *pool,
 		used_pages = atomic_dec_return_relaxed(&pool->used_pages);
 		free_pages = atomic_inc_return_relaxed(&pool->free_pages);
 
-		netmem_to_page(netmem)->pp_pressure = 0;
 		trace_page_pool_page_move(pool, netmem, PAGE_POOL_PUT, used_pages, free_pages);
 	}
 }
@@ -235,7 +233,6 @@ static inline void page_pool_alloc_page_account(struct page_pool *pool,
 		used_pages = atomic_inc_return_relaxed(&pool->used_pages);
 		free_pages = atomic_read(&pool->free_pages);
 
-		netmem_to_page(netmem)->pp_pressure = (unsigned long) used_pages << 32 | free_pages;
 		if (used_pages > free_pages)
 			alloc_stat_inc(pool, pressure);
 		trace_page_pool_page_move(pool, netmem, PAGE_POOL_ALLOC, used_pages, free_pages);
@@ -271,7 +268,6 @@ static inline void page_pool_return_page_account(struct page_pool *pool,
 		used_pages = atomic_dec_return_relaxed(&pool->used_pages);
 		free_pages = atomic_read(&pool->free_pages);
 
-		netmem_to_page(netmem)->pp_pressure = 0;
 		trace_page_pool_page_move(pool, netmem, PAGE_POOL_FREE, used_pages, free_pages);
 	}
 }
@@ -1003,7 +999,6 @@ static void __page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 void page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 {
 	if (page_pool_fixed_size(pool)) {
-		page_pool_clear_pressure(pool, netmem_to_page(netmem));
 		page_pool_return_page_account(pool, netmem);
 	}
 
@@ -1012,12 +1007,6 @@ void page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 
 static void page_pool_release_return_page(struct page_pool *pool, netmem_ref netmem)
 {
-#ifdef CONFIG_NET_CACHEFLOW
-	// clean pp_pressure before returning the page to pool
-	if (page_pool_fixed_size(pool)) {
-		page_pool_clear_pressure(pool, netmem_to_page(netmem));
-	}
-#endif
 	__page_pool_return_page(pool, netmem);
 }
 
