@@ -88,6 +88,7 @@
 #include <linux/scatterlist.h>
 
 #include <trace/events/tcp.h>
+#include <trace/events/page_pool.h>
 
 #ifdef CONFIG_TCP_MD5SIG
 static int tcp_v4_md5_hash_hdr(char *md5_hash, const struct tcp_md5sig_key *key,
