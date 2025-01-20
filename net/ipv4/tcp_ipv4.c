@@ -2146,8 +2146,9 @@ int tcp_filter(struct sock *sk, struct sk_buff *skb)
 #ifdef CONFIG_NET_CACHEFLOW
 	struct page_pool_mem_usage usage = {};
 
-	if (is_cacheflow_enabled() && skb_pp_pressure(skb, &usage) == 0) {
-		if (usage.used_pages >= READ_ONCE(cacheflow_thresh))
+	if (skb_pp_pressure(skb, &usage) == 0) {
+		trace_page_pool_pressure(usage.pool, sk, skb, usage.used_pages, usage.free_pages);
+		if (is_cacheflow_mark_enabled() && (usage.used_pages >= READ_ONCE(cacheflow_thresh)))
 			INET_ECN_set_ce(skb);
 	}
 #endif

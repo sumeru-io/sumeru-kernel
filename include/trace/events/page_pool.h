@@ -143,12 +143,13 @@ TRACE_EVENT(page_pool_page_move,
 
 TRACE_EVENT(page_pool_pressure,
 
-	TP_PROTO(const struct page_pool *pool, const struct sk_buff *skb, u32 used, u32 free),
+	TP_PROTO(const struct page_pool *pool, const struct sock *sk, const struct sk_buff *skb, u32 used, u32 free),
 
-	TP_ARGS(pool, skb, used, free),
+	TP_ARGS(pool, sk, skb, used, free),
 
 	TP_STRUCT__entry(
 		__field(const struct page_pool *,	pool)
+		__field(const struct sock *,		sk)
 		__field(const struct sk_buff *,		skb)
 		__field(u32,				used)
 		__field(u32,				free)
@@ -156,13 +157,14 @@ TRACE_EVENT(page_pool_pressure,
 
 	TP_fast_assign(
 		__entry->pool	= pool;
+		__entry->sk	= sk;
 		__entry->skb	= skb;
 		__entry->used	= used;
 		__entry->free	= free;
 	),
 
-	TP_printk("page_pool=%p skb=%p used=%u free=%u",
-		  __entry->pool, __entry->skb, __entry->used, __entry->free)
+	TP_printk("page_pool=%p sk=%p skb=%p used=%u free=%u",
+		  __entry->pool, __entry->sk, __entry->skb, __entry->used, __entry->free)
 )
 
 #endif /* _TRACE_PAGE_POOL_H */

@@ -10,6 +10,7 @@
 #include <net/page_pool/helpers.h>
 
 struct page_pool_mem_usage {
+	struct page_pool *pool;
 	u32 used_pages;
 	u32 free_pages;
 };
@@ -21,6 +22,11 @@ extern int cacheflow_thresh;
 static inline bool is_cacheflow_enabled(void)
 {
 	return READ_ONCE(cacheflow_enable) > 0;
+}
+
+static inline bool is_cacheflow_mark_enabled(void)
+{
+	return READ_ONCE(cacheflow_enable) > 1;
 }
 
 static inline int get_cacheflow_pool_size(void) {
