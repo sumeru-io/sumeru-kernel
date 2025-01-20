@@ -7320,6 +7320,6 @@ int skb_pp_pressure(struct sk_buff *skb, struct page_pool_mem_usage *usage) {
 		}
 	}
 
-	return 0;
+	return ret;
 }
 #endif
