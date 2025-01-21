@@ -7302,6 +7302,8 @@ int skb_pp_pressure(struct sk_buff *skb, struct page_pool_mem_usage *usage) {
 	int i, ret = 1;
 	netmem_ref netmem;
 	struct page_pool* pool;
+
+	usage->pool = NULL;
 	usage->free_pages = 0;
 	usage->used_pages = 0;
 
@@ -7314,6 +7316,7 @@ int skb_pp_pressure(struct sk_buff *skb, struct page_pool_mem_usage *usage) {
 				continue;
 
 			pool = netmem_get_pp(skb_shinfo(skb)->frags[i].netmem);
+			usage->pool = pool;
 			usage->used_pages = atomic_read(&pool->used_pages);
 			usage->free_pages = atomic_read(&pool->free_pages);
 

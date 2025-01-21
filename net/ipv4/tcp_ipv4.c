@@ -2143,16 +2143,18 @@ int tcp_filter(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcphdr *th = (struct tcphdr *)skb->data;
 
+	int ret = sk_filter_trim_cap(sk, skb, th->doff * 4);
+
 #ifdef CONFIG_NET_CACHEFLOW
 	struct page_pool_mem_usage usage = {};
 
-	if (skb_pp_pressure(skb, &usage) == 0) {
+	if (!ret && !skb_pp_pressure(skb, &usage)) {
 		trace_page_pool_pressure(usage.pool, sk, skb, usage.used_pages, usage.free_pages);
 		if (is_cacheflow_mark_enabled() && (usage.used_pages >= READ_ONCE(cacheflow_thresh)))
 			INET_ECN_set_ce(skb);
 	}
 #endif
-	return sk_filter_trim_cap(sk, skb, th->doff * 4);
+	return ret;
 }
 EXPORT_SYMBOL(tcp_filter);
 
