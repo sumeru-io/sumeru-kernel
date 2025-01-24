@@ -848,7 +848,7 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 	rq->buff.headroom = mlx5e_get_rq_headroom(mdev, params, xsk);
 	pool_size = 1 << params->log_rq_mtu_frames;
 
-	pr_warn("mlx5e: pool size=%u, headroom=%u\n", pool_size, rq->buff.headroom);
+	mlx5e_params_print_info(mdev, params);
 
 	rq->mkey_be = cpu_to_be32(mdev->mlx5e_res.hw_objs.mkey);
 
