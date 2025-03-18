@@ -92,6 +92,29 @@ TRACE_EVENT(skb_copy_datagram_iovec,
 	TP_printk("skbaddr=%p len=%d", __entry->skbaddr, __entry->len)
 );
 
+
+TRACE_EVENT(skb_proc_latency_diff,
+	TP_PROTO(u32 queue_index, u64 latency_ns, u64 recv_timestamp, u64 proc_timestamp),
+	TP_ARGS(queue_index, latency_ns, recv_timestamp, proc_timestamp),
+	TP_STRUCT__entry(
+		__field(u32, queue_index)
+		__field(u64, latency_ns)
+		__field(u64, recv_timestamp)
+		__field(u64, proc_timestamp)
+	),
+	TP_fast_assign(
+		__entry->queue_index = queue_index;
+		__entry->latency_ns = latency_ns;
+		__entry->recv_timestamp = recv_timestamp;
+		__entry->proc_timestamp = proc_timestamp;
+	),
+	TP_printk("queue=%u latency=%llu ns recv=%llu proc=%llu",
+		  __entry->queue_index,
+		  __entry->latency_ns,
+		  __entry->recv_timestamp,
+		  __entry->proc_timestamp)
+);
+
 #endif /* _TRACE_SKB_H */
 
 /* This part must be outside protection */

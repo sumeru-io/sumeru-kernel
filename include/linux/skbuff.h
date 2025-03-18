@@ -600,6 +600,7 @@ struct skb_shared_info {
 		struct skb_shared_hwtstamps hwtstamps;
 		struct xsk_tx_metadata_compl xsk_meta;
 	};
+	ktime_t		proc_delay;
 	unsigned int	gso_type;
 	u32		tskey;
 
