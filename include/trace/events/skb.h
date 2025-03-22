@@ -93,28 +93,32 @@ TRACE_EVENT(skb_copy_datagram_iovec,
 );
 
 TRACE_EVENT(skb_ring_timestamp,
-	TP_PROTO(u32 queue_index, u64 receive_timestamp, u64 process_timestamp),
-	TP_ARGS(queue_index, receive_timestamp, process_timestamp),
+	TP_PROTO(const struct sk_buff *skb, u32 queue_index, u64 receive_timestamp, u64 process_timestamp),
+	TP_ARGS(skb, queue_index, receive_timestamp, process_timestamp),
 	TP_STRUCT__entry(
+		__field(const void *, skb)
 		__field(u32, queue_index)
 		__field(u64, receive_timestamp)
 		__field(u64, process_timestamp)
 	),
 	TP_fast_assign(
+		__entry->skb = skb;
 		__entry->queue_index = queue_index;
 		__entry->receive_timestamp = receive_timestamp;
 		__entry->process_timestamp = process_timestamp;
 	),
-	TP_printk("queue=%u recv=%llu proc=%llu",
+	TP_printk("skbaddr=%p queue=%u recv=%llu proc=%llu",
+		  __entry->skb,
 		  __entry->queue_index,
 		  __entry->receive_timestamp,
 		  __entry->process_timestamp)
 );
 
 TRACE_EVENT(skb_milestone_timestamp,
-	TP_PROTO(u32 queue_index, u64 sock_id, u64 receive_timestamp, u64 process_timestamp, u64 enqueue_timestamp, u64 consume_timestamp),
-	TP_ARGS(queue_index, sock_id, receive_timestamp, process_timestamp, enqueue_timestamp, consume_timestamp),
+	TP_PROTO(const struct sk_buff *skb, u32 queue_index, u64 sock_id, u64 receive_timestamp, u64 process_timestamp, u64 enqueue_timestamp, u64 consume_timestamp),
+	TP_ARGS(skb, queue_index, sock_id, receive_timestamp, process_timestamp, enqueue_timestamp, consume_timestamp),
 	TP_STRUCT__entry(
+		__field(const void *, skb)
 		__field(u32, queue_index)
 		__field(u64, sock_id)
 		__field(u64, receive_timestamp)
@@ -123,6 +127,7 @@ TRACE_EVENT(skb_milestone_timestamp,
 		__field(u64, consume_timestamp)
 	),
 	TP_fast_assign(
+		__entry->skb = skb;
 		__entry->queue_index = queue_index;
 		__entry->sock_id = sock_id;
 		__entry->receive_timestamp = receive_timestamp;
@@ -130,7 +135,8 @@ TRACE_EVENT(skb_milestone_timestamp,
 		__entry->enqueue_timestamp = enqueue_timestamp;
 		__entry->consume_timestamp = consume_timestamp;
 	),
-	TP_printk("queue=%u sock_id=%u recv=%llu proc=%llu enq=%llu cons=%llu",
+	TP_printk("skbaddr=%p queue=%u sock_id=%u recv=%llu proc=%llu enq=%llu cons=%llu",
+		  __entry->skb,
 		  __entry->queue_index,
 		  __entry->sock_id,
 		  __entry->receive_timestamp,

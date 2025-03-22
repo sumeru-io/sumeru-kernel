@@ -1100,7 +1100,10 @@ static void skb_free_head(struct sk_buff *skb)
 	if (skb_shinfo(skb)->ms_timestamp.valid && skb_rx_queue_recorded(skb)) {
 		int queue_index = skb_get_rx_queue(skb);
 		u64 sock_id = skb->sk ? sock_gen_cookie(skb->sk) : 0;
-		trace_skb_milestone_timestamp(queue_index, sock_id, 
+
+		skb_shinfo(skb)->ms_timestamp.consume_timestamp = ktime_get_real_ns();
+
+		trace_skb_milestone_timestamp(skb, queue_index, sock_id, 
 		skb_shinfo(skb)->ms_timestamp.receive_timestamp, 
 		skb_shinfo(skb)->ms_timestamp.process_timestamp, 
 		skb_shinfo(skb)->ms_timestamp.enqueue_timestamp, 
