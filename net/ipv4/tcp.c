@@ -283,6 +283,7 @@
 #include <net/busy_poll.h>
 #include <net/hotdata.h>
 #include <trace/events/tcp.h>
+#include <trace/events/skb.h>
 #include <net/rps.h>
 
 #include "../core/devmem.h"
@@ -1519,6 +1520,18 @@ void tcp_cleanup_rbuf(struct sock *sk, int copied)
 static void tcp_eat_recv_skb(struct sock *sk, struct sk_buff *skb)
 {
 	__skb_unlink(skb, &sk->sk_receive_queue);
+	if (skb_shinfo(skb)->ms_timestamp.valid) {
+		int queue_index = skb_get_rx_queue(skb);
+		u64 sock_id = skb->sk ? sock_gen_cookie(skb->sk) : 0;
+
+		skb_shinfo(skb)->ms_timestamp.consume_timestamp = ktime_get_real_ns();
+
+		trace_skb_milestone_timestamp(skb, queue_index, sock_id, 
+		skb_shinfo(skb)->ms_timestamp.receive_timestamp, 
+		skb_shinfo(skb)->ms_timestamp.process_timestamp, 
+		skb_shinfo(skb)->ms_timestamp.enqueue_timestamp, 
+		skb_shinfo(skb)->ms_timestamp.consume_timestamp);
+	}
 	if (likely(skb->destructor == sock_rfree)) {
 		sock_rfree(skb);
 		skb->destructor = NULL;

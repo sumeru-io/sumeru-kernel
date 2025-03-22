@@ -1577,11 +1577,18 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 	if (unlikely(mlx5e_rx_hw_stamp(rq->tstamp))) {
 		skb_hwtstamps(skb)->hwtstamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time,
 								  rq->clock, get_cqe_ts(cqe));
-		skb_shinfo(skb)->ms_timestamp.valid = 1;
-		skb_shinfo(skb)->ms_timestamp.receive_timestamp = skb_hwtstamps(skb)->hwtstamp;
-		skb_shinfo(skb)->ms_timestamp.process_timestamp = ktime_get_real_ns();
 
-		trace_skb_ring_timestamp(skb, rq->ix, skb_shinfo(skb)->ms_timestamp.receive_timestamp, skb_shinfo(skb)->ms_timestamp.process_timestamp);
+		int network_depth = 0;
+		__be16 proto;
+		if (likely(is_last_ethertype_ip(skb, &network_depth, &proto))) {
+			if (likely(get_ip_proto(skb, network_depth, proto) == IPPROTO_TCP)) {
+				skb_shinfo(skb)->ms_timestamp.valid = 1;
+				skb_shinfo(skb)->ms_timestamp.receive_timestamp = skb_hwtstamps(skb)->hwtstamp;
+				skb_shinfo(skb)->ms_timestamp.process_timestamp = ktime_get_real_ns();
+
+				trace_skb_ring_timestamp(skb, rq->ix, skb_shinfo(skb)->ms_timestamp.receive_timestamp, skb_shinfo(skb)->ms_timestamp.process_timestamp);
+			}
+		}
 	}
 	skb_record_rx_queue(skb, rq->ix);
 
