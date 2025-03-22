@@ -89,6 +89,7 @@
 #include <linux/user_namespace.h>
 #include <linux/indirect_call_wrapper.h>
 #include <linux/textsearch.h>
+#include <linux/sock_diag.h>
 
 #include "dev.h"
 #include "netmem_priv.h"
@@ -1095,6 +1096,16 @@ static void skb_kfree_head(void *head, unsigned int end_offset)
 static void skb_free_head(struct sk_buff *skb)
 {
 	unsigned char *head = skb->head;
+
+	if (skb_shinfo(skb)->ms_timestamp.valid && skb_rx_queue_recorded(skb)) {
+		int queue_index = skb_get_rx_queue(skb);
+		u64 sock_id = skb->sk ? sock_gen_cookie(skb->sk) : 0;
+		trace_skb_milestone_timestamp(queue_index, sock_id, 
+		skb_shinfo(skb)->ms_timestamp.receive_timestamp, 
+		skb_shinfo(skb)->ms_timestamp.process_timestamp, 
+		skb_shinfo(skb)->ms_timestamp.enqueue_timestamp, 
+		skb_shinfo(skb)->ms_timestamp.consume_timestamp);
+	}
 
 	if (skb->head_frag) {
 		if (skb_pp_recycle(skb, head))

@@ -93,26 +93,32 @@ TRACE_EVENT(skb_copy_datagram_iovec,
 );
 
 
-TRACE_EVENT(skb_proc_latency_diff,
-	TP_PROTO(u32 queue_index, u64 latency_ns, u64 recv_timestamp, u64 proc_timestamp),
-	TP_ARGS(queue_index, latency_ns, recv_timestamp, proc_timestamp),
+TRACE_EVENT(skb_milestone_timestamp,
+	TP_PROTO(u32 queue_index, u64 sock_id, u64 receive_timestamp, u64 process_timestamp, u64 enqueue_timestamp, u64 consume_timestamp),
+	TP_ARGS(queue_index, sock_id, receive_timestamp, process_timestamp, enqueue_timestamp, consume_timestamp),
 	TP_STRUCT__entry(
 		__field(u32, queue_index)
-		__field(u64, latency_ns)
-		__field(u64, recv_timestamp)
-		__field(u64, proc_timestamp)
+		__field(u64, sock_id)
+		__field(u64, receive_timestamp)
+		__field(u64, process_timestamp)
+		__field(u64, enqueue_timestamp)
+		__field(u64, consume_timestamp)
 	),
 	TP_fast_assign(
 		__entry->queue_index = queue_index;
-		__entry->latency_ns = latency_ns;
-		__entry->recv_timestamp = recv_timestamp;
-		__entry->proc_timestamp = proc_timestamp;
+		__entry->sock_id = sock_id;
+		__entry->receive_timestamp = receive_timestamp;
+		__entry->process_timestamp = process_timestamp;
+		__entry->enqueue_timestamp = enqueue_timestamp;
+		__entry->consume_timestamp = consume_timestamp;
 	),
-	TP_printk("queue=%u latency=%llu ns recv=%llu proc=%llu",
+	TP_printk("queue=%u sock_id=%u recv=%llu proc=%llu enq=%llu cons=%llu",
 		  __entry->queue_index,
-		  __entry->latency_ns,
-		  __entry->recv_timestamp,
-		  __entry->proc_timestamp)
+		  __entry->sock_id,
+		  __entry->receive_timestamp,
+		  __entry->process_timestamp,
+		  __entry->enqueue_timestamp,
+		  __entry->consume_timestamp)
 );
 
 #endif /* _TRACE_SKB_H */

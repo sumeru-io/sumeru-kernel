@@ -1577,9 +1577,9 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 	if (unlikely(mlx5e_rx_hw_stamp(rq->tstamp))) {
 		skb_hwtstamps(skb)->hwtstamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time,
 								  rq->clock, get_cqe_ts(cqe));
-		u64 now = ktime_get_real_ns();
-		skb_shinfo(skb)->proc_delay = now - skb_hwtstamps(skb)->hwtstamp;
-		trace_skb_proc_latency_diff(rq->ix, skb_shinfo(skb)->proc_delay, skb_hwtstamps(skb)->hwtstamp, now);
+		skb_shinfo(skb)->ms_timestamp.valid = 1;
+		skb_shinfo(skb)->ms_timestamp.receive_timestamp = skb_hwtstamps(skb)->hwtstamp;
+		skb_shinfo(skb)->ms_timestamp.process_timestamp = ktime_get_real_ns();
 	}
 	skb_record_rx_queue(skb, rq->ix);
 

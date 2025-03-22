@@ -584,10 +584,19 @@ struct xsk_tx_metadata_compl {
 	__u64 *tx_timestamp;
 };
 
+struct skb_millstone_timestamp {
+	int valid;
+	u64 receive_timestamp;
+	u64 process_timestamp;
+	u64 enqueue_timestamp;
+	u64 consume_timestamp;
+} __attribute__((aligned(64)));
+
 /* This data is invariant across clones and lives at
  * the end of the header data, ie. at skb->end.
  */
 struct skb_shared_info {
+	struct skb_millstone_timestamp ms_timestamp;
 	__u8		flags;
 	__u8		meta_len;
 	__u8		nr_frags;
@@ -600,7 +609,7 @@ struct skb_shared_info {
 		struct skb_shared_hwtstamps hwtstamps;
 		struct xsk_tx_metadata_compl xsk_meta;
 	};
-	ktime_t		proc_delay;
+
 	unsigned int	gso_type;
 	u32		tskey;
 

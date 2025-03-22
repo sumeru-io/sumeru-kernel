@@ -2021,6 +2021,10 @@ bool tcp_add_backlog(struct sock *sk, struct sk_buff *skb,
 	u64 limit;
 	int delta;
 
+	if (skb_shinfo(skb)->ms_timestamp.valid && skb_shinfo(skb)->ms_timestamp.enqueue_timestamp == 0) {
+		skb_shinfo(skb)->ms_timestamp.enqueue_timestamp = ktime_get_real_ns();
+	}
+
 	/* In case all data was pulled from skb frags (in __pskb_pull_tail()),
 	 * we can fix skb->truesize to its real value to avoid future drops.
 	 * This is valid because skb is not yet charged to the socket.
