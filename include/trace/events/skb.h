@@ -92,6 +92,24 @@ TRACE_EVENT(skb_copy_datagram_iovec,
 	TP_printk("skbaddr=%p len=%d", __entry->skbaddr, __entry->len)
 );
 
+TRACE_EVENT(skb_ring_timestamp,
+	TP_PROTO(u32 queue_index, u64 receive_timestamp, u64 process_timestamp),
+	TP_ARGS(queue_index, receive_timestamp, process_timestamp),
+	TP_STRUCT__entry(
+		__field(u32, queue_index)
+		__field(u64, receive_timestamp)
+		__field(u64, process_timestamp)
+	),
+	TP_fast_assign(
+		__entry->queue_index = queue_index;
+		__entry->receive_timestamp = receive_timestamp;
+		__entry->process_timestamp = process_timestamp;
+	),
+	TP_printk("queue=%u recv=%llu proc=%llu",
+		  __entry->queue_index,
+		  __entry->receive_timestamp,
+		  __entry->process_timestamp)
+);
 
 TRACE_EVENT(skb_milestone_timestamp,
 	TP_PROTO(u32 queue_index, u64 sock_id, u64 receive_timestamp, u64 process_timestamp, u64 enqueue_timestamp, u64 consume_timestamp),
@@ -120,6 +138,8 @@ TRACE_EVENT(skb_milestone_timestamp,
 		  __entry->enqueue_timestamp,
 		  __entry->consume_timestamp)
 );
+
+
 
 #endif /* _TRACE_SKB_H */
 

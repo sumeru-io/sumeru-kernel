@@ -1580,6 +1580,8 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 		skb_shinfo(skb)->ms_timestamp.valid = 1;
 		skb_shinfo(skb)->ms_timestamp.receive_timestamp = skb_hwtstamps(skb)->hwtstamp;
 		skb_shinfo(skb)->ms_timestamp.process_timestamp = ktime_get_real_ns();
+
+		trace_skb_ring_timestamp(rq->ix, skb_shinfo(skb)->ms_timestamp.receive_timestamp, skb_shinfo(skb)->ms_timestamp.process_timestamp);
 	}
 	skb_record_rx_queue(skb, rq->ix);
 
