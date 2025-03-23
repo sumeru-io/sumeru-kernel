@@ -135,7 +135,7 @@ TRACE_EVENT(skb_milestone_timestamp,
 		__entry->enqueue_timestamp = enqueue_timestamp;
 		__entry->consume_timestamp = consume_timestamp;
 	),
-	TP_printk("skbaddr=%p queue=%u sock_id=%u recv=%llu proc=%llu enq=%llu cons=%llu",
+	TP_printk("skbaddr=%p queue=%u sock_id=%llu recv=%llu proc=%llu enq=%llu cons=%llu",
 		  __entry->skb,
 		  __entry->queue_index,
 		  __entry->sock_id,

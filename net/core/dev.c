@@ -1483,8 +1483,9 @@ void netdev_notify_peers(struct net_device *dev)
 EXPORT_SYMBOL(netdev_notify_peers);
 
 static int napi_threaded_poll(void *data);
-
-static int napi_kthread_create(struct napi_struct *n)
+static int napi_threaded_busy_poll(void *data);
+#define NAPI_KTHREAD_CORE_ANY -1
+static int napi_kthread_create(struct napi_struct *n, bool busy_polling, int core)
 {
 	int err = 0;
 
@@ -1492,14 +1493,22 @@ static int napi_kthread_create(struct napi_struct *n)
 	 * TASK_INTERRUPTIBLE mode to avoid the blocked task
 	 * warning and work with loadavg.
 	 */
-	n->thread = kthread_run(napi_threaded_poll, n, "napi/%s-%d",
+	int (*thread_func)(void *) = busy_polling ? napi_threaded_busy_poll : napi_threaded_poll;
+	if (core != NAPI_KTHREAD_CORE_ANY) {
+		n->thread = kthread_run_on_cpu(thread_func, n, core, "napi/%u");
+	} else {
+		n->thread = kthread_run(thread_func, n, "napi/%s-%d",
 				n->dev->name, n->napi_id);
+	}
+
 	if (IS_ERR(n->thread)) {
 		err = PTR_ERR(n->thread);
 		pr_err("kthread_run failed with err %d\n", err);
 		n->thread = NULL;
 	}
 
+	if (core != NAPI_KTHREAD_CORE_ANY)
+		kthread_bind(n->thread, core);
 	return err;
 }
 
@@ -6448,6 +6457,7 @@ static void busy_poll_stop(struct napi_struct *napi, void *have_poll_lock,
 	netpoll_poll_unlock(have_poll_lock);
 	if (rc == budget)
 		__busy_poll_stop(napi, skip_schedule);
+
 	bpf_net_ctx_clear(bpf_net_ctx);
 	local_bh_enable();
 }
@@ -6623,10 +6633,11 @@ static void init_gro_hash(struct napi_struct *napi)
 	napi->gro_bitmask = 0;
 }
 
-int dev_set_threaded(struct net_device *dev, bool threaded)
+int dev_set_threaded(struct net_device *dev, int threaded)
 {
 	struct napi_struct *napi;
 	int err = 0;
+	int idx = 0;
 
 	if (dev->threaded == threaded)
 		return 0;
@@ -6634,7 +6645,7 @@ int dev_set_threaded(struct net_device *dev, bool threaded)
 	if (threaded) {
 		list_for_each_entry(napi, &dev->napi_list, dev_list) {
 			if (!napi->thread) {
-				err = napi_kthread_create(napi);
+				err = napi_kthread_create(napi, threaded == 2, 10 + (idx++));
 				if (err) {
 					threaded = false;
 					break;
@@ -6733,7 +6744,7 @@ void netif_napi_add_weight(struct net_device *dev, struct napi_struct *napi,
 	 * Clear dev->threaded if kthread creation failed so that
 	 * threaded mode will not be enabled in napi_enable().
 	 */
-	if (dev->threaded && napi_kthread_create(napi))
+	if (dev->threaded && napi_kthread_create(napi, dev->threaded == 2, 10))
 		dev->threaded = false;
 	netif_napi_set_irq(napi, -1);
 }
@@ -6980,6 +6991,24 @@ static int napi_threaded_poll(void *data)
 	while (!napi_thread_wait(napi))
 		napi_threaded_poll_loop(napi);
 
+	return 0;
+}
+
+static bool napi_busy_loop_end(void *p, unsigned long start_time) {
+	unsigned long end_time = start_time + 1000;
+	return time_after(jiffies, end_time);
+}
+
+static int napi_threaded_busy_poll(void *data)
+{
+	struct napi_struct *napi = data;
+
+	while (!napi_thread_wait(napi)) {
+		// we clear the NAPI_STATE_SCHED bit to be compitable with 
+		// napi_busy_loop's expectation.
+		clear_bit(NAPI_STATE_SCHED, &napi->state);
+		napi_busy_loop(napi->napi_id, napi_busy_loop_end, NULL, false, THREADED_BUSY_POLL_BUDGET);
+	}
 	return 0;
 }
 

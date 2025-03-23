@@ -904,6 +904,16 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		if (err)
 			goto err_free_mpwqe_info;
 
+		pr_info("mlx5e: RQ[%d]: pages_per_wqe %u, min_wqe_bulk: %u, wq_sz %d, "
+			"num_strides: %u, stride_size: %u, frame0_sz: %u\n",
+			rq->ix,
+			rq->mpwqe.pages_per_wqe,
+			rq->mpwqe.min_wqe_bulk,
+			wq_sz,
+			rq->mpwqe.num_strides,
+			1 << rq->mpwqe.log_stride_sz,
+			rq->buff.frame0_sz);
+
 		break;
 	default: /* MLX5_WQ_TYPE_CYCLIC */
 		err = mlx5_wq_cyc_create(mdev, &rqp->wq, rqc_wq, &rq->wqe.wq,
