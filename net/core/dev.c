@@ -7007,7 +7007,8 @@ static int napi_threaded_busy_poll(void *data)
 		// we clear the NAPI_STATE_SCHED bit to be compitable with 
 		// napi_busy_loop's expectation.
 		clear_bit(NAPI_STATE_SCHED, &napi->state);
-		napi_busy_loop(napi->napi_id, napi_busy_loop_end, NULL, false, THREADED_BUSY_POLL_BUDGET);
+		napi_busy_loop(napi->napi_id, napi_busy_loop_end, NULL, false,
+			napi->dev->threaded_budget ? napi->dev->threaded_budget : 32);
 	}
 	return 0;
 }

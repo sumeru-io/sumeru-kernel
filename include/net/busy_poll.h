@@ -26,8 +26,6 @@
 
 #define BUSY_POLL_BUDGET 8
 
-#define THREADED_BUSY_POLL_BUDGET 128
-
 #ifdef CONFIG_NET_RX_BUSY_POLL
 
 struct napi_struct;
