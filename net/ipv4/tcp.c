@@ -1525,7 +1525,7 @@ static void tcp_eat_recv_skb(struct sock *sk, struct sk_buff *skb)
 
 		skb_shinfo(skb)->ms_timestamp.consume_timestamp = ktime_get_real_ns();
 
-		trace_skb_sock_timestamp(skb, sock_id, 
+		trace_skb_sock_timestamp(skb, skb->len, sock_id, 
 		skb_shinfo(skb)->ms_timestamp.enqueue_timestamp,
 		skb_shinfo(skb)->ms_timestamp.consume_timestamp);
 

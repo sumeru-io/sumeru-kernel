@@ -115,22 +115,25 @@ TRACE_EVENT(skb_ring_timestamp,
 );
 
 TRACE_EVENT(skb_sock_timestamp,
-	TP_PROTO(const struct sk_buff *skb, u64 sock_id, u64 enqueue_timestamp, u64 consume_timestamp),
-	TP_ARGS(skb, sock_id, enqueue_timestamp, consume_timestamp),
+	TP_PROTO(const struct sk_buff *skb, u32 skb_len, u64 sock_id, u64 enqueue_timestamp, u64 consume_timestamp),
+	TP_ARGS(skb, skb_len, sock_id, enqueue_timestamp, consume_timestamp),
 	TP_STRUCT__entry(
 		__field(const void *, skb)
+		__field(u32, skb_len)
 		__field(u64, sock_id)
 		__field(u64, enqueue_timestamp)
 		__field(u64, consume_timestamp)
 	),
 	TP_fast_assign(
 		__entry->skb = skb;
+		__entry->skb_len = skb_len;
 		__entry->sock_id = sock_id;
 		__entry->enqueue_timestamp = enqueue_timestamp;
 		__entry->consume_timestamp = consume_timestamp;
 	),
-	TP_printk("skbaddr=%p queue=%u sock_id=%llu recv=%llu proc=%llu enq=%llu cons=%llu",
+	TP_printk("skbaddr=%p skb_len=%lu sock_id=%llu enq=%llu cons=%llu",
 		  __entry->skb,
+		  __entry->skb_len,
 		  __entry->sock_id,
 		  __entry->enqueue_timestamp,
 		  __entry->consume_timestamp)
