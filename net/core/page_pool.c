@@ -181,7 +181,7 @@ enum {
 static inline void page_pool_get_page_account(struct page_pool *pool,
 						netmem_ref netmem)
 {
-	if (page_pool_fixed_size(pool) && likely(netmem)) {
+	if (page_pool_cacheflow(pool) && likely(netmem)) {
 		u32 used_pages, free_pages;
 
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
@@ -206,7 +206,7 @@ static inline void page_pool_get_page_account(struct page_pool *pool,
 static inline void page_pool_put_page_account(struct page_pool *pool,
 						netmem_ref netmem)
 {
-	if (page_pool_fixed_size(pool) && likely(netmem)) {
+	if (page_pool_cacheflow(pool) && likely(netmem)) {
 		u32 used_pages, free_pages;
 
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
@@ -226,7 +226,7 @@ static inline void page_pool_put_page_account(struct page_pool *pool,
 static inline void page_pool_alloc_page_account(struct page_pool *pool,
 						netmem_ref netmem)
 {
-	if (page_pool_fixed_size(pool) && likely(netmem)) {
+	if (page_pool_cacheflow(pool) && likely(netmem)) {
 		u32 used_pages, free_pages;
 
 
@@ -242,7 +242,7 @@ static inline void page_pool_alloc_page_account(struct page_pool *pool,
 static inline void page_pool_prealloc_page_account(struct page_pool *pool,
 							netmem_ref netmem)
 {
-	if (page_pool_fixed_size(pool) && likely(netmem)) {
+	if (page_pool_cacheflow(pool) && likely(netmem)) {
 		u32 used_pages, free_pages;
 
 		used_pages = atomic_read(&pool->used_pages);
@@ -255,7 +255,7 @@ static inline void page_pool_prealloc_page_account(struct page_pool *pool,
 static inline void page_pool_return_page_account(struct page_pool *pool,
 						 netmem_ref netmem)
 {
-	if (page_pool_fixed_size(pool) && likely(netmem)) {
+	if (page_pool_cacheflow(pool) && likely(netmem)) {
 		u32 used_pages, free_pages;
 
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
@@ -547,8 +547,8 @@ static int page_pool_init(struct page_pool *pool,
 		static_branch_inc(&page_pool_mem_providers);
 	}
 #ifdef CONFIG_NET_CACHEFLOW
-	if (pool->slow.flags & PP_FLAG_FIXED_SIZE) {
-		pool->fixed_size = 1;
+	if (pool->slow.flags & PP_FLAG_CACHEFLOW) {
+		pool->cacheflow = 1;
 		__page_pool_fill_ptr_ring(pool);
 		atomic_set(&pool->free_pages, pool->ring.size);
 		atomic_set(&pool->used_pages, 0);
@@ -882,7 +882,7 @@ netmem_ref page_pool_alloc_netmem(struct page_pool *pool, gfp_t gfp)
 	if (static_branch_unlikely(&page_pool_mem_providers) && pool->mp_priv)
 		netmem = mp_dmabuf_devmem_alloc_netmems(pool, gfp);
 	else {
-		if(page_pool_fixed_size(pool))
+		if(page_pool_cacheflow(pool))
 			alloc_stat_inc(pool, overcommit);
 
 		netmem = __page_pool_alloc_pages_slow(pool, gfp);
@@ -998,7 +998,7 @@ static void __page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 
 void page_pool_return_page(struct page_pool *pool, netmem_ref netmem)
 {
-	if (page_pool_fixed_size(pool)) {
+	if (page_pool_cacheflow(pool)) {
 		page_pool_return_page_account(pool, netmem);
 	}
 
