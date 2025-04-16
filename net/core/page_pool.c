@@ -229,7 +229,6 @@ static inline void page_pool_alloc_page_account(struct page_pool *pool,
 	if (page_pool_cacheflow(pool) && likely(netmem)) {
 		u32 used_pages, free_pages;
 
-
 		used_pages = atomic_inc_return_relaxed(&pool->used_pages);
 		free_pages = atomic_read(&pool->free_pages);
 

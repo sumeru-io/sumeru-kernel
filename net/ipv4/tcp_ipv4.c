@@ -2153,9 +2153,14 @@ int tcp_filter(struct sock *sk, struct sk_buff *skb)
 	struct page_pool_mem_usage usage = {};
 
 	if (!ret && !skb_pp_pressure(skb, &usage)) {
-		trace_page_pool_pressure(usage.pool, sk, sock_gen_cookie(sk), skb, usage.used_pages, usage.free_pages);
-		if (is_cacheflow_mark_enabled() && (usage.used_pages >= READ_ONCE(cacheflow_thresh)))
+		if (is_cacheflow_mark_enabled() && (usage.used_pages >= READ_ONCE(cacheflow_thresh))) {
 			INET_ECN_set_ce(skb);
+			trace_page_pool_pressure(usage.pool, sk, sock_gen_cookie(sk),
+						 skb, usage.used_pages, usage.free_pages, 1);
+		} else {
+			trace_page_pool_pressure(usage.pool, sk, sock_gen_cookie(sk),
+						 skb, usage.used_pages, usage.free_pages, 0);
+		}
 	}
 #endif
 	return ret;
