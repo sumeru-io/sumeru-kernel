@@ -947,9 +947,13 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 
 #ifdef CONFIG_NET_CACHEFLOW
 		if (is_cacheflow_enabled()) {
-			pr_info("mlx5e: RQ[%d]: cacheflow enabled\n", rq->ix);
 			pp_params.flags |= PP_FLAG_CACHEFLOW;
 			pp_params.pool_size = get_cacheflow_pool_size();
+			pr_info("mlx5e: RQ[%d]: cacheflow enabled, pool size = %u\n", rq->ix, 
+				pp_params.pool_size);
+		} else {
+			pr_info("mlx5e: RQ[%d]: cacheflow disabled, pool size = %u\n", rq->ix, 
+				pp_params.pool_size);
 		}
 #endif
 
