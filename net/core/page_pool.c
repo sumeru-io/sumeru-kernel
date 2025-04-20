@@ -406,9 +406,17 @@ static bool page_pool_producer_lock(struct page_pool *pool)
 	bool in_softirq = in_softirq();
 
 	if (in_softirq)
+#ifdef CONFIG_PAGE_POOL_STACK
+		spin_lock(&pool->stack.lock);
+#else
 		spin_lock(&pool->ring.producer_lock);
+#endif
 	else
+#ifdef CONFIG_PAGE_POOL_STACK
+		spin_lock_bh(&pool->stack.lock);
+#else
 		spin_lock_bh(&pool->ring.producer_lock);
+#endif
 
 	return in_softirq;
 }
@@ -418,9 +426,17 @@ static void page_pool_producer_unlock(struct page_pool *pool,
 	__releases(&pool->ring.producer_lock)
 {
 	if (in_softirq)
+#ifdef CONFIG_PAGE_POOL_STACK
+		spin_unlock(&pool->stack.lock);
+#else
 		spin_unlock(&pool->ring.producer_lock);
+#endif
 	else
+#ifdef CONFIG_PAGE_POOL_STACK
+		spin_unlock_bh(&pool->stack.lock);
+#else
 		spin_unlock_bh(&pool->ring.producer_lock);
+#endif
 }
 
 static void page_pool_struct_check(void)
@@ -507,8 +523,12 @@ static int page_pool_init(struct page_pool *pool,
 		pool->system = true;
 	}
 #endif
-
-	if (ptr_ring_init(&pool->ring, ring_qsize, GFP_KERNEL) < 0) {
+#ifdef CONFIG_PAGE_POOL_STACK
+	if (ptr_stack_init(&pool->stack, ring_qsize, GFP_KERNEL) < 0)
+#else
+	if (ptr_ring_init(&pool->ring, ring_qsize, GFP_KERNEL) < 0) 
+#endif
+	{
 #ifdef CONFIG_PAGE_POOL_STATS
 		if (!pool->system)
 			free_percpu(pool->recycle_stats);
@@ -547,12 +567,17 @@ static int page_pool_init(struct page_pool *pool,
 	}
 #ifdef CONFIG_NET_CACHEFLOW
 	if (pool->slow.flags & PP_FLAG_CACHEFLOW) {
+#ifdef CONFIG_PAGE_POOL_STACK
+		u32 size = pool->stack.size;
+#else
+		u32 size = pool->ring.size;
+#endif
 		pool->cacheflow = 1;
 		__page_pool_fill_ptr_ring(pool);
-		atomic_set(&pool->free_pages, pool->ring.size);
+
+		atomic_set(&pool->free_pages, size);
 		atomic_set(&pool->used_pages, 0);
-		pr_warn("page_pool: create fixed size pool with %u pages",
-			pool->ring.size);
+		pr_warn("page_pool: create fixed size pool with %u pages", size);
 
 		pool->proc = create_proc_entry(pool);
 		if (!pool->proc) {
@@ -566,7 +591,11 @@ static int page_pool_init(struct page_pool *pool,
 	return 0;
 
 free_ptr_ring:
+#ifdef CONFIG_PAGE_POOL_STACK
+	ptr_stack_cleanup(&pool->stack, NULL);
+#else
 	ptr_ring_cleanup(&pool->ring, NULL);
+#endif
 #ifdef CONFIG_PAGE_POOL_STATS
 	if (!pool->system)
 		free_percpu(pool->recycle_stats);
@@ -576,7 +605,11 @@ free_ptr_ring:
 
 static void page_pool_uninit(struct page_pool *pool)
 {
+#ifdef CONFIG_PAGE_POOL_STACK
+	ptr_stack_cleanup(&pool->stack, NULL);
+#else
 	ptr_ring_cleanup(&pool->ring, NULL);
+#endif
 
 	if (pool->dma_map)
 		put_device(pool->p.dev);
@@ -635,12 +668,21 @@ static void page_pool_return_page(struct page_pool *pool, netmem_ref netmem);
 
 static noinline netmem_ref page_pool_refill_alloc_cache(struct page_pool *pool)
 {
+#ifdef CONFIG_PAGE_POOL_STACK
+	struct ptr_stack *r = &pool->stack;
+#else
 	struct ptr_ring *r = &pool->ring;
+#endif
 	netmem_ref netmem;
 	int pref_nid; /* preferred NUMA node */
 
 	/* Quicker fallback, avoid locks when ring is empty */
-	if (__ptr_ring_empty(r)) {
+#ifdef CONFIG_PAGE_POOL_STACK
+	if (ptr_stack_empty(r))
+#else
+	if (__ptr_ring_empty(r)) 
+#endif
+	{
 		alloc_stat_inc(pool, empty);
 		return 0;
 	}
@@ -657,7 +699,11 @@ static noinline netmem_ref page_pool_refill_alloc_cache(struct page_pool *pool)
 
 	/* Refill alloc array, but only if NUMA match */
 	do {
+#ifdef CONFIG_PAGE_POOL_STACK
+		netmem = (__force netmem_ref)ptr_stack_pop(r);
+#else
 		netmem = (__force netmem_ref)__ptr_ring_consume(r);
+#endif
 		if (unlikely(!netmem))
 			break;
 
@@ -850,12 +896,21 @@ static noinline void __page_pool_fill_ptr_ring(struct page_pool *pool)
 {
 	netmem_ref netmem;
 	int i, ret;
+#ifdef CONFIG_PAGE_POOL_STACK
+	u32 size = pool->stack.size;
+#else
+	u32 size = pool->ring.size;
+#endif
 
-	for (i = 0; i < pool->ring.size; i++) {
+	for (i = 0; i < size; i++) {
 		netmem = page_to_netmem(__page_pool_alloc_page_order(pool, GFP_ATOMIC));
 		if (unlikely(!netmem))
 			break;
+#ifdef CONFIG_PAGE_POOL_STACK
+		ret = ptr_stack_push_any(&pool->stack, (__force void *)netmem);
+#else
 		ret = ptr_ring_produce_any(&pool->ring, (__force void *)netmem);
+#endif
 		if (unlikely(ret)) {
 			page_pool_return_page(pool, netmem);
 			break;
@@ -1014,9 +1069,17 @@ static bool page_pool_recycle_in_ring(struct page_pool *pool, netmem_ref netmem)
 	int ret;
 	/* BH protection not needed if current is softirq */
 	if (in_softirq())
+#ifdef CONFIG_PAGE_POOL_STACK
+		ret = ptr_stack_push(&pool->stack, (__force void *)netmem);
+#else
 		ret = ptr_ring_produce(&pool->ring, (__force void *)netmem);
+#endif
 	else
+#ifdef CONFIG_PAGE_POOL_STACK
+		ret = ptr_stack_push_bh(&pool->stack, (__force void *)netmem);
+#else
 		ret = ptr_ring_produce_bh(&pool->ring, (__force void *)netmem);
+#endif
 
 	if (!ret) {
 		page_pool_put_page_account(pool, netmem);
@@ -1198,7 +1261,12 @@ void page_pool_put_page_bulk(struct page_pool *pool, void **data,
 	/* Bulk producer into ptr_ring page_pool cache */
 	in_softirq = page_pool_producer_lock(pool);
 	for (i = 0; i < bulk_len; i++) {
-		if (__ptr_ring_produce(&pool->ring, data[i])) {
+#ifdef CONFIG_PAGE_POOL_STACK
+		if (__ptr_stack_push(&pool->stack, data[i]))
+#else
+		if (__ptr_ring_produce(&pool->ring, data[i])) 
+#endif
+		{
 			/* ring full */
 			recycle_stat_inc(pool, ring_full);
 			break;
@@ -1309,7 +1377,12 @@ static void page_pool_empty_ring(struct page_pool *pool)
 	netmem_ref netmem;
 
 	/* Empty recycle ring */
-	while ((netmem = (__force netmem_ref)ptr_ring_consume_bh(&pool->ring))) {
+#ifdef CONFIG_PAGE_POOL_STACK
+	while ((netmem = (__force netmem_ref)ptr_stack_pop_bh(&pool->stack)))
+#else
+	while ((netmem = (__force netmem_ref)ptr_ring_consume_bh(&pool->ring))) 
+#endif
+	{
 		/* Verify the refcnt invariant of cached pages */
 		if (!(netmem_ref_count(netmem) == 1))
 			pr_crit("%s() page_pool refcnt %d violation\n",

@@ -19,4 +19,12 @@ config NET_CACHEFLOW_DEBUG
   	help
       This option enables debug information for CacheFlow buffer management.
 
+config PAGE_POOL_STACK
+	default y
+	bool "Use stack for page pool"
+	help
+	  This option enables the use of stack (instead of the default ring) for page pool.
+
+	  If unsure, say N.
+
 endif

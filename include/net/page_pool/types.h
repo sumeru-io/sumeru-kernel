@@ -5,6 +5,7 @@
 
 #include <linux/dma-direction.h>
 #include <linux/ptr_ring.h>
+#include <linux/ptr_stack.h>
 #include <linux/types.h>
 #include <net/netmem.h>
 
@@ -242,7 +243,11 @@ struct page_pool {
 	 *
 	 * TODO: Implement bulk return pages into this structure.
 	 */
+#ifdef CONFIG_PAGE_POOL_STACK
+	struct ptr_stack stack;
+#else
 	struct ptr_ring ring;
+#endif
 
 	void *mp_priv;
 
