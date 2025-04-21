@@ -904,7 +904,7 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		if (err)
 			goto err_free_mpwqe_info;
 
-		pr_info("mlx5e: RQ[%d]: MTU RQ: %u, MPRQ RQ: %u, pages_per_wqe %u, min_wqe_bulk: %u, wq_sz %d, "
+		pr_info("mlx5e: MPRQ[%d]: MTU RQ: %u, MPRQ RQ: %u, pages_per_wqe %u, min_wqe_bulk: %u, wq_sz %d, "
 			"num_strides: %u, stride_size: %u, frame0_sz: %u\n",
 			rq->ix,
 			1 << params->log_rq_mtu_frames,
@@ -933,6 +933,15 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		err = mlx5e_init_wqe_alloc_info(rq, node);
 		if (err)
 			goto err_rq_wq_destroy;
+
+		pr_info("mlx5e: RQ[%d]: MTU RQ: %u, wq_sz %d, wqe_bulk %u, refill_unit %u, num_frags %u, frag_size %d\n",
+			rq->ix,
+			1 << params->log_rq_mtu_frames,
+			wq_sz,
+			rq->wqe.info.wqe_bulk,
+			rq->wqe.info.refill_unit,
+			rq->wqe.info.num_frags,
+			rq->wqe.info.arr[0].frag_stride);
 	}
 
 	if (xsk) {
