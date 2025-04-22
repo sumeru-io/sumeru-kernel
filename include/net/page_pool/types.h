@@ -56,7 +56,7 @@
  * cache is already full (or partly full) then the XDP_DROP recycles
  * would have to take a slower code path.
  */
-#define PP_ALLOC_CACHE_SIZE	128
+#define PP_ALLOC_CACHE_SIZE	256
 #define PP_ALLOC_CACHE_REFILL	64
 struct pp_alloc_cache {
 	u32 count;
