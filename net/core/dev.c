@@ -7034,10 +7034,10 @@ start:
 	list_splice_init(&sd->poll_list, &list);
 	local_irq_enable();
 
+	skb_defer_free_flush(sd);
+
 	for (;;) {
 		struct napi_struct *n;
-
-		skb_defer_free_flush(sd);
 
 		if (list_empty(&list)) {
 			if (list_empty(&repoll)) {
@@ -7054,6 +7054,8 @@ start:
 			}
 			break;
 		}
+
+		skb_defer_free_flush(sd);
 
 		n = list_first_entry(&list, struct napi_struct, poll_list);
 		budget -= napi_poll(n, &repoll);
