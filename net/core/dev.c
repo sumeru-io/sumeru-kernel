@@ -6369,6 +6369,7 @@ EXPORT_SYMBOL(napi_complete_done);
 static void skb_defer_free_flush(struct softnet_data *sd)
 {
 	struct sk_buff *skb, *next;
+	int skb_defer_list_count;
 
 	/* Paired with WRITE_ONCE() in skb_attempt_defer_free() */
 	if (!READ_ONCE(sd->defer_list))
@@ -6376,9 +6377,12 @@ static void skb_defer_free_flush(struct softnet_data *sd)
 
 	spin_lock(&sd->defer_lock);
 	skb = sd->defer_list;
+	skb_defer_list_count = sd->defer_count;
 	sd->defer_list = NULL;
 	sd->defer_count = 0;
 	spin_unlock(&sd->defer_lock);
+
+	trace_skb_defer_flush(sd->cpu, skb_defer_list_count);
 
 	while (skb != NULL) {
 		next = skb->next;

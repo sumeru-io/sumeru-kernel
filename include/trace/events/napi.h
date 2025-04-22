@@ -69,6 +69,28 @@ TRACE_EVENT(dql_stall_detected,
 		  __entry->hist[2], __entry->hist[3])
 );
 
+TRACE_EVENT(skb_defer_flush,
+
+	TP_PROTO(int cpu, int count),
+
+	TP_ARGS(cpu, count),
+
+	TP_STRUCT__entry(
+		__field(	int,	cpu)
+		__field(	int,	count)
+	),
+
+	TP_fast_assign(
+		__entry->cpu = cpu;
+		__entry->count = count;
+	),
+
+	TP_printk("softnet efer flush on cpu %d with count %d",
+		__entry->cpu,
+		__entry->count)
+);
+
+
 #undef NO_DEV
 
 #endif /* _TRACE_NAPI_H */
