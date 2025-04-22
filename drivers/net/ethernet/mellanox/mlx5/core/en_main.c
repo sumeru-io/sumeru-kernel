@@ -934,14 +934,21 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		if (err)
 			goto err_rq_wq_destroy;
 
-		pr_info("mlx5e: RQ[%d]: MTU RQ: %u, wq_sz %d, wqe_bulk %u, refill_unit %u, num_frags %u, frag_size %d\n",
+		pr_info("mlx5e: RQ[%d]: MTU RQ: %u, wq_sz %d, wqe_bulk %u, refill_unit %u, num_frags %u, frag_size [%d/%d %d/%d %d/%d %d/%d]\n",
 			rq->ix,
 			1 << params->log_rq_mtu_frames,
 			wq_sz,
 			rq->wqe.info.wqe_bulk,
 			rq->wqe.info.refill_unit,
 			rq->wqe.info.num_frags,
-			rq->wqe.info.arr[0].frag_stride);
+			rq->wqe.info.arr[0].frag_size,
+			rq->wqe.info.arr[0].frag_stride,
+			rq->wqe.info.arr[1].frag_size,
+			rq->wqe.info.arr[1].frag_stride,
+			rq->wqe.info.arr[2].frag_size,
+			rq->wqe.info.arr[2].frag_stride,
+			rq->wqe.info.arr[3].frag_size,
+			rq->wqe.info.arr[3].frag_stride);
 	}
 
 	if (xsk) {
