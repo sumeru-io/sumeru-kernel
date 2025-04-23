@@ -6965,6 +6965,7 @@ static void napi_threaded_poll_loop(struct napi_struct *napi)
 		sd = this_cpu_ptr(&softnet_data);
 		sd->in_napi_threaded_poll = true;
 
+		WRITE_ONCE(napi->list_owner, smp_processor_id());
 		have = netpoll_poll_lock(napi);
 		__napi_poll(napi, &repoll);
 		netpoll_poll_unlock(have);
