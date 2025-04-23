@@ -6514,6 +6514,10 @@ restart:
 			have_poll_lock = netpoll_poll_lock(napi);
 			napi_poll = napi->poll;
 		}
+
+		WRITE_ONCE(napi->list_owner, smp_processor_id());
+		skb_defer_free_flush(this_cpu_ptr(&softnet_data));
+
 		work = napi_poll(napi, budget);
 		trace_napi_poll(napi, work, budget);
 		gro_normal_list(napi);
@@ -6521,7 +6525,6 @@ count:
 		if (work > 0)
 			__NET_ADD_STATS(dev_net(napi->dev),
 					LINUX_MIB_BUSYPOLLRXPACKETS, work);
-		skb_defer_free_flush(this_cpu_ptr(&softnet_data));
 		bpf_net_ctx_clear(bpf_net_ctx);
 		local_bh_enable();
 
