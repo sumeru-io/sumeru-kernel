@@ -34,6 +34,27 @@ TRACE_EVENT(mlx5e_mpwqe_post,
 		  __entry->umr_missing)
 );
 
+TRACE_EVENT(mlx5e_wqe_post,
+
+	TP_PROTO(int ix, u32 wqe_bulk),
+
+	TP_ARGS(ix, wqe_bulk),
+
+	TP_STRUCT__entry(
+		__field(int, ix)
+		__field(u32, wqe_bulk)
+	),
+
+	TP_fast_assign(
+		__entry->ix = ix;
+		__entry->wqe_bulk = wqe_bulk;
+	),
+
+	TP_printk("ix %d, wqe_bulk %u",
+		  __entry->ix,
+		  __entry->wqe_bulk)
+);
+
 #endif /* _MLX5_CACHEFLOW_TP_H_ */
 
 /* This part must be outside protection */

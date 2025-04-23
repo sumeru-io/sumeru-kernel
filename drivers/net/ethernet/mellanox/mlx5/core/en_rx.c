@@ -931,6 +931,8 @@ INDIRECT_CALLABLE_SCOPE bool mlx5e_post_rx_wqes(struct mlx5e_rq *rq)
 		busy = true;
 	}
 
+	trace_mlx5e_wqe_post(rq->ix, wqe_bulk);
+
 	/* ensure wqes are visible to device before updating doorbell record */
 	dma_wmb();
 
