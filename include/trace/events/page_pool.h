@@ -175,6 +175,33 @@ TRACE_EVENT(page_pool_pressure,
 		  __entry->used, __entry->free, __entry->mark)
 )
 
+TRACE_EVENT(page_pool_napi_local_check,
+
+	TP_PROTO(const struct page_pool *pool, int reason, int cpu, int pool_owner, int napi_owner),
+
+	TP_ARGS(pool, reason, cpu, pool_owner, napi_owner),
+
+	TP_STRUCT__entry(
+		__field(const struct page_pool *,	pool)
+		__field(int,				reason)
+		__field(int,				cpu)
+		__field(int,				pool_owner)
+		__field(int,				napi_owner)
+	),
+
+	TP_fast_assign(
+		__entry->pool		= pool;
+		__entry->reason		= reason;
+		__entry->cpu		= cpu;
+		__entry->pool_owner	= pool_owner;
+		__entry->napi_owner	= napi_owner;
+	),
+
+	TP_printk("page_pool=%p reason=%d cpu=%d pool_owner=%d napi_owner=%d",
+		__entry->pool, __entry->reason,
+		__entry->cpu, __entry->pool_owner, __entry->napi_owner)
+)
+
 #endif /* _TRACE_PAGE_POOL_H */
 
 /* This part must be outside protection */

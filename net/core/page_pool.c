@@ -1066,8 +1066,10 @@ static bool page_pool_napi_local(const struct page_pool *pool)
 	const struct napi_struct *napi;
 	u32 cpuid;
 
-	if (unlikely(!in_softirq()))
+	if (unlikely(!in_softirq())) {
+		trace_page_pool_napi_local_check(pool, 0, -1, -1, -1);
 		return false;
+	}
 
 	/* Allow direct recycle if we have reasons to believe that we are
 	 * in the same context as the consumer would run, so there's
@@ -1076,12 +1078,20 @@ static bool page_pool_napi_local(const struct page_pool *pool)
 	 * and interrupts are enabled prior to accessing the cache.
 	 */
 	cpuid = smp_processor_id();
-	if (READ_ONCE(pool->cpuid) == cpuid)
+	if (READ_ONCE(pool->cpuid) == cpuid) {
+		trace_page_pool_napi_local_check(pool, 1, cpuid, READ_ONCE(pool->cpuid), -1);
 		return true;
+	}
 
 	napi = READ_ONCE(pool->p.napi);
 
-	return napi && READ_ONCE(napi->list_owner) == cpuid;
+	if (napi && READ_ONCE(napi->list_owner) == cpuid) {
+		trace_page_pool_napi_local_check(pool, 2, cpuid, READ_ONCE(pool->cpuid), READ_ONCE(napi->list_owner));
+		return true;
+	}
+
+	trace_page_pool_napi_local_check(pool, 3, cpuid, READ_ONCE(pool->cpuid), napi ? READ_ONCE(napi->list_owner) : -1);
+	return false;
 }
 
 void page_pool_put_unrefed_netmem(struct page_pool *pool, netmem_ref netmem,
