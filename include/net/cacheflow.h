@@ -15,18 +15,19 @@ struct page_pool_mem_usage {
 	u32 free_pages;
 };
 
-extern u8 cacheflow_enable;
+extern u8 cacheflow_mark_enable;
+extern u8 cacheflow_track_enable;
 extern int cacheflow_buffer_size;
 extern int cacheflow_thresh;
 
-static inline bool is_cacheflow_enabled(void)
+static inline bool is_cacheflow_track_enabled(void)
 {
-	return READ_ONCE(cacheflow_enable) > 0;
+	return READ_ONCE(cacheflow_track_enable) > 0;
 }
 
 static inline bool is_cacheflow_mark_enabled(void)
 {
-	return READ_ONCE(cacheflow_enable) > 1;
+	return READ_ONCE(cacheflow_mark_enable) > 0;
 }
 
 static inline int get_cacheflow_pool_size(void) {

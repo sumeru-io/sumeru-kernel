@@ -115,15 +115,18 @@ TRACE_EVENT(page_pool_update_nid,
 
 TRACE_EVENT(page_pool_page_move,
 
-	TP_PROTO(const struct page_pool *pool, netmem_ref netmem, u8 old_state, u8 new_state),
+	TP_PROTO(const struct page_pool *pool, netmem_ref netmem,
+		 u8 old_state, u8 new_state, u32 used_pages, u32 free_pages),
 
-	TP_ARGS(pool, netmem, old_state, new_state),
+	TP_ARGS(pool, netmem, old_state, new_state, used_pages, free_pages),
 
 	TP_STRUCT__entry(
 		__field(const struct page_pool *,	pool)
 		__field(unsigned long,			netmem)
 		__field(u8,				old_state)
 		__field(u8,				new_state)
+		__field(u32,				used_pages)
+		__field(u32,				free_pages)
 	),
 
 	TP_fast_assign(
@@ -131,11 +134,13 @@ TRACE_EVENT(page_pool_page_move,
 		__entry->netmem	= (__force unsigned long)netmem;
 		__entry->old_state = old_state;
 		__entry->new_state = new_state;
+		__entry->used_pages = used_pages;
+		__entry->free_pages = free_pages;
 	),
 
-	TP_printk("page_pool=%p netmem=%p old_state=%u new_state=%u",
+	TP_printk("page_pool=%p netmem=%p old_state=%u new_state=%u used_pages=%u free_pages=%u",
 		  __entry->pool, (void *)__entry->netmem,
-		  __entry->old_state, __entry->new_state)
+		  __entry->old_state, __entry->new_state, __entry->used_pages, __entry->free_pages)
 )
 
 TRACE_EVENT(page_pool_pressure,

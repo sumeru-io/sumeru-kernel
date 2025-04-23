@@ -34,13 +34,13 @@
 /* Create a page pool with fixed number of pages and therefore deterministic
  * memory footprint. Used for CoABM buffer management.
  */
-#define PP_FLAG_CACHEFLOW BIT(4)
+#define PP_FLAG_CACHEFLOW_MARK BIT(4)
 
-#define PP_FLAG_LIFE_TRACK BIT(5)
+#define PP_FLAG_CACHEFLOW_TRACK BIT(5)
 
 #define PP_FLAG_ALL		(PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV | \
 				 PP_FLAG_SYSTEM_POOL | PP_FLAG_ALLOW_UNREADABLE_NETMEM | \
-				 PP_FLAG_CACHEFLOW | PP_FLAG_LIFE_TRACK)
+				 PP_FLAG_CACHEFLOW_MARK | PP_FLAG_CACHEFLOW_TRACK)
 
 /*
  * Fast allocation side cache array/stack
@@ -189,8 +189,8 @@ struct page_pool {
 	bool system:1;			/* This is a global percpu pool */
 #endif
 #ifdef CONFIG_NET_CACHEFLOW
-	bool cacheflow:1;		/* Fixed size page pool */
-	bool page_life:1;
+	bool cacheflow_mark:1;		/* Fixed size page pool */
+	bool cacheflow_track:1;
 #endif
 
 	__cacheline_group_begin_aligned(frag, PAGE_POOL_FRAG_GROUP_ALIGN);

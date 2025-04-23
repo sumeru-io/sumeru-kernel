@@ -55,22 +55,4 @@ static inline int page_pool_check_memory_provider(struct net_device *dev,
 }
 #endif
 
-#if defined (CONFIG_NET_CACHEFLOW)
-extern u8 cacheflow_enable;
-
-static inline int page_pool_cacheflow(struct page_pool *pool)
-{
-	return pool->cacheflow;
-}
-#else
-static inline int page_pool_cacheflow(struct page_pool *pool)
-{
-	return 0;
-}
-static inline void page_pool_set_pressure(struct page_pool *pool,
-					 struct page* page) {}
-static inline void page_pool_clear_pressure(struct page_pool *pool,
-					 struct page* page) {}
-#endif
-
 #endif

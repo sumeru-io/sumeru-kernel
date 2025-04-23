@@ -7308,7 +7308,7 @@ int skb_pp_pressure(struct sk_buff *skb, struct page_pool_mem_usage *usage) {
 	usage->free_pages = 0;
 	usage->used_pages = 0;
 
-	if (skb->pp_recycle && is_cacheflow_enabled()) {
+	if (skb->pp_recycle && is_cacheflow_track_enabled()) {
 		for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
 			netmem = skb_frag_netmem(&skb_shinfo(skb)->frags[i]);
 			netmem = netmem_compound_head(netmem);
