@@ -2329,7 +2329,7 @@ static const struct pflag_desc mlx5e_priv_flags[MLX5E_NUM_PFLAGS] = {
 	{ "xdp_tx_mpwqe",        set_pflag_xdp_tx_mpwqe },
 	{ "skb_tx_mpwqe",        set_pflag_skb_tx_mpwqe },
 	{ "tx_port_ts",          set_pflag_tx_port_ts },
-	{ "legacy_rq_wqe_bulk", 		 set_legacy_rq_wqe_bulk }
+	{ "legacy_rq_wqe_bulk",  set_legacy_rq_wqe_bulk }
 };
 
 static int mlx5e_handle_pflag(struct net_device *netdev,

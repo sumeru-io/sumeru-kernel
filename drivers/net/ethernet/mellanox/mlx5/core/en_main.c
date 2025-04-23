@@ -2753,8 +2753,13 @@ static int mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 	c->stats    = &priv->channel_stats[ix]->ch;
 	c->aff_mask = irq_get_effective_affinity_mask(irq);
 	c->lag_port = mlx5e_enumerate_lag_port(mdev, ix);
+	
+	if (MLX5E_GET_PFLAG(params, MLX5E_PFLAG_LEGACY_RQ_WQE_BULK)) {
+		netif_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, 16);
+	} else {
+		netif_napi_add(netdev, &c->napi, mlx5e_napi_poll);
+	}
 
-	netif_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, 16);
 	netif_napi_set_irq(&c->napi, irq);
 
 	err = mlx5e_open_queues(c, params, cparam);
