@@ -6966,6 +6966,8 @@ static void napi_threaded_poll_loop(struct napi_struct *napi)
 		sd->in_napi_threaded_poll = true;
 
 		WRITE_ONCE(napi->list_owner, smp_processor_id());
+		skb_defer_free_flush(sd);
+
 		have = netpoll_poll_lock(napi);
 		__napi_poll(napi, &repoll);
 		netpoll_poll_unlock(have);
@@ -6977,7 +6979,6 @@ static void napi_threaded_poll_loop(struct napi_struct *napi)
 			local_irq_disable();
 			net_rps_action_and_irq_enable(sd);
 		}
-		skb_defer_free_flush(sd);
 		bpf_net_ctx_clear(bpf_net_ctx);
 		local_bh_enable();
 
