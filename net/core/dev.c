@@ -1494,12 +1494,7 @@ static int napi_kthread_create(struct napi_struct *n, bool busy_polling, int cor
 	 * warning and work with loadavg.
 	 */
 	int (*thread_func)(void *) = busy_polling ? napi_threaded_busy_poll : napi_threaded_poll;
-	if (core != NAPI_KTHREAD_CORE_ANY) {
-		n->thread = kthread_run_on_cpu(thread_func, n, core, "napi/%u");
-	} else {
-		n->thread = kthread_run(thread_func, n, "napi/%s-%d",
-				n->dev->name, n->napi_id);
-	}
+	n->thread = kthread_create(thread_func, n, "napi/%s-%d", n->dev->name, n->napi_id);
 
 	if (IS_ERR(n->thread)) {
 		err = PTR_ERR(n->thread);
@@ -1509,6 +1504,8 @@ static int napi_kthread_create(struct napi_struct *n, bool busy_polling, int cor
 
 	if (core != NAPI_KTHREAD_CORE_ANY)
 		kthread_bind(n->thread, core);
+
+	wake_up_process(n->thread);
 	return err;
 }
 
