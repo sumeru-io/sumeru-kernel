@@ -966,15 +966,17 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 #ifdef CONFIG_NET_CACHEFLOW
 		if (is_cacheflow_track_enabled()) {
 			pp_params.flags |= PP_FLAG_CACHEFLOW_TRACK;
-			pr_info("mlx5e: RQ[%d]: cacheflow track enabled\n", rq->ix);
 		}
 		
 		if (is_cacheflow_mark_enabled()) {
 			pp_params.flags |= PP_FLAG_CACHEFLOW_MARK;
 			pp_params.pool_size = get_cacheflow_pool_size();
-			pr_info("mlx5e: RQ[%d]: cacheflow mark enabled, pool size = %u\n", rq->ix, 
-				pp_params.pool_size);
 		}
+
+		pr_info("mlx5e: RQ[%d]: cacheflow track: %s, mark: %s, pool size = %u\n", rq->ix, 
+			is_cacheflow_track_enabled() ? "enabled" : "disabled",
+			is_cacheflow_mark_enabled() ? "enabled" : "disabled",
+			pp_params.pool_size);
 #endif
 
 		pp_params.nid       = node;
