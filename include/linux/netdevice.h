@@ -2360,6 +2360,7 @@ struct net_device {
 	bool			proto_down;
 	int			threaded;
 	int			threaded_budget;
+	int			threaded_budget_usecs;
 
 	/* priv_flags_slow, ungrouped to save space */
 	unsigned long		see_all_hwtstamp_requests:1;

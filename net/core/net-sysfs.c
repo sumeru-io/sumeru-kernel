@@ -651,7 +651,7 @@ static ssize_t threaded_budget_show(struct device *dev,
 	rcu_read_lock();
 
 	if (dev_isalive(netdev))
-	ret = sysfs_emit(buf, fmt_dec, READ_ONCE(netdev->threaded_budget));
+		ret = sysfs_emit(buf, fmt_dec, READ_ONCE(netdev->threaded_budget));
 
 	rcu_read_unlock();
 
@@ -675,6 +675,42 @@ static ssize_t threaded_budget_store(struct device *dev,
 	return netdev_store(dev, attr, buf, len, modify_napi_threaded_budget);
 }
 static DEVICE_ATTR_RW(threaded_budget);
+
+
+static ssize_t threaded_budget_usecs_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct net_device *netdev = to_net_dev(dev);
+	ssize_t ret = -EINVAL;
+
+	rcu_read_lock();
+
+	if (dev_isalive(netdev))
+		ret = sysfs_emit(buf, fmt_dec, READ_ONCE(netdev->threaded_budget_usecs));
+
+	rcu_read_unlock();
+
+	return ret;
+}
+
+static int modify_napi_threaded_budget_usecs(struct net_device *dev, unsigned long val)
+{
+	if (!(val >= 0 && val <= 1000000))
+		return -EOPNOTSUPP;
+
+	dev->threaded_budget_usecs = val;
+
+	return 0;
+}
+
+static ssize_t threaded_budget_usecs_store(struct device *dev,
+			      struct device_attribute *attr,
+			      const char *buf, size_t len)
+{
+	return netdev_store(dev, attr, buf, len, modify_napi_threaded_budget_usecs);
+}
+
+static DEVICE_ATTR_RW(threaded_budget_usecs);
 
 static struct attribute *net_class_attrs[] __ro_after_init = {
 	&dev_attr_netdev_group.attr,
@@ -710,6 +746,7 @@ static struct attribute *net_class_attrs[] __ro_after_init = {
 	&dev_attr_carrier_down_count.attr,
 	&dev_attr_threaded.attr,
 	&dev_attr_threaded_budget.attr,
+	&dev_attr_threaded_budget_usecs.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(net_class);

@@ -7001,7 +7001,10 @@ static int napi_threaded_poll(void *data)
 }
 
 static bool napi_busy_loop_end(void *p, unsigned long start_time) {
-	unsigned long end_time = start_time + 1000;
+	struct napi_struct *n = p;
+	int budget_usecs = n->dev->threaded_budget_usecs ? n->dev->threaded_budget_usecs : 1000;
+	unsigned long end_time = start_time + usecs_to_jiffies(budget_usecs);
+
 	return time_after(jiffies, end_time);
 }
 
@@ -7013,7 +7016,7 @@ static int napi_threaded_busy_poll(void *data)
 		// we clear the NAPI_STATE_SCHED bit to be compitable with 
 		// napi_busy_loop's expectation.
 		clear_bit(NAPI_STATE_SCHED, &napi->state);
-		napi_busy_loop(napi->napi_id, napi_busy_loop_end, NULL, false,
+		napi_busy_loop(napi->napi_id, napi_busy_loop_end, napi, false,
 			napi->dev->threaded_budget ? napi->dev->threaded_budget : 32);
 	}
 	return 0;
