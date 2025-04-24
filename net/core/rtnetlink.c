@@ -76,6 +76,9 @@ static DEFINE_MUTEX(rtnl_mutex);
 
 void rtnl_lock(void)
 {
+	pr_info("rtnl_lock on %s[%d] cpu%d, softirq: %lu, irq: %ld\n",
+		current->comm, current->pid, smp_processor_id(),
+		in_serving_softirq(), in_interrupt());
 	mutex_lock(&rtnl_mutex);
 }
 EXPORT_SYMBOL(rtnl_lock);
@@ -99,6 +102,10 @@ EXPORT_SYMBOL(rtnl_kfree_skbs);
 void __rtnl_unlock(void)
 {
 	struct sk_buff *head = defer_kfree_skb_list;
+
+	pr_info("__rtnl_unlock on %s[%d] cpu%d, softirq: %lu, irq: %ld\n",
+		current->comm, current->pid, smp_processor_id(),
+		in_serving_softirq(), in_interrupt());
 
 	defer_kfree_skb_list = NULL;
 

@@ -7005,6 +7005,9 @@ static bool napi_busy_loop_end(void *p, unsigned long start_time) {
 	int budget_usecs = n->dev->threaded_budget_usecs ? n->dev->threaded_budget_usecs : 1000;
 	unsigned long end_time = start_time + usecs_to_jiffies(budget_usecs);
 
+	pr_info_ratelimited("napi_busy_loop_end: %s, budget_usecs: %d, jiffies: %ld, end_time: %ld\n",
+		n->dev->name, budget_usecs, jiffies, end_time);
+
 	return time_after(jiffies, end_time);
 }
 
