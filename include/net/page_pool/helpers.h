@@ -317,7 +317,7 @@ static inline void page_pool_put_netmem(struct page_pool *pool,
 	 * allow registering MEM_TYPE_PAGE_POOL, but shield linker.
 	 */
 #ifdef CONFIG_PAGE_POOL
-	if (!page_pool_is_last_ref(netmem))
+	if (!pool->single_owner && !page_pool_is_last_ref(netmem))
 		return;
 
 	page_pool_put_unrefed_netmem(pool, netmem, dma_sync_size, allow_direct);

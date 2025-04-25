@@ -934,6 +934,8 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		if (err)
 			goto err_rq_wq_destroy;
 
+		__set_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags);
+
 		pr_info("mlx5e: RQ[%d]: MTU RQ: %u, wq_sz %d, wqe_bulk %u, refill_unit %u, num_frags %u, frag_size [%d/%d %d/%d %d/%d %d/%d]\n",
 			rq->ix,
 			1 << params->log_rq_mtu_frames,
@@ -972,6 +974,9 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 			pp_params.flags |= PP_FLAG_CACHEFLOW_MARK;
 			pp_params.pool_size = get_cacheflow_pool_size();
 		}
+
+		if (rq->wq_type != MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
+			pp_params.flags |= PP_FLAG_SINGLE_OWNER;
 
 		pr_info("mlx5e: RQ[%d]: cacheflow track: %s, mark: %s, pool size = %u\n", rq->ix, 
 			is_cacheflow_track_enabled() ? "enabled" : "disabled",

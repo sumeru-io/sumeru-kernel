@@ -285,8 +285,12 @@ static int mlx5e_page_alloc_fragmented(struct mlx5e_rq *rq,
 	if (unlikely(!page))
 		return -ENOMEM;
 
+	if (test_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags))
+		goto alloc;
+
 	page_pool_fragment_page(page, MLX5E_PAGECNT_BIAS_MAX);
 
+alloc:
 	*frag_page = (struct mlx5e_frag_page) {
 		.page	= page,
 		.frags	= 0,
@@ -295,7 +299,7 @@ static int mlx5e_page_alloc_fragmented(struct mlx5e_rq *rq,
 	return 0;
 }
 
-static void mlx5e_page_release_fragmented(struct mlx5e_rq *rq,
+static void __mlx5e_page_release_fragmented(struct mlx5e_rq *rq,
 					  struct mlx5e_frag_page *frag_page)
 {
 	u16 drain_count = MLX5E_PAGECNT_BIAS_MAX - frag_page->frags;
@@ -303,6 +307,13 @@ static void mlx5e_page_release_fragmented(struct mlx5e_rq *rq,
 
 	if (page_pool_unref_page(page, drain_count) == 0)
 		page_pool_put_unrefed_page(rq->page_pool, page, -1, true);
+}
+
+static void mlx5e_page_release_fragmented(struct mlx5e_rq *rq,
+					  struct mlx5e_frag_page *frag_page)
+{
+	if (!test_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags))
+		__mlx5e_page_release_fragmented(rq, frag_page);
 }
 
 static inline int mlx5e_get_rx_frag(struct mlx5e_rq *rq,
@@ -341,6 +352,17 @@ static inline void mlx5e_put_rx_frag(struct mlx5e_rq *rq,
 static inline struct mlx5e_wqe_frag_info *get_frag(struct mlx5e_rq *rq, u16 ix)
 {
 	return &rq->wqe.frags[ix << rq->wqe.info.log_num_frags];
+}
+
+static inline void mlx5e_frag_ref_inc(struct mlx5e_rq *rq, struct mlx5e_frag_page *page)
+{
+	if (test_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags)) {
+		if (page->frags != 0) {
+			pr_err("mlx5e: frag_ref_inc: page->frags (%d) != 0\n", page->frags);
+			BUG();
+		}
+	}
+	page->frags++;
 }
 
 static int mlx5e_alloc_rx_wqe(struct mlx5e_rq *rq, struct mlx5e_rx_wqe_cyc *wqe,
@@ -539,7 +561,7 @@ mlx5e_add_skb_frag(struct mlx5e_rq *rq, struct sk_buff *skb,
 	if (skb_can_coalesce(skb, next_frag, frag_page->page, frag_offset)) {
 		skb_coalesce_rx_frag(skb, next_frag - 1, len, truesize);
 	} else {
-		frag_page->frags++;
+		mlx5e_frag_ref_inc(rq, frag_page);
 		skb_add_rx_frag(skb, next_frag, frag_page->page,
 				frag_offset, len, truesize);
 	}
@@ -1726,7 +1748,7 @@ mlx5e_skb_from_cqe_linear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi,
 
 	/* queue up for recycling/reuse */
 	skb_mark_for_recycle(skb);
-	frag_page->frags++;
+	mlx5e_frag_ref_inc(rq, frag_page);
 
 	return skb;
 }
@@ -1788,7 +1810,7 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi
 			struct mlx5e_wqe_frag_info *pwi;
 
 			for (pwi = head_wi; pwi < wi; pwi++)
-				pwi->frag_page->frags++;
+				mlx5e_frag_ref_inc(rq, pwi->frag_page);
 		}
 		return NULL; /* page/packet was consumed by XDP */
 	}
@@ -1801,7 +1823,7 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi
 		return NULL;
 
 	skb_mark_for_recycle(skb);
-	head_wi->frag_page->frags++;
+	mlx5e_frag_ref_inc(rq, head_wi->frag_page);
 
 	if (xdp_buff_has_frags(&mxbuf.xdp)) {
 		/* sinfo->nr_frags is reset by build_skb, calculate again. */
@@ -1810,7 +1832,7 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi
 					   xdp_buff_is_frag_pfmemalloc(&mxbuf.xdp));
 
 		for (struct mlx5e_wqe_frag_info *pwi = head_wi + 1; pwi < wi; pwi++)
-			pwi->frag_page->frags++;
+			mlx5e_frag_ref_inc(rq, pwi->frag_page);
 	}
 
 	return skb;
@@ -1859,7 +1881,7 @@ static void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 	if (!skb) {
 		/* probably for XDP */
 		if (__test_and_clear_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags))
-			wi->frag_page->frags++;
+			mlx5e_frag_ref_inc(rq, wi->frag_page);
 		goto wq_cyc_pop;
 	}
 
@@ -1906,7 +1928,7 @@ static void mlx5e_handle_rx_cqe_rep(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 	if (!skb) {
 		/* probably for XDP */
 		if (__test_and_clear_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags))
-			wi->frag_page->frags++;
+			mlx5e_frag_ref_inc(rq, wi->frag_page);
 		goto wq_cyc_pop;
 	}
 
@@ -2082,9 +2104,9 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *w
 				struct mlx5e_frag_page *pfp;
 
 				for (pfp = head_page; pfp < frag_page; pfp++)
-					pfp->frags++;
+					mlx5e_frag_ref_inc(rq, pfp);
 
-				wi->linear_page.frags++;
+				mlx5e_frag_ref_inc(rq, &wi->linear_page);
 			}
 			mlx5e_page_release_fragmented(rq, &wi->linear_page);
 			return NULL; /* page/packet was consumed by XDP */
@@ -2100,7 +2122,7 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *w
 		}
 
 		skb_mark_for_recycle(skb);
-		wi->linear_page.frags++;
+		mlx5e_frag_ref_inc(rq, &wi->linear_page);
 		mlx5e_page_release_fragmented(rq, &wi->linear_page);
 
 		if (xdp_buff_has_frags(&mxbuf.xdp)) {
@@ -2113,7 +2135,7 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *w
 
 			pagep = head_page;
 			do
-				pagep->frags++;
+				mlx5e_frag_ref_inc(rq, pagep);
 			while (++pagep < frag_page);
 		}
 		__pskb_pull_tail(skb, headlen);
@@ -2129,7 +2151,7 @@ mlx5e_skb_from_cqe_mpwrq_nonlinear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *w
 
 			pagep = frag_page - sinfo->nr_frags;
 			do
-				pagep->frags++;
+				mlx5e_frag_ref_inc(rq, pagep);
 			while (++pagep < frag_page);
 		}
 		/* copy header */
@@ -2182,7 +2204,7 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
 				 cqe_bcnt, &mxbuf);
 		if (mlx5e_xdp_handle(rq, prog, &mxbuf)) {
 			if (__test_and_clear_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags))
-				frag_page->frags++;
+				mlx5e_frag_ref_inc(rq, frag_page);
 			return NULL; /* page/packet was consumed by XDP */
 		}
 
@@ -2197,7 +2219,7 @@ mlx5e_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
 
 	/* queue up for recycling/reuse */
 	skb_mark_for_recycle(skb);
-	frag_page->frags++;
+	mlx5e_frag_ref_inc(rq, frag_page);
 
 	return skb;
 }
@@ -2228,7 +2250,7 @@ mlx5e_skb_from_cqe_shampo(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
 		if (unlikely(!skb))
 			return NULL;
 
-		head->frag_page->frags++;
+		mlx5e_frag_ref_inc(rq, head->frag_page);
 	} else {
 		/* allocate SKB and copy header for large header */
 		rq->stats->gro_large_hds++;

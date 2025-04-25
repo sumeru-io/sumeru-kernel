@@ -38,9 +38,12 @@
 
 #define PP_FLAG_CACHEFLOW_TRACK BIT(5)
 
+#define PP_FLAG_SINGLE_OWNER BIT(6)
+
 #define PP_FLAG_ALL		(PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV | \
 				 PP_FLAG_SYSTEM_POOL | PP_FLAG_ALLOW_UNREADABLE_NETMEM | \
-				 PP_FLAG_CACHEFLOW_MARK | PP_FLAG_CACHEFLOW_TRACK)
+				 PP_FLAG_CACHEFLOW_MARK | PP_FLAG_CACHEFLOW_TRACK | \
+				 PP_FLAG_SINGLE_OWNER)
 
 /*
  * Fast allocation side cache array/stack
@@ -189,7 +192,8 @@ struct page_pool {
 	bool system:1;			/* This is a global percpu pool */
 #endif
 #ifdef CONFIG_NET_CACHEFLOW
-	bool cacheflow_mark:1;		/* Fixed size page pool */
+	bool single_owner:1;
+	bool cacheflow_mark:1;
 	bool cacheflow_track:1;
 #endif
 
