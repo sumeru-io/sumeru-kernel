@@ -61,10 +61,28 @@
  */
 #define PP_ALLOC_CACHE_SIZE	256
 #define PP_ALLOC_CACHE_REFILL	64
+
+#ifdef CONFIG_PAGE_POOL_BULK
+
+#define PP_ALLOC_CACHE_BULK		16
+#define PP_ALLOC_CACHE_BULK_SIZE	(PP_ALLOC_CACHE_SIZE / PP_ALLOC_CACHE_BULK)
+#define PP_ALLOC_CACHE_BULK_REFILL	(PP_ALLOC_CACHE_REFILL / PP_ALLOC_CACHE_BULK)
+
+typedef netmem_ref* netmem_mini_array_t;
+
+struct pp_alloc_cache {
+	u32 bulk_count;
+	u32 count;
+	netmem_mini_array_t bulk[PP_ALLOC_CACHE_BULK_SIZE];
+	netmem_mini_array_t cache;
+};
+
+#else
 struct pp_alloc_cache {
 	u32 count;
 	netmem_ref cache[PP_ALLOC_CACHE_SIZE];
 };
+#endif
 
 /**
  * struct page_pool_params - page pool parameters

@@ -27,4 +27,12 @@ config PAGE_POOL_STACK
 
 	  If unsure, say N.
 
+config PAGE_POOL_BULK
+	default y
+	bool "Use bulk alloc and free for page pool"
+	help
+	  This option enables the use of bulk alloc and free for page pool.
+
+	  If unsure, say N.
+
 endif
