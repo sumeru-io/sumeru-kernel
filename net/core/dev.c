@@ -6412,6 +6412,7 @@ static void __busy_poll_stop(struct napi_struct *napi, bool skip_schedule)
 enum {
 	NAPI_F_PREFER_BUSY_POLL	= 1,
 	NAPI_F_END_ON_RESCHED	= 2,
+	NAPI_F_THREADED_POLL	= 4,
 };
 
 static void busy_poll_stop(struct napi_struct *napi, void *have_poll_lock,
@@ -6472,6 +6473,7 @@ static void __napi_busy_loop(unsigned int napi_id,
 	struct bpf_net_context __bpf_net_ctx, *bpf_net_ctx;
 	void *have_poll_lock = NULL;
 	struct napi_struct *napi;
+	struct softnet_data *sd;
 
 	WARN_ON_ONCE(!rcu_read_lock_held());
 
@@ -6489,6 +6491,12 @@ restart:
 
 		local_bh_disable();
 		bpf_net_ctx = bpf_net_ctx_set(&__bpf_net_ctx);
+
+		if (flags & NAPI_F_THREADED_POLL) {
+			sd = this_cpu_ptr(&softnet_data);
+			sd->in_napi_threaded_poll = true;
+		}
+
 		if (!napi_poll) {
 			unsigned long val = READ_ONCE(napi->state);
 
@@ -6511,7 +6519,6 @@ restart:
 			have_poll_lock = netpoll_poll_lock(napi);
 			napi_poll = napi->poll;
 		}
-
 		WRITE_ONCE(napi->list_owner, smp_processor_id());
 		skb_defer_free_flush(this_cpu_ptr(&softnet_data));
 
@@ -6522,6 +6529,16 @@ count:
 		if (work > 0)
 			__NET_ADD_STATS(dev_net(napi->dev),
 					LINUX_MIB_BUSYPOLLRXPACKETS, work);
+
+		if (flags & NAPI_F_THREADED_POLL) {
+			sd->in_napi_threaded_poll = false;
+			barrier();
+
+			if (sd_has_rps_ipi_waiting(sd)) {
+				local_irq_disable();
+				net_rps_action_and_irq_enable(sd);
+			}
+		}
 		bpf_net_ctx_clear(bpf_net_ctx);
 		local_bh_enable();
 
@@ -7011,13 +7028,16 @@ static bool napi_busy_loop_end(void *p, unsigned long start_time) {
 static int napi_threaded_busy_poll(void *data)
 {
 	struct napi_struct *napi = data;
+	int budget = napi->dev->threaded_budget ? napi->dev->threaded_budget : 32;
 
 	while (!napi_thread_wait(napi)) {
 		// we clear the NAPI_STATE_SCHED bit to be compitable with 
 		// napi_busy_loop's expectation.
 		clear_bit(NAPI_STATE_SCHED, &napi->state);
-		napi_busy_loop(napi->napi_id, napi_busy_loop_end, napi, false,
-			napi->dev->threaded_budget ? napi->dev->threaded_budget : 32);
+
+		rcu_read_lock();
+		__napi_busy_loop(napi->napi_id, napi_busy_loop_end, napi, NAPI_F_THREADED_POLL, budget);
+		rcu_read_unlock();
 	}
 	return 0;
 }
