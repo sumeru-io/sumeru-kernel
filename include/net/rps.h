@@ -6,6 +6,7 @@
 #include <linux/static_key.h>
 #include <net/sock.h>
 #include <net/hotdata.h>
+#include <trace/events/rps.h>
 
 #ifdef CONFIG_RPS
 
@@ -65,7 +66,7 @@ struct rps_sock_flow_table {
 
 #define RPS_NO_CPU 0xffff
 
-static inline void rps_record_sock_flow(struct rps_sock_flow_table *table,
+static inline int rps_record_sock_flow(struct rps_sock_flow_table *table,
 					u32 hash)
 {
 	unsigned int index = hash & table->mask;
@@ -77,24 +78,29 @@ static inline void rps_record_sock_flow(struct rps_sock_flow_table *table,
 	/* The following WRITE_ONCE() is paired with the READ_ONCE()
 	 * here, and another one in get_rps_cpu().
 	 */
-	if (READ_ONCE(table->ents[index]) != val)
+	if (READ_ONCE(table->ents[index]) != val) {
 		WRITE_ONCE(table->ents[index], val);
+		return (val & net_hotdata.rps_cpu_mask) + 1;
+	}
+	return 0;
 }
 
 #endif /* CONFIG_RPS */
 
-static inline void sock_rps_record_flow_hash(__u32 hash)
+static inline int sock_rps_record_flow_hash(__u32 hash)
 {
 #ifdef CONFIG_RPS
+	int cpu = 0;
 	struct rps_sock_flow_table *sock_flow_table;
 
 	if (!hash)
-		return;
+		return cpu;
 	rcu_read_lock();
 	sock_flow_table = rcu_dereference(net_hotdata.rps_sock_flow_table);
 	if (sock_flow_table)
-		rps_record_sock_flow(sock_flow_table, hash);
+		cpu = rps_record_sock_flow(sock_flow_table, hash);
 	rcu_read_unlock();
+	return cpu;
 #endif
 }
 
@@ -116,7 +122,10 @@ static inline void sock_rps_record_flow(const struct sock *sk)
 			/* This READ_ONCE() is paired with the WRITE_ONCE()
 			 * from sock_rps_save_rxhash() and sock_rps_reset_rxhash().
 			 */
-			sock_rps_record_flow_hash(READ_ONCE(sk->sk_rxhash));
+			int cpu = sock_rps_record_flow_hash(READ_ONCE(sk->sk_rxhash));
+			if (cpu) {
+				trace_sk_rps_core_change(sk, READ_ONCE(sk->sk_rxhash), cpu - 1);
+			}
 		}
 	}
 #endif
