@@ -1021,6 +1021,9 @@ struct sk_buff {
 	__u8			csum_not_inet:1;
 #endif
 	__u8			unreadable:1;
+#if IS_ENABLED(CONFIG_NET_CACHEFLOW)
+	__u8			cacheflow:1;
+#endif
 #if defined(CONFIG_NET_SCHED) || defined(CONFIG_NET_XGRESS)
 	__u16			tc_index;	/* traffic control index */
 #endif
@@ -5210,6 +5213,15 @@ static inline void skb_mark_for_recycle(struct sk_buff *skb)
 {
 #ifdef CONFIG_PAGE_POOL
 	skb->pp_recycle = 1;
+#endif
+}
+
+static inline bool skb_cacheflow(struct sk_buff *skb)
+{
+#ifdef CONFIG_NET_CACHEFLOW
+	return skb->cacheflow;
+#else
+	return 0;
 #endif
 }
 

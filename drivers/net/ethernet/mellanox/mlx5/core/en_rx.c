@@ -1823,6 +1823,10 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi
 		return NULL;
 
 	skb_mark_for_recycle(skb);
+
+	if (test_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags))
+		skb->cacheflow = 1;
+
 	mlx5e_frag_ref_inc(rq, head_wi->frag_page);
 
 	if (xdp_buff_has_frags(&mxbuf.xdp)) {

@@ -975,6 +975,11 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 			pp_params.pool_size = get_cacheflow_pool_size();
 		}
 
+		if (is_cacheflow_steer_enabled()) {
+			pr_info("mlx5e: RQ[%d]: cacheflow steer enabled\n", rq->ix);
+			__set_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags);
+		}
+
 		if (rq->wq_type != MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
 			pp_params.flags |= PP_FLAG_SINGLE_OWNER;
 
