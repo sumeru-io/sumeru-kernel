@@ -159,6 +159,9 @@
 #include <net/page_pool/helpers.h>
 #include <net/rps.h>
 #include <linux/phy_link_topology.h>
+#ifdef CONFIG_NET_CACHEFLOW
+#include <net/cacheflow.h>
+#endif
 
 #include "dev.h"
 #include "devmem.h"
@@ -1485,7 +1488,7 @@ EXPORT_SYMBOL(netdev_notify_peers);
 static int napi_threaded_poll(void *data);
 static int napi_threaded_busy_poll(void *data);
 #define NAPI_KTHREAD_CORE_ANY -1
-static int napi_kthread_create(struct napi_struct *n, bool busy_polling, int core)
+static int napi_kthread_create(struct napi_struct *n)
 {
 	int err = 0;
 
@@ -1493,19 +1496,35 @@ static int napi_kthread_create(struct napi_struct *n, bool busy_polling, int cor
 	 * TASK_INTERRUPTIBLE mode to avoid the blocked task
 	 * warning and work with loadavg.
 	 */
-	int (*thread_func)(void *) = busy_polling ? napi_threaded_busy_poll : napi_threaded_poll;
-	n->thread = kthread_create(thread_func, n, "napi/%s-%d", n->dev->name, n->napi_id);
-
+	n->thread = kthread_run(napi_threaded_poll, n, "napi/%s-%d",
+				n->dev->name, n->napi_id);
 	if (IS_ERR(n->thread)) {
 		err = PTR_ERR(n->thread);
 		pr_err("kthread_run failed with err %d\n", err);
 		n->thread = NULL;
 	}
 
-	if (core != NAPI_KTHREAD_CORE_ANY)
-		kthread_bind(n->thread, core);
+	return err;
+}
 
-	wake_up_process(n->thread);
+static int napi_cacheflow_kthread_create(struct napi_struct *n, int core)
+{
+	int err = 0;
+
+	n->cacheflow_thread = kthread_create(napi_threaded_busy_poll, n, "napi/%s-%d", n->dev->name, n->napi_id);
+
+	if (IS_ERR(n->cacheflow_thread)) {
+		err = PTR_ERR(n->cacheflow_thread);
+		pr_err("kthread_run failed with err %d\n", err);
+		n->cacheflow_thread = NULL;
+		return err;
+	}
+
+	if (core != NAPI_KTHREAD_CORE_ANY)
+		kthread_bind(n->cacheflow_thread, core);
+
+	wake_up_process(n->cacheflow_thread);
+
 	return err;
 }
 
@@ -4589,6 +4608,15 @@ static inline void ____napi_schedule(struct softnet_data *sd,
 
 	lockdep_assert_irqs_disabled();
 
+	if (test_bit(NAPI_STATE_CACHEFLOW, &napi->state)) {
+		thread = READ_ONCE(napi->cacheflow_thread);
+		if (thread) {
+			set_bit(NAPI_STATE_SCHED_THREADED, &napi->state);
+			wake_up_process(thread);
+			return;
+		}
+	}
+
 	if (test_bit(NAPI_STATE_THREADED, &napi->state)) {
 		/* Paired with smp_mb__before_atomic() in
 		 * napi_enable()/dev_set_threaded().
@@ -6658,15 +6686,14 @@ int dev_set_threaded(struct net_device *dev, int threaded)
 {
 	struct napi_struct *napi;
 	int err = 0;
-	int idx = 0;
 
 	if (dev->threaded == threaded)
 		return 0;
 
-	if (threaded) {
+	if (threaded == 1) {
 		list_for_each_entry(napi, &dev->napi_list, dev_list) {
 			if (!napi->thread) {
-				err = napi_kthread_create(napi, threaded == 2, 10 + (idx++));
+				err = napi_kthread_create(napi);
 				if (err) {
 					threaded = false;
 					break;
@@ -6765,11 +6792,52 @@ void netif_napi_add_weight(struct net_device *dev, struct napi_struct *napi,
 	 * Clear dev->threaded if kthread creation failed so that
 	 * threaded mode will not be enabled in napi_enable().
 	 */
-	if (dev->threaded && napi_kthread_create(napi, dev->threaded == 2, 10))
+	if (dev->threaded && napi_kthread_create(napi))
 		dev->threaded = false;
 	netif_napi_set_irq(napi, -1);
 }
 EXPORT_SYMBOL(netif_napi_add_weight);
+
+void netif_cacheflow_napi_add_weight(struct net_device *dev, struct napi_struct *napi,
+			   int (*poll)(struct napi_struct *, int), int weight, int core)
+{
+	if (WARN_ON(test_and_set_bit(NAPI_STATE_LISTED, &napi->state)))
+		return;
+
+	INIT_LIST_HEAD(&napi->poll_list);
+	INIT_HLIST_NODE(&napi->napi_hash_node);
+	hrtimer_init(&napi->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL_PINNED);
+	napi->timer.function = napi_watchdog;
+	init_gro_hash(napi);
+	napi->skb = NULL;
+	INIT_LIST_HEAD(&napi->rx_list);
+	napi->rx_count = 0;
+	napi->poll = poll;
+	if (weight > NAPI_POLL_WEIGHT)
+		netdev_err_once(dev, "%s() called with weight %d\n", __func__,
+				weight);
+	napi->weight = weight;
+	napi->dev = dev;
+#ifdef CONFIG_NETPOLL
+	napi->poll_owner = -1;
+#endif
+	napi->list_owner = -1;
+	set_bit(NAPI_STATE_SCHED, &napi->state);
+	set_bit(NAPI_STATE_NPSVC, &napi->state);
+	list_add_rcu(&napi->dev_list, &dev->napi_list);
+	napi_hash_add(napi);
+	napi_get_frags_check(napi);
+	/* Create kthread for this napi if dev->threaded is set.
+	 * Clear dev->threaded if kthread creation failed so that
+	 * threaded mode will not be enabled in napi_enable().
+	 */
+	if (!napi_cacheflow_kthread_create(napi, core)) {
+		assign_bit(NAPI_STATE_CACHEFLOW, &napi->state, 1);
+	}
+
+	netif_napi_set_irq(napi, -1);
+}
+EXPORT_SYMBOL(netif_cacheflow_napi_add_weight);
 
 void napi_disable(struct napi_struct *n)
 {
@@ -6786,7 +6854,7 @@ void napi_disable(struct napi_struct *n)
 		}
 
 		new = val | NAPIF_STATE_SCHED | NAPIF_STATE_NPSVC;
-		new &= ~(NAPIF_STATE_THREADED | NAPIF_STATE_PREFER_BUSY_POLL);
+		new &= ~(NAPIF_STATE_THREADED | NAPIF_STATE_CACHEFLOW | NAPIF_STATE_PREFER_BUSY_POLL);
 	} while (!try_cmpxchg(&n->state, &val, new));
 
 	hrtimer_cancel(&n->timer);
@@ -6812,6 +6880,8 @@ void napi_enable(struct napi_struct *n)
 		new = val & ~(NAPIF_STATE_SCHED | NAPIF_STATE_NPSVC);
 		if (n->dev->threaded && n->thread)
 			new |= NAPIF_STATE_THREADED;
+		if (is_cacheflow_steer_enabled() && n->cacheflow_thread)
+			new |= NAPIF_STATE_CACHEFLOW;
 	} while (!try_cmpxchg(&n->state, &val, new));
 }
 EXPORT_SYMBOL(napi_enable);

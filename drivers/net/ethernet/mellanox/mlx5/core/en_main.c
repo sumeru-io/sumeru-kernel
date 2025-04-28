@@ -976,16 +976,17 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		}
 
 		if (is_cacheflow_steer_enabled()) {
-			pr_info("mlx5e: RQ[%d]: cacheflow steer enabled\n", rq->ix);
 			__set_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags);
 		}
 
 		if (rq->wq_type != MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
 			pp_params.flags |= PP_FLAG_SINGLE_OWNER;
 
-		pr_info("mlx5e: RQ[%d]: cacheflow track: %s, mark: %s, pool size = %u\n", rq->ix, 
+		pr_info("mlx5e: RQ[%d]: cacheflow track: %s, mark: %s, steer: %s, pool size = %u\n", 
+			rq->ix, 
 			is_cacheflow_track_enabled() ? "enabled" : "disabled",
 			is_cacheflow_mark_enabled() ? "enabled" : "disabled",
+			is_cacheflow_steer_enabled() ? "enabled" : "disabled",
 			pp_params.pool_size);
 #endif
 
@@ -2725,6 +2726,7 @@ static int mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 	unsigned int irq;
 	int vec_ix;
 	int cpu;
+	int weight;
 	int err;
 
 	mdev = mlx5_sd_ch_ix_get_dev(priv->mdev, ix);
@@ -2765,11 +2767,15 @@ static int mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 	c->stats    = &priv->channel_stats[ix]->ch;
 	c->aff_mask = irq_get_effective_affinity_mask(irq);
 	c->lag_port = mlx5e_enumerate_lag_port(mdev, ix);
-	
-	if (MLX5E_GET_PFLAG(params, MLX5E_PFLAG_LEGACY_RQ_WQE_BULK)) {
-		netif_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, 16);
+
+	weight = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_LEGACY_RQ_WQE_BULK) ? 16 : NAPI_POLL_WEIGHT;
+
+	if (is_cacheflow_steer_enabled()) {
+		netif_cacheflow_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, weight, get_cacheflow_steer_core());
+		pr_info("mlx5e: RQ[%d]: add busy poll NAPI kthread on core %d, res: %s\n", ix, get_cacheflow_steer_core(), (netdev->threaded == 2) ? "succeed" : "fail");
 	} else {
-		netif_napi_add(netdev, &c->napi, mlx5e_napi_poll);
+		netif_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, weight);
+		pr_info("mlx5e: RQ[%d]: add normal NAPI\n", ix);
 	}
 
 	netif_napi_set_irq(&c->napi, irq);

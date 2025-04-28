@@ -373,6 +373,9 @@ struct napi_struct {
 	unsigned int		napi_id;
 	struct hrtimer		timer;
 	struct task_struct	*thread;
+#ifdef CONFIG_NET_CACHEFLOW
+	struct task_struct	*cacheflow_thread;
+#endif
 	/* control-path-only fields follow */
 	struct list_head	dev_list;
 	struct hlist_node	napi_hash_node;
@@ -390,6 +393,7 @@ enum {
 	NAPI_STATE_PREFER_BUSY_POLL,	/* prefer busy-polling over softirq processing*/
 	NAPI_STATE_THREADED,		/* The poll is performed inside its own thread*/
 	NAPI_STATE_SCHED_THREADED,	/* Napi is currently scheduled in threaded mode */
+	NAPI_STATE_CACHEFLOW,		/* Cacheflow is enabled */
 };
 
 enum {
@@ -403,6 +407,7 @@ enum {
 	NAPIF_STATE_PREFER_BUSY_POLL	= BIT(NAPI_STATE_PREFER_BUSY_POLL),
 	NAPIF_STATE_THREADED		= BIT(NAPI_STATE_THREADED),
 	NAPIF_STATE_SCHED_THREADED	= BIT(NAPI_STATE_SCHED_THREADED),
+	NAPIF_STATE_CACHEFLOW		= BIT(NAPI_STATE_CACHEFLOW),
 };
 
 enum gro_result {
@@ -2629,6 +2634,8 @@ static inline void netif_napi_set_irq(struct napi_struct *napi, int irq)
 
 void netif_napi_add_weight(struct net_device *dev, struct napi_struct *napi,
 			   int (*poll)(struct napi_struct *, int), int weight);
+void netif_cacheflow_napi_add_weight(struct net_device *dev, struct napi_struct *napi,
+			   int (*poll)(struct napi_struct *, int), int weight, int core);
 
 /**
  * netif_napi_add() - initialize a NAPI context

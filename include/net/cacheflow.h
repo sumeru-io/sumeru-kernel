@@ -13,6 +13,7 @@ extern u8 cacheflow_mark_enable;
 extern u8 cacheflow_track_enable;
 extern u8 cacheflow_steer_enable;
 
+extern int cacheflow_steer_core;
 extern int cacheflow_buffer_size;
 extern int cacheflow_thresh;
 
@@ -33,6 +34,10 @@ static inline bool is_cacheflow_steer_enabled(void)
 
 static inline int get_cacheflow_pool_size(void) {
 	return READ_ONCE(cacheflow_buffer_size);
+}
+
+static inline int get_cacheflow_steer_core(void) {
+	return READ_ONCE(cacheflow_steer_core);
 }
 
 #endif /* __CACHEFLOW_H */
