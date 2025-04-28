@@ -1027,7 +1027,10 @@ struct sk_buff {
 #if defined(CONFIG_NET_SCHED) || defined(CONFIG_NET_XGRESS)
 	__u16			tc_index;	/* traffic control index */
 #endif
-
+#if defined(CONFIG_NET_CACHEFLOW)
+	u32			used_pages;
+	u32			free_pages;
+#endif
 	u16			alloc_cpu;
 
 	union {

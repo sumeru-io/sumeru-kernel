@@ -9,12 +9,6 @@
 
 #include <net/page_pool/helpers.h>
 
-struct page_pool_mem_usage {
-	struct page_pool *pool;
-	u32 used_pages;
-	u32 free_pages;
-};
-
 extern u8 cacheflow_mark_enable;
 extern u8 cacheflow_track_enable;
 extern u8 cacheflow_steer_enable;
@@ -40,7 +34,5 @@ static inline bool is_cacheflow_steer_enabled(void)
 static inline int get_cacheflow_pool_size(void) {
 	return READ_ONCE(cacheflow_buffer_size);
 }
-
-int skb_pp_pressure(struct sk_buff *skb, struct page_pool_mem_usage *usage);
 
 #endif /* __CACHEFLOW_H */

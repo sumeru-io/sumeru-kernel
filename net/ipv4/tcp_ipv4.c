@@ -2150,16 +2150,14 @@ int tcp_filter(struct sock *sk, struct sk_buff *skb)
 	int ret = sk_filter_trim_cap(sk, skb, th->doff * 4);
 
 #ifdef CONFIG_NET_CACHEFLOW
-	struct page_pool_mem_usage usage = {};
-
-	if (!ret && !skb_pp_pressure(skb, &usage)) {
-		if (is_cacheflow_mark_enabled() && (usage.used_pages >= READ_ONCE(cacheflow_thresh))) {
+	if (!ret && skb_cacheflow(skb)) {
+		if (is_cacheflow_mark_enabled() && (skb->used_pages >= READ_ONCE(cacheflow_thresh))) {
 			INET_ECN_set_ce(skb);
-			trace_page_pool_pressure(usage.pool, sk, sock_gen_cookie(sk),
-						 skb, usage.used_pages, usage.free_pages, 1);
+			trace_page_pool_pressure(0, sk, sock_gen_cookie(sk),
+						 skb, skb->used_pages, skb->free_pages, 1);
 		} else {
-			trace_page_pool_pressure(usage.pool, sk, sock_gen_cookie(sk),
-						 skb, usage.used_pages, usage.free_pages, 0);
+			trace_page_pool_pressure(0, sk, sock_gen_cookie(sk),
+						 skb, skb->used_pages, skb->free_pages, 0);
 		}
 	}
 #endif

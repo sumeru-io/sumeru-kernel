@@ -469,7 +469,7 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 	enum gro_result ret;
 	int same_flow;
 
-	if (skb_cacheflow(skb) || netif_elide_gro(skb->dev))
+	if (netif_elide_gro(skb->dev))
 		goto normal;
 
 	gro_list_prepare(&gro_list->list, skb);

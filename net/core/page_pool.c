@@ -178,20 +178,20 @@ static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref net
 		return 0;
 
 	if (old_state == PAGE_POOL_ALLOC) {
-		atomic_dec(&pool->used_pages);
+		pool->used_pages--;
 	} else if (old_state == PAGE_POOL_RING || old_state == PAGE_POOL_ARRAY) {
-		atomic_dec(&pool->free_pages);
+		pool->free_pages--;
 	}
 
 	if (new_state == PAGE_POOL_ALLOC) {
-		atomic_inc(&pool->used_pages);
+		pool->used_pages++;
 	} else if (new_state == PAGE_POOL_RING || new_state == PAGE_POOL_ARRAY) {
-		atomic_inc(&pool->free_pages);
+		pool->free_pages++;
 	}
 
 	trace_page_pool_page_move(pool, netmem, old_state, new_state, 
-			atomic_read(&pool->used_pages),
-			 atomic_read(&pool->free_pages));
+			pool->used_pages,
+			pool->free_pages);
 
 	return 0;
 }
@@ -226,9 +226,9 @@ static int pool_watermark_show(struct seq_file *m, void *v) {
 	struct page_pool *pool = pool_proc->pool;
 
 	seq_printf(m, "Pool Name: %s, ", pool_proc->page_pool_name);
-	seq_printf(m, "Pool Size: %u, ", atomic_read(&pool->free_pages) + atomic_read(&pool->used_pages));
-	seq_printf(m, "Free Pages: %u, ", atomic_read(&pool->free_pages));
-	seq_printf(m, "Used Pages: %u\n", atomic_read(&pool->used_pages));
+	seq_printf(m, "Pool Size: %u, ", pool->free_pages + pool->used_pages);
+	seq_printf(m, "Free Pages: %u, ", pool->free_pages);
+	seq_printf(m, "Used Pages: %u\n", pool->used_pages);
 
 	return 0;
 }
@@ -568,8 +568,8 @@ static int page_pool_init(struct page_pool *pool,
 #endif
 		pool->cacheflow_track = 1;
 
-		atomic_set(&pool->free_pages, 0);
-		atomic_set(&pool->used_pages, 0);
+		pool->free_pages = 0;
+		pool->used_pages = 0;
 		pr_warn("page_pool: create fixed size pool with %u pages", size);
 
 		pool->proc = create_proc_entry(pool);

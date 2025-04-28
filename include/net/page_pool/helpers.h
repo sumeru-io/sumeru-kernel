@@ -454,16 +454,4 @@ static inline void page_pool_nid_changed(struct page_pool *pool, int new_nid)
 		page_pool_update_nid(pool, new_nid);
 }
 
-#if defined (CONFIG_NET_CACHEFLOW)
-static inline u32 page_pool_get_used_pages(struct page_pool *pool)
-{
-	return atomic_read(&pool->used_pages);
-}
-
-static inline u32 page_pool_get_free_pages(struct page_pool *pool)
-{
-	return atomic_read(&pool->free_pages);
-}
-#endif
-
 #endif /* _NET_PAGE_POOL_HELPERS_H */
