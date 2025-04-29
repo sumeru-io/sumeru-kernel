@@ -2771,8 +2771,10 @@ static int mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 	weight = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_LEGACY_RQ_WQE_BULK) ? 16 : NAPI_POLL_WEIGHT;
 
 	if (is_cacheflow_steer_enabled()) {
-		netif_cacheflow_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, weight, get_cacheflow_steer_core());
-		pr_info("mlx5e: RQ[%d]: add busy poll NAPI kthread on core %d, res: %s\n", ix, get_cacheflow_steer_core(), (netdev->threaded == 2) ? "succeed" : "fail");
+		int core = get_cacheflow_steer_core();
+		netif_cacheflow_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, weight, core);
+		pr_info("mlx5e: RQ[%d]: add busy poll NAPI kthread on core %d, res: %s\n", ix, 
+			core, test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" : "fail");
 	} else {
 		netif_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, weight);
 		pr_info("mlx5e: RQ[%d]: add normal NAPI\n", ix);

@@ -1632,8 +1632,11 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 
 	skb->mark = be32_to_cpu(cqe->sop_drop_qpn) & MLX5E_TC_FLOW_ID_MASK;
 
-	skb->used_pages = rq->page_pool->used_pages;
-	skb->free_pages = rq->page_pool->free_pages;
+#if IS_ENABLED(CONFIG_NET_CACHEFLOW)
+	skb->page_pool  = rq->page_pool;
+	skb->used_pages = rq->page_pool->allocated_pages;
+	skb->free_pages = rq->page_pool->array_pages + rq->page_pool->ring_pages;
+#endif
 
 	mlx5e_handle_csum(netdev, cqe, rq, skb, !!lro_num_seg);
 	/* checking CE bit in cqe - MSB in ml_path field */
@@ -1827,8 +1830,10 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi
 
 	skb_mark_for_recycle(skb);
 
+#if IS_ENABLED(CONFIG_NET_CACHEFLOW)
 	if (test_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags))
 		skb->cacheflow = 1;
+#endif
 
 	mlx5e_frag_ref_inc(rq, head_wi->frag_page);
 

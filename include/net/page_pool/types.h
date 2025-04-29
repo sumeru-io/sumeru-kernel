@@ -233,8 +233,9 @@ struct page_pool {
 	u32 xdp_mem_id;
 
 #ifdef CONFIG_NET_CACHEFLOW
-	u32 free_pages;
-	u32 used_pages;
+	u32 array_pages;
+	u32 ring_pages;
+	u32 allocated_pages;
 	struct page_pool_proc *proc;
 #endif
 

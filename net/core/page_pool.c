@@ -178,20 +178,36 @@ static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref net
 		return 0;
 
 	if (old_state == PAGE_POOL_ALLOC) {
-		pool->used_pages--;
-	} else if (old_state == PAGE_POOL_RING || old_state == PAGE_POOL_ARRAY) {
-		pool->free_pages--;
+#if IS_ENABLED(CONFIG_NET_CACHEFLOW_DEBUG)
+		if (unlikely(pool->allocated_pages == 0)) {
+			pr_err("page_pool: allocated_pages is 0\n");
+		}
+#endif
+		pool->allocated_pages--;
+	} else if (old_state == PAGE_POOL_ARRAY) {
+		if (unlikely(pool->array_pages == 0)) {
+			pr_err("page_pool: array_pages is 0\n");
+		}
+		pool->array_pages--;
+	} else if (old_state == PAGE_POOL_RING) {
+		if (unlikely(pool->ring_pages == 0)) {
+			pr_err("page_pool: ring_pages is 0\n");
+		}
+		pool->ring_pages--;
 	}
 
 	if (new_state == PAGE_POOL_ALLOC) {
-		pool->used_pages++;
-	} else if (new_state == PAGE_POOL_RING || new_state == PAGE_POOL_ARRAY) {
-		pool->free_pages++;
+		pool->allocated_pages++;
+	} else if (new_state == PAGE_POOL_ARRAY) {
+		pool->array_pages++;
+	} else if (new_state == PAGE_POOL_RING) {
+		pool->ring_pages++;
 	}
 
 	trace_page_pool_page_move(pool, netmem, old_state, new_state, 
-			pool->used_pages,
-			pool->free_pages);
+			pool->allocated_pages,
+			pool->array_pages,
+			pool->ring_pages);
 
 	return 0;
 }
@@ -226,9 +242,9 @@ static int pool_watermark_show(struct seq_file *m, void *v) {
 	struct page_pool *pool = pool_proc->pool;
 
 	seq_printf(m, "Pool Name: %s, ", pool_proc->page_pool_name);
-	seq_printf(m, "Pool Size: %u, ", pool->free_pages + pool->used_pages);
-	seq_printf(m, "Free Pages: %u, ", pool->free_pages);
-	seq_printf(m, "Used Pages: %u\n", pool->used_pages);
+	seq_printf(m, "Pool Size: %u, ", pool->array_pages + pool->ring_pages + pool->allocated_pages);
+	seq_printf(m, "Free Pages: %u, ", pool->array_pages + pool->ring_pages);
+	seq_printf(m, "Used Pages: %u\n", pool->allocated_pages);
 
 	return 0;
 }
@@ -363,14 +379,14 @@ static void page_pool_recycle_mini_array(struct page_pool *pool) {
 		if (unlikely(ret)) {
 			for (j = 0; j < PP_ALLOC_CACHE_BULK; j++) {
 				recycle_stat_inc(pool, ring_full);
-				page_pool_account_usage(pool, pool->alloc.bulk[i][j], PAGE_POOL_ALLOC, PAGE_POOL_UNALLOC);
+				page_pool_account_usage(pool, pool->alloc.bulk[i][j], PAGE_POOL_ARRAY, PAGE_POOL_UNALLOC);
 				page_pool_return_page(pool, pool->alloc.bulk[i][j]);
 			}
 			kmem_cache_free(netmem_mini_array_cache, pool->alloc.bulk[i]);
 			pool->alloc.bulk[i] = 0;
 		} else {
 			for (j = 0; j < PP_ALLOC_CACHE_BULK; j++) {
-				page_pool_account_usage(pool, pool->alloc.bulk[i][j], PAGE_POOL_ALLOC, PAGE_POOL_RING);
+				page_pool_account_usage(pool, pool->alloc.bulk[i][j], PAGE_POOL_ARRAY, PAGE_POOL_RING);
 			}
 		}
 	}
@@ -568,8 +584,9 @@ static int page_pool_init(struct page_pool *pool,
 #endif
 		pool->cacheflow_track = 1;
 
-		pool->free_pages = 0;
-		pool->used_pages = 0;
+		pool->array_pages = 0;
+		pool->ring_pages = 0;
+		pool->allocated_pages = 0;
 		pr_warn("page_pool: create fixed size pool with %u pages", size);
 
 		pool->proc = create_proc_entry(pool);
