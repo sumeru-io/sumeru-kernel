@@ -748,7 +748,7 @@ static int mlx5e_build_rq_frags_info(struct mlx5_core_dev *mdev,
 				frag_size += headroom;
 				frag_size += SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
 			}
-			info->arr[i].frag_stride = roundup_pow_of_two(frag_size);
+			info->arr[i].frag_stride = frag_size_max;
 		}
 
 		i++;

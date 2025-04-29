@@ -76,7 +76,7 @@ static DEFINE_MUTEX(rtnl_mutex);
 
 void rtnl_lock(void)
 {
-	trace_printk("rtnl_lock on %s[%d] cpu%d, softirq: %lu, irq: %ld\n",
+	trace_printk("%s[%d] cpu%d, softirq: %lu, irq: %ld\n",
 		current->comm, current->pid, smp_processor_id(),
 		in_serving_softirq(), in_interrupt());
 	mutex_lock(&rtnl_mutex);
@@ -103,7 +103,7 @@ void __rtnl_unlock(void)
 {
 	struct sk_buff *head = defer_kfree_skb_list;
 
-	trace_printk("__rtnl_unlock on %s[%d] cpu%d, softirq: %lu, irq: %ld\n",
+	trace_printk("%s[%d] cpu%d, softirq: %lu, irq: %ld\n",
 		current->comm, current->pid, smp_processor_id(),
 		in_serving_softirq(), in_interrupt());
 
