@@ -600,8 +600,8 @@ static int page_pool_init(struct page_pool *pool,
 	if (pool->slow.flags & PP_FLAG_CACHEFLOW_MARK)
 		pool->cacheflow_mark = 1;
 
-	if (pool->slow.flags & PP_FLAG_SINGLE_OWNER)
-		pool->single_owner = 1;
+	// if (pool->slow.flags & PP_FLAG_SINGLE_OWNER)
+	// 	pool->single_owner = 1;
 #endif
 
 	return 0;

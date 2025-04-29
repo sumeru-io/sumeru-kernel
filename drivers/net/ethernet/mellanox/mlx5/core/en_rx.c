@@ -312,8 +312,11 @@ static void __mlx5e_page_release_fragmented(struct mlx5e_rq *rq,
 static void mlx5e_page_release_fragmented(struct mlx5e_rq *rq,
 					  struct mlx5e_frag_page *frag_page)
 {
-	if (!test_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags))
+	if (!test_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags)) {
 		__mlx5e_page_release_fragmented(rq, frag_page);
+	} else if (frag_page->frags == 0) {
+		page_pool_put_unrefed_page(rq->page_pool, frag_page->page, -1, true);
+	}
 }
 
 static inline int mlx5e_get_rx_frag(struct mlx5e_rq *rq,
