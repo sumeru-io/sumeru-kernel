@@ -174,7 +174,7 @@ enum {
 };
 
 static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref netmem, int old_state, int new_state) {
-	if (!pool->cacheflow_track)
+	if (!pool->usage_track)
 		return 0;
 
 	if (old_state == PAGE_POOL_ALLOC) {
@@ -576,13 +576,13 @@ static int page_pool_init(struct page_pool *pool,
 		static_branch_inc(&page_pool_mem_providers);
 	}
 #ifdef CONFIG_NET_CACHEFLOW
-	if (pool->slow.flags & PP_FLAG_CACHEFLOW_TRACK) {
+	if (pool->slow.flags & PP_FLAG_USAGE_TRACK) {
 #ifdef CONFIG_PAGE_POOL_STACK
 		u32 size = pool->stack.size;
 #else
 		u32 size = pool->ring.size;
 #endif
-		pool->cacheflow_track = 1;
+		pool->usage_track = 1;
 
 		pool->array_pages = 0;
 		pool->ring_pages = 0;
@@ -597,11 +597,8 @@ static int page_pool_init(struct page_pool *pool,
 		}
 	}
 
-	if (pool->slow.flags & PP_FLAG_CACHEFLOW_MARK)
-		pool->cacheflow_mark = 1;
-
-	// if (pool->slow.flags & PP_FLAG_SINGLE_OWNER)
-	// 	pool->single_owner = 1;
+	if (pool->slow.flags & PP_FLAG_SINGLE_OWNER)
+		pool->single_owner = 1;
 #endif
 
 	return 0;

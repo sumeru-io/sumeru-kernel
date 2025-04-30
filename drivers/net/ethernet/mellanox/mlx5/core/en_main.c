@@ -966,21 +966,15 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		pp_params.pool_size = pool_size;
 
 #ifdef CONFIG_NET_CACHEFLOW
+		pp_params.pool_size = get_cacheflow_pool_size();
+		__set_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags);
+
 		if (is_cacheflow_track_enabled()) {
-			pp_params.flags |= PP_FLAG_CACHEFLOW_TRACK;
-		}
-		
-		if (is_cacheflow_mark_enabled()) {
-			pp_params.flags |= PP_FLAG_CACHEFLOW_MARK;
-			pp_params.pool_size = get_cacheflow_pool_size();
+			pp_params.flags |= PP_FLAG_USAGE_TRACK;
 		}
 
-		if (is_cacheflow_steer_enabled()) {
-			__set_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags);
-		}
-
-		// if (rq->wq_type != MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
-		// 	pp_params.flags |= PP_FLAG_SINGLE_OWNER;
+		if (rq->wq_type != MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
+			pp_params.flags |= PP_FLAG_SINGLE_OWNER;
 
 		pr_info("mlx5e: RQ[%d]: cacheflow track: %s, mark: %s, steer: %s, pool size = %u\n", 
 			rq->ix, 
