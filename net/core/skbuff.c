@@ -7150,7 +7150,7 @@ nodefer:	kfree_skb_napi_cache(skb);
 
 	sd = &per_cpu(softnet_data, cpu);
 	defer_max = READ_ONCE(net_hotdata.sysctl_skb_defer_max);
-	if (READ_ONCE(sd->defer_count) >= defer_max)
+	if (READ_ONCE(sd->defer_count) >= defer_max && !skb_cacheflow(skb))
 		goto nodefer;
 
 	spin_lock_bh(&sd->defer_lock);

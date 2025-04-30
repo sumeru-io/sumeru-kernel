@@ -36,6 +36,10 @@ static inline int get_cacheflow_pool_size(void) {
 	return READ_ONCE(cacheflow_buffer_size);
 }
 
+static inline int get_cacheflow_thresh(void) {
+	return READ_ONCE(cacheflow_thresh);
+}
+
 static inline int get_cacheflow_steer_core(void) {
 	return READ_ONCE(cacheflow_steer_core);
 }

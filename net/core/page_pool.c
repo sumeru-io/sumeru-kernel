@@ -180,19 +180,29 @@ static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref net
 	if (old_state == PAGE_POOL_ALLOC) {
 #if IS_ENABLED(CONFIG_NET_CACHEFLOW_DEBUG)
 		if (unlikely(pool->allocated_pages == 0)) {
-			pr_err("page_pool: allocated_pages is 0\n");
+			pr_err("page_pool: alloc pages = %u, array_pages = %u, ring_pages = %u\n",
+				pool->allocated_pages, pool->array_pages, pool->ring_pages);
+			BUG();
 		}
 #endif
 		pool->allocated_pages--;
 	} else if (old_state == PAGE_POOL_ARRAY) {
+#if IS_ENABLED(CONFIG_NET_CACHEFLOW_DEBUG)
 		if (unlikely(pool->array_pages == 0)) {
-			pr_err("page_pool: array_pages is 0\n");
+			pr_err("page_pool: alloc pages = %u, array_pages = %u, ring_pages = %u\n",
+				pool->allocated_pages, pool->array_pages, pool->ring_pages);
+			BUG();
 		}
+#endif
 		pool->array_pages--;
 	} else if (old_state == PAGE_POOL_RING) {
+#if IS_ENABLED(CONFIG_NET_CACHEFLOW_DEBUG)
 		if (unlikely(pool->ring_pages == 0)) {
-			pr_err("page_pool: ring_pages is 0\n");
+			pr_err("page_pool: alloc pages = %u, array_pages = %u, ring_pages = %u\n",
+				pool->allocated_pages, pool->array_pages, pool->ring_pages);
+			BUG();
 		}
+#endif
 		pool->ring_pages--;
 	}
 
@@ -724,7 +734,6 @@ static noinline netmem_ref page_pool_refill_alloc_cache(struct page_pool *pool)
 		if (unlikely(!bulk))
 			break;
 		
-		// TODO(cacheflow): validate netmem numa node in batch.
 		for (i = 0; i < PP_ALLOC_CACHE_BULK; i++) {
 			page_pool_account_usage(pool, bulk[i], PAGE_POOL_RING, PAGE_POOL_ARRAY);
 		}
@@ -1323,7 +1332,7 @@ void page_pool_put_unrefed_netmem(struct page_pool *pool, netmem_ref netmem,
 {
 	if (!allow_direct)
 		allow_direct = page_pool_napi_local(pool);
-
+	
 	netmem =
 		__page_pool_put_page(pool, netmem, dma_sync_size, allow_direct);
 
@@ -1395,6 +1404,9 @@ void page_pool_put_page_bulk(struct page_pool *pool, void **data,
 	if (!bulk_len)
 		return;
 
+	if (pool->single_owner)
+		goto return_pages;
+
 #ifndef CONFIG_PAGE_POOL_BULK
 	/* Bulk producer into ptr_ring page_pool cache */
 	in_softirq = page_pool_producer_lock(pool);
@@ -1418,7 +1430,8 @@ void page_pool_put_page_bulk(struct page_pool *pool, void **data,
 	if (likely(i == bulk_len))
 		return;
 #endif
-	
+
+return_pages:
 	/* ptr_ring cache full, free remaining pages outside producer lock
 	 * since put_page() with refcnt == 1 can be an expensive operation
 	 */
