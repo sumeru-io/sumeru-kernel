@@ -285,6 +285,10 @@
 #include <trace/events/tcp.h>
 #include <trace/events/skb.h>
 #include <net/rps.h>
+#if IS_ENABLED(CONFIG_NET_CACHEFLOW)
+#include <net/cacheflow.h>
+#endif
+
 
 #include "../core/devmem.h"
 
@@ -1530,7 +1534,7 @@ static void tcp_eat_recv_skb(struct sock *sk, struct sk_buff *skb)
 		skb_shinfo(skb)->ms_timestamp.consume_timestamp);
 
 	}
-	if (likely(skb->destructor == sock_rfree)) {
+	if (likely(skb->destructor == sock_rfree) && (!is_cacheflow_steer_enabled())) {
 		sock_rfree(skb);
 		skb->destructor = NULL;
 		skb->sk = NULL;

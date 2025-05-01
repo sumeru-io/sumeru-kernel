@@ -375,6 +375,10 @@ struct napi_struct {
 	struct task_struct	*thread;
 #ifdef CONFIG_NET_CACHEFLOW
 	struct task_struct	*cacheflow_thread;
+	/* Another possibly contended cache line */
+	spinlock_t		defer_lock ____cacheline_aligned_in_smp;
+	int			defer_count;
+	struct sk_buff		*defer_list;
 #endif
 	/* control-path-only fields follow */
 	struct list_head	dev_list;

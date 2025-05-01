@@ -6502,6 +6502,7 @@ static void __napi_busy_loop(unsigned int napi_id,
 	void *have_poll_lock = NULL;
 	struct napi_struct *napi;
 	struct softnet_data *sd;
+	struct sk_buff *skb, *next;
 
 	WARN_ON_ONCE(!rcu_read_lock_held());
 
@@ -6548,7 +6549,20 @@ restart:
 			napi_poll = napi->poll;
 		}
 		WRITE_ONCE(napi->list_owner, smp_processor_id());
-		skb_defer_free_flush(this_cpu_ptr(&softnet_data));
+
+		if (READ_ONCE(napi->defer_list)) {
+			spin_lock_bh(&napi->defer_lock);
+			skb = napi->defer_list;
+			napi->defer_list = NULL;
+			napi->defer_count = 0;
+			spin_unlock_bh(&napi->defer_lock);
+
+			while (skb != NULL) {
+				next = skb->next;
+				____kfree_skb(skb);
+				skb = next;
+			}
+		}
 
 		work = napi_poll(napi, budget);
 		trace_napi_poll(napi, work, budget);
@@ -6798,6 +6812,8 @@ void netif_napi_add_weight(struct net_device *dev, struct napi_struct *napi,
 }
 EXPORT_SYMBOL(netif_napi_add_weight);
 
+
+#ifdef CONFIG_NET_CACHEFLOW
 void netif_cacheflow_napi_add_weight(struct net_device *dev, struct napi_struct *napi,
 			   int (*poll)(struct napi_struct *, int), int weight, int core)
 {
@@ -6833,11 +6849,15 @@ void netif_cacheflow_napi_add_weight(struct net_device *dev, struct napi_struct 
 	 */
 	if (!napi_cacheflow_kthread_create(napi, core)) {
 		assign_bit(NAPI_STATE_CACHEFLOW, &napi->state, 1);
+		napi->defer_count = 0;
+		napi->defer_list = NULL;
+		spin_lock_init(&napi->defer_lock);
 	}
 
 	netif_napi_set_irq(napi, -1);
 }
 EXPORT_SYMBOL(netif_cacheflow_napi_add_weight);
+#endif
 
 void napi_disable(struct napi_struct *n)
 {
@@ -7051,9 +7071,6 @@ static void napi_threaded_poll_loop(struct napi_struct *napi)
 
 		sd = this_cpu_ptr(&softnet_data);
 		sd->in_napi_threaded_poll = true;
-
-		WRITE_ONCE(napi->list_owner, smp_processor_id());
-		skb_defer_free_flush(sd);
 
 		have = netpoll_poll_lock(napi);
 		__napi_poll(napi, &repoll);

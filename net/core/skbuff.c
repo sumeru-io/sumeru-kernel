@@ -1141,6 +1141,10 @@ exit:
 	 * dataref set to 0, which will trigger the recycling
 	 */
 	skb->pp_recycle = 0;
+#ifdef CONFIG_NET_CACHEFLOW
+	skb->cacheflow = 0;
+	skb->page_pool = NULL;
+#endif
 }
 
 /*
@@ -1208,16 +1212,44 @@ static void skb_release_all(struct sk_buff *skb, enum skb_drop_reason reason)
 
 void __kfree_skb(struct sk_buff *skb)
 {
-	if (unlikely(skb_cacheflow(skb) && !skb_dst(skb) && skb->sk && skb->destructor == sock_rfree)) {
-		sock_rfree(skb);
-		skb->sk = NULL;
-		skb->destructor = NULL;
-		return skb_attempt_defer_free(skb);
+#ifdef CONFIG_NET_CACHEFLOW
+	if (skb_cacheflow(skb) && is_cacheflow_steer_enabled()) {
+		bool kick;
+		unsigned int defer_max;
+		struct napi_struct *napi;
+		
+		skb_dst_drop(skb);
+		if (skb->destructor) {
+			INDIRECT_CALL_1(skb->destructor, sock_rfree, skb);
+			skb->destructor = NULL;
+		}
+
+		napi = skb->page_pool->p.napi;
+		defer_max = READ_ONCE(net_hotdata.sysctl_skb_defer_max);
+
+		spin_lock_bh(&napi->defer_lock);
+		kick = napi->defer_count == (defer_max >> 1);
+		WRITE_ONCE(napi->defer_count, napi->defer_count + 1);
+		skb->next = napi->defer_list;
+		WRITE_ONCE(napi->defer_list, skb);
+		spin_unlock_bh(&napi->defer_lock);
+
+		if (kick && napi->cacheflow_thread)
+			wake_up_process(napi->cacheflow_thread);
+
+		return;
 	}
+#endif
+	____kfree_skb(skb);
+}
+EXPORT_SYMBOL(__kfree_skb);
+
+void ____kfree_skb(struct sk_buff *skb)
+{
 	skb_release_all(skb, SKB_DROP_REASON_NOT_SPECIFIED);
 	kfree_skbmem(skb);
 }
-EXPORT_SYMBOL(__kfree_skb);
+EXPORT_SYMBOL(____kfree_skb);
 
 static __always_inline
 bool __sk_skb_reason_drop(struct sock *sk, struct sk_buff *skb,
