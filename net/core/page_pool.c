@@ -176,8 +176,6 @@ enum {
 static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref netmem, int old_state, int new_state) {
 	if (!pool->usage_track)
 		return 0;
-	
-	spin_lock_bh(&pool->usage_lock);
 
 	if (old_state == PAGE_POOL_ALLOC) {
 #if IS_ENABLED(CONFIG_NET_CACHEFLOW_DEBUG)
@@ -216,7 +214,6 @@ static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref net
 		pool->ring_pages++;
 	}
 
-	spin_unlock_bh(&pool->usage_lock);
 	trace_page_pool_page_move(pool, netmem, old_state, new_state, 
 			pool->allocated_pages,
 			pool->array_pages,
@@ -597,7 +594,6 @@ static int page_pool_init(struct page_pool *pool,
 #endif
 		pool->usage_track = 1;
 
-		spin_lock_init(&pool->usage_lock);
 		pool->array_pages = 0;
 		pool->ring_pages = 0;
 		pool->allocated_pages = 0;

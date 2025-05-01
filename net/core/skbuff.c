@@ -1208,6 +1208,12 @@ static void skb_release_all(struct sk_buff *skb, enum skb_drop_reason reason)
 
 void __kfree_skb(struct sk_buff *skb)
 {
+	if (unlikely(skb_cacheflow(skb) && !skb_dst(skb) && skb->sk && skb->destructor == sock_rfree)) {
+		sock_rfree(skb);
+		skb->sk = NULL;
+		skb->destructor = NULL;
+		return skb_attempt_defer_free(skb);
+	}
 	skb_release_all(skb, SKB_DROP_REASON_NOT_SPECIFIED);
 	kfree_skbmem(skb);
 }

@@ -934,7 +934,8 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		if (err)
 			goto err_rq_wq_destroy;
 
-		__set_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags);
+		if (rq->wq_type != MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
+			__set_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags);
 
 		pr_info("mlx5e: RQ[%d]: MTU RQ: %u, wq_sz %d, wqe_bulk %u, refill_unit %u, num_frags %u, frag_size [%d/%d %d/%d %d/%d %d/%d]\n",
 			rq->ix,
