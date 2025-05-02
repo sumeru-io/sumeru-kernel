@@ -25,6 +25,7 @@ struct mlx5e_rq_param {
 	struct mlx5_wq_param       wq;
 	struct mlx5e_rq_frags_info frags_info;
 	u32                        xdp_frag_size;
+	u32                        cacheflow_channel;
 };
 
 struct mlx5e_sq_param {

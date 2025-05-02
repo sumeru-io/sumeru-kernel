@@ -27,6 +27,14 @@ config PAGE_POOL_STACK
 
 	  If unsure, say N.
 
+config PAGE_POOL_SINGLE_OWNER
+	default y
+	bool "Use single owner for page pool"
+	help
+	  This option enables the use of single owner for page pool.
+
+	  If unsure, say N.
+
 config PAGE_POOL_BULK
 	default y
 	bool "Use bulk alloc and free for page pool"

@@ -42,6 +42,12 @@
 #include <net/udp.h>
 #include <net/tcp.h>
 #include <net/xdp_sock_drv.h>
+#ifdef CONFIG_NET_CACHEFLOW
+#include <net/cacheflow.h>
+#endif
+#ifdef CONFIG_NET_CACHEFLOW
+#include <net/cacheflow.h>
+#endif
 #include "en.h"
 #include "en/txrx.h"
 #include "en_tc.h"
@@ -1835,7 +1841,7 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi
 
 #if IS_ENABLED(CONFIG_NET_CACHEFLOW)
 	if (test_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags))
-		skb->cacheflow = 1;
+		skb->cacheflow = is_cacheflow_steer_enabled() ? SKB_CACHEFLOW_STEER : SKB_CACHEFLOW_NORMAL;
 #endif
 
 	mlx5e_frag_ref_inc(rq, head_wi->frag_page);

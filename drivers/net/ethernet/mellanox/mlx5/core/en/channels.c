@@ -5,7 +5,7 @@
 #include "en.h"
 #include "en/dim.h"
 #include "en/ptp.h"
-
+#include "en/cacheflow.h"
 unsigned int mlx5e_channels_get_num(struct mlx5e_channels *chs)
 {
 	return chs->num;
@@ -56,6 +56,19 @@ bool mlx5e_channels_get_ptp_rqn(struct mlx5e_channels *chs, u32 *rqn)
 	*rqn = c->rq.rqn;
 	return true;
 }
+
+#ifdef CONFIG_NET_CACHEFLOW
+bool mlx5e_channels_get_cacheflow_rqn(struct mlx5e_channels *chs, u32 *rqn)
+{
+	struct mlx5e_cacheflow *c = chs->cacheflow;
+
+	if (!c)
+		return false;
+
+	*rqn = c->rq.rqn;
+	return true;
+}
+#endif
 
 int mlx5e_channels_rx_change_dim(struct mlx5e_channels *chs, bool enable)
 {

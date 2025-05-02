@@ -62,6 +62,23 @@ TRACE_EVENT(sk_rps_core_change,
 		__entry->cpu, __entry->hash)
 );
 
+TRACE_EVENT(sk_rps_flow_update,
+	TP_PROTO(int flow_id, int filter_id, int rxq),
+	TP_ARGS(flow_id, filter_id, rxq),
+	TP_STRUCT__entry(
+		__field(int, flow_id)
+		__field(int, filter_id)
+		__field(int, rxq)
+	),
+	TP_fast_assign(
+		__entry->flow_id = flow_id;
+		__entry->filter_id = filter_id;
+		__entry->rxq = rxq;
+		
+	),
+	TP_printk("flow_id=%d filter_id=%d rxq=%d",
+		__entry->flow_id, __entry->filter_id, __entry->rxq)
+);
 
 #endif /* _TRACE_RPS_H */
 

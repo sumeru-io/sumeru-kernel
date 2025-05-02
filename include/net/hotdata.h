@@ -30,6 +30,9 @@ struct net_hotdata {
 #ifdef CONFIG_RPS
 	struct rps_sock_flow_table __rcu *rps_sock_flow_table;
 	u32			rps_cpu_mask;
+#ifdef CONFIG_NET_CACHEFLOW
+	u32			cacheflow_mask;
+#endif
 #endif
 	int			gro_normal_batch;
 	int			netdev_budget;

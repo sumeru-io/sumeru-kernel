@@ -31,6 +31,11 @@ struct mlx5e_rx_res {
 		struct mlx5e_rqt rqt;
 		struct mlx5e_tir tir;
 	} ptp;
+
+	struct {
+		struct mlx5e_rqt rqt;
+		struct mlx5e_tir tir;
+	} cacheflow;
 };
 
 /* API for rx_res_rss_* */
@@ -426,6 +431,42 @@ out:
 	return err;
 }
 
+static int mlx5e_rx_res_cacheflow_init(struct mlx5e_rx_res *res)
+{
+	bool inner_ft_support = res->features & MLX5E_RX_RES_FEATURE_INNER_FT;
+	struct mlx5e_tir_builder *builder;
+	int err;
+
+	builder = mlx5e_tir_builder_alloc(false);
+	if (!builder)
+		return -ENOMEM;
+
+	err = mlx5e_rqt_init_direct(&res->cacheflow.rqt, res->mdev, false, res->drop_rqn,
+				    mlx5e_rqt_size(res->mdev, res->max_nch));
+	if (err)
+		goto out;
+
+	mlx5e_tir_builder_build_rqt(builder, res->mdev->mlx5e_res.hw_objs.td.tdn,
+				    mlx5e_rqt_get_rqtn(&res->cacheflow.rqt),
+				    inner_ft_support);
+	mlx5e_tir_builder_build_packet_merge(builder, &res->pkt_merge_param);
+	mlx5e_tir_builder_build_direct(builder);
+
+	err = mlx5e_tir_init(&res->cacheflow.tir, builder, res->mdev, true);
+	if (err)
+		goto err_destroy_cacheflow_rqt;
+
+	mlx5e_tir_builder_clear(builder);
+	goto out;
+
+err_destroy_cacheflow_rqt:
+	mlx5e_rqt_destroy(&res->cacheflow.rqt);
+
+out:
+	mlx5e_tir_builder_free(builder);
+	return err;
+}
+
 static void mlx5e_rx_res_channels_destroy(struct mlx5e_rx_res *res)
 {
 	unsigned int ix;
@@ -442,6 +483,12 @@ static void mlx5e_rx_res_ptp_destroy(struct mlx5e_rx_res *res)
 {
 	mlx5e_tir_destroy(&res->ptp.tir);
 	mlx5e_rqt_destroy(&res->ptp.rqt);
+}
+
+static void mlx5e_rx_res_cacheflow_destroy(struct mlx5e_rx_res *res)
+{
+	mlx5e_tir_destroy(&res->cacheflow.tir);
+	mlx5e_rqt_destroy(&res->cacheflow.rqt);
 }
 
 struct mlx5e_rx_res *
@@ -478,8 +525,14 @@ mlx5e_rx_res_create(struct mlx5_core_dev *mdev, enum mlx5e_rx_res_features featu
 	if (err)
 		goto err_channels_destroy;
 
+	err = mlx5e_rx_res_cacheflow_init(res);
+	if (err)
+		goto err_ptp_destroy;
+
 	return res;
 
+err_ptp_destroy:
+	mlx5e_rx_res_ptp_destroy(res);
 err_channels_destroy:
 	mlx5e_rx_res_channels_destroy(res);
 err_rss_destroy:
@@ -492,6 +545,7 @@ err_rx_res_free:
 void mlx5e_rx_res_destroy(struct mlx5e_rx_res *res)
 {
 	mlx5e_rx_res_ptp_destroy(res);
+	mlx5e_rx_res_cacheflow_destroy(res);
 	mlx5e_rx_res_channels_destroy(res);
 	mlx5e_rx_res_rss_destroy_all(res);
 	mlx5e_rx_res_free(res);
@@ -520,6 +574,11 @@ u32 mlx5e_rx_res_get_tirn_ptp(struct mlx5e_rx_res *res)
 {
 	WARN_ON(!(res->features & MLX5E_RX_RES_FEATURE_PTP));
 	return mlx5e_tir_get_tirn(&res->ptp.tir);
+}
+
+u32 mlx5e_rx_res_get_tirn_cacheflow(struct mlx5e_rx_res *res)
+{
+	return mlx5e_tir_get_tirn(&res->cacheflow.tir);
 }
 
 static u32 mlx5e_rx_res_get_rqtn_direct(struct mlx5e_rx_res *res, unsigned int ix)
@@ -590,6 +649,21 @@ void mlx5e_rx_res_channels_activate(struct mlx5e_rx_res *res, struct mlx5e_chann
 				       mlx5e_rqt_get_rqtn(&res->ptp.rqt),
 				       rqn, err);
 	}
+
+#ifdef CONFIG_NET_CACHEFLOW
+	if (res->features & MLX5E_RX_RES_FEATURE_CACHEFLOW) {
+		u32 rqn;
+
+		if (!mlx5e_channels_get_cacheflow_rqn(chs, &rqn))
+			rqn = res->drop_rqn;
+
+		err = mlx5e_rqt_redirect_direct(&res->cacheflow.rqt, rqn, NULL);
+		if (err)
+			mlx5_core_warn(res->mdev, "Failed to redirect direct RQT %#x to RQ %#x (cacheflow): err = %d\n",
+				       mlx5e_rqt_get_rqtn(&res->cacheflow.rqt),
+				       rqn, err);
+	}
+#endif
 }
 
 void mlx5e_rx_res_channels_deactivate(struct mlx5e_rx_res *res)
@@ -607,6 +681,14 @@ void mlx5e_rx_res_channels_deactivate(struct mlx5e_rx_res *res)
 		if (err)
 			mlx5_core_warn(res->mdev, "Failed to redirect direct RQT %#x to drop RQ %#x (PTP): err = %d\n",
 				       mlx5e_rqt_get_rqtn(&res->ptp.rqt),
+				       res->drop_rqn, err);
+	}
+
+	if (res->features & MLX5E_RX_RES_FEATURE_CACHEFLOW) {
+		err = mlx5e_rqt_redirect_direct(&res->cacheflow.rqt, res->drop_rqn, NULL);
+		if (err)
+			mlx5_core_warn(res->mdev, "Failed to redirect direct RQT %#x to drop RQ %#x (cacheflow): err = %d\n",
+				       mlx5e_rqt_get_rqtn(&res->cacheflow.rqt),
 				       res->drop_rqn, err);
 	}
 }

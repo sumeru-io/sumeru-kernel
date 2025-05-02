@@ -163,15 +163,15 @@ EXPORT_SYMBOL(page_pool_ethtool_stats_get);
 #define recycle_stat_add(pool, __stat, val)
 #endif
 
-#ifdef CONFIG_NET_CACHEFLOW
-static struct proc_dir_entry *page_pool_root_dir;
-
 enum {
 	PAGE_POOL_ALLOC,
 	PAGE_POOL_RING,
 	PAGE_POOL_ARRAY,
 	PAGE_POOL_UNALLOC,
 };
+
+#ifdef CONFIG_NET_CACHEFLOW
+static struct proc_dir_entry *page_pool_root_dir;
 
 static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref netmem, int old_state, int new_state) {
 	if (!pool->usage_track)
@@ -342,7 +342,9 @@ static void free_proc_entry(struct page_pool *pool) {
 	pool->proc = NULL;
 }
 #else
-static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref netmem,int old_state, int new_state) {}
+static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref netmem,int old_state, int new_state) {
+	return 0;
+}
 #endif
 
 static void page_pool_return_page(struct page_pool *pool, netmem_ref netmem);
@@ -924,7 +926,7 @@ static noinline netmem_ref __page_pool_alloc_pages_slow(struct page_pool *pool,
 	unsigned int pp_order = pool->p.order;
 	bool dma_map = pool->dma_map;
 	netmem_ref netmem;
-	int i, j, nr_pages;
+	int i, nr_pages;
 
 	/* Don't support bulk alloc for high-order pages */
 	if (unlikely(pp_order)) {
@@ -942,6 +944,7 @@ static noinline netmem_ref __page_pool_alloc_pages_slow(struct page_pool *pool,
 	}
 
 #ifdef CONFIG_PAGE_POOL_BULK
+	int j;
 	for (i = 0; i < bulk / PP_ALLOC_CACHE_BULK; i++) {
 		pool->alloc.cache = kmem_cache_alloc(netmem_mini_array_cache, GFP_ATOMIC|GFP_NOWAIT);
 		if (unlikely(!pool->alloc.cache))
@@ -1404,7 +1407,7 @@ void page_pool_put_page_bulk(struct page_pool *pool, void **data,
 	if (!bulk_len)
 		return;
 
-	if (pool->single_owner)
+	if (page_pool_is_single_owner(pool))
 		goto return_pages;
 
 #ifndef CONFIG_PAGE_POOL_BULK
@@ -1609,7 +1612,8 @@ static void page_pool_empty_mini_array(struct page_pool *pool, netmem_mini_array
 		page_pool_account_usage(pool, (__force netmem_ref)mini_array[i], PAGE_POOL_ARRAY, PAGE_POOL_UNALLOC);
 		page_pool_release_return_page(pool, (__force netmem_ref)mini_array[i]);
 	}
-	kmem_cache_free(netmem_mini_array_cache, mini_array);
+	if (mini_array)
+		kmem_cache_free(netmem_mini_array_cache, mini_array);
 }
 #endif
 

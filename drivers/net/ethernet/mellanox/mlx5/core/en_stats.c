@@ -2266,6 +2266,71 @@ static const struct counter_desc ptp_rq_stats_desc[] = {
 	{ MLX5E_DECLARE_PTP_RQ_STAT(struct mlx5e_rq_stats, recover) },
 };
 
+#ifdef CONFIG_NET_CACHEFLOW
+static const struct counter_desc cacheflow_ch_stats_desc[] = {
+	{ MLX5E_DECLARE_CACHEFLOW_CH_STAT(struct mlx5e_ch_stats, events) },
+	{ MLX5E_DECLARE_CACHEFLOW_CH_STAT(struct mlx5e_ch_stats, poll) },
+	{ MLX5E_DECLARE_CACHEFLOW_CH_STAT(struct mlx5e_ch_stats, arm) },
+	{ MLX5E_DECLARE_CACHEFLOW_CH_STAT(struct mlx5e_ch_stats, aff_change) },
+	{ MLX5E_DECLARE_CACHEFLOW_CH_STAT(struct mlx5e_ch_stats, force_irq) },
+	{ MLX5E_DECLARE_CACHEFLOW_CH_STAT(struct mlx5e_ch_stats, eq_rearm) },
+};
+
+static const struct counter_desc cacheflow_rq_stats_desc[] = {
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, packets) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, bytes) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, csum_complete) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, csum_complete_tail) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, csum_complete_tail_slow) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, csum_unnecessary) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, csum_unnecessary_inner) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, csum_none) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, xdp_drop) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, xdp_redirect) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, lro_packets) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, lro_bytes) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, gro_packets) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, gro_bytes) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, gro_skbs) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, gro_large_hds) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, hds_nodata_packets) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, hds_nodata_bytes) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, hds_nosplit_packets) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, hds_nosplit_bytes) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, ecn_mark) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, removed_vlan_packets) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, wqe_err) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, mpwqe_filler_cqes) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, mpwqe_filler_strides) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, oversize_pkts_sw_drop) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, buff_alloc_err) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, cqe_compress_blks) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, cqe_compress_pkts) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, congst_umr) },
+#ifdef CONFIG_MLX5_EN_ARFS
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, arfs_add) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, arfs_request_in) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, arfs_request_out) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, arfs_expired) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, arfs_err) },
+#endif
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, recover) },
+#ifdef CONFIG_PAGE_POOL_STATS
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, pp_alloc_fast) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, pp_alloc_slow) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, pp_alloc_slow_high_order) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, pp_alloc_empty) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, pp_alloc_refill) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, pp_alloc_waive) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, pp_recycle_cached) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, pp_recycle_cache_full) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, pp_recycle_ring) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, pp_recycle_ring_full) },
+	{ MLX5E_DECLARE_CACHEFLOW_RQ_STAT(struct mlx5e_rq_stats, pp_recycle_released_ref) },
+#endif
+};
+#endif
+
 static const struct counter_desc qos_sq_stats_desc[] = {
 	{ MLX5E_DECLARE_QOS_TX_STAT(struct mlx5e_sq_stats, packets) },
 	{ MLX5E_DECLARE_QOS_TX_STAT(struct mlx5e_sq_stats, bytes) },
@@ -2312,6 +2377,10 @@ static const struct counter_desc qos_sq_stats_desc[] = {
 #define NUM_PTP_CH_STATS		ARRAY_SIZE(ptp_ch_stats_desc)
 #define NUM_PTP_CQ_STATS		ARRAY_SIZE(ptp_cq_stats_desc)
 #define NUM_PTP_RQ_STATS                ARRAY_SIZE(ptp_rq_stats_desc)
+#ifdef CONFIG_NET_CACHEFLOW
+#define NUM_CACHEFLOW_RQ_STATS		ARRAY_SIZE(cacheflow_rq_stats_desc)
+#define NUM_CACHEFLOW_CH_STATS		ARRAY_SIZE(cacheflow_ch_stats_desc)
+#endif
 #define NUM_QOS_SQ_STATS		ARRAY_SIZE(qos_sq_stats_desc)
 
 static MLX5E_DECLARE_STATS_GRP_OP_NUM_STATS(qos)
@@ -2436,6 +2505,51 @@ static MLX5E_DECLARE_STATS_GRP_OP_FILL_STATS(ptp)
 
 static MLX5E_DECLARE_STATS_GRP_OP_UPDATE_STATS(ptp) { return; }
 
+#ifdef CONFIG_NET_CACHEFLOW
+static MLX5E_DECLARE_STATS_GRP_OP_NUM_STATS(cacheflow)
+{
+	if (!priv->cacheflow_opened)
+		return 0;
+
+	return NUM_CACHEFLOW_RQ_STATS + NUM_CACHEFLOW_CH_STATS;
+}
+
+static MLX5E_DECLARE_STATS_GRP_OP_FILL_STRS(cacheflow)
+{
+	int i;
+
+	if (!priv->cacheflow_opened)
+		return;
+
+	for (i = 0; i < NUM_CACHEFLOW_CH_STATS; i++)
+		ethtool_puts(data, cacheflow_ch_stats_desc[i].format);
+	for (i = 0; i < NUM_CACHEFLOW_RQ_STATS; i++)
+		ethtool_puts(data, cacheflow_rq_stats_desc[i].format);
+}
+
+static MLX5E_DECLARE_STATS_GRP_OP_FILL_STATS(cacheflow)
+{
+	int i;
+
+	if (!priv->cacheflow_opened)
+		return;
+
+	for (i = 0; i < NUM_CACHEFLOW_CH_STATS; i++)
+		mlx5e_ethtool_put_stat(
+			data, MLX5E_READ_CTR64_CPU(
+				&priv->cacheflow_stats.ch,
+				cacheflow_ch_stats_desc, i));
+
+	for (i = 0; i < NUM_CACHEFLOW_RQ_STATS; i++)
+		mlx5e_ethtool_put_stat(
+			data, MLX5E_READ_CTR64_CPU(
+				&priv->cacheflow_stats.rq,
+				cacheflow_rq_stats_desc, i));
+}
+
+static MLX5E_DECLARE_STATS_GRP_OP_UPDATE_STATS(cacheflow) { return; }
+#endif
+
 static MLX5E_DECLARE_STATS_GRP_OP_NUM_STATS(channels)
 {
 	int max_nch = priv->stats_nch;
@@ -2554,6 +2668,9 @@ MLX5E_DEFINE_STATS_GRP(per_port_buff_congest, 0);
 MLX5E_DEFINE_STATS_GRP(eth_ext, 0);
 static MLX5E_DEFINE_STATS_GRP(tls, 0);
 MLX5E_DEFINE_STATS_GRP(ptp, 0);
+#ifdef CONFIG_NET_CACHEFLOW
+MLX5E_DEFINE_STATS_GRP(cacheflow, 0);
+#endif
 static MLX5E_DEFINE_STATS_GRP(qos, 0);
 
 /* The stats groups order is opposite to the update_stats() order calls */
@@ -2579,6 +2696,9 @@ mlx5e_stats_grp_t mlx5e_nic_stats_grps[] = {
 	&MLX5E_STATS_GRP(per_port_buff_congest),
 	&MLX5E_STATS_GRP(ptp),
 	&MLX5E_STATS_GRP(qos),
+#ifdef CONFIG_NET_CACHEFLOW
+	&MLX5E_STATS_GRP(cacheflow),
+#endif
 #ifdef CONFIG_MLX5_MACSEC
 	&MLX5E_STATS_GRP(macsec_hw),
 #endif

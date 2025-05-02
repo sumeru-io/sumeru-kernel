@@ -31,6 +31,8 @@ mlx5_core-$(CONFIG_MLX5_CORE_EN) += en/rqt.o en/tir.o en/rss.o en/rx_res.o \
 		en/qos.o en/htb.o en/trap.o en/fs_tt_redirect.o en/selq.o \
 		lib/crypto.o lib/sd.o
 
+mlx5_core-$(CONFIG_NET_CACHEFLOW) += en/cacheflow.o
+
 #
 # Netdev extra
 #

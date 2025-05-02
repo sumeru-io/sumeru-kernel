@@ -1534,7 +1534,7 @@ static void tcp_eat_recv_skb(struct sock *sk, struct sk_buff *skb)
 		skb_shinfo(skb)->ms_timestamp.consume_timestamp);
 
 	}
-	if (likely(skb->destructor == sock_rfree) && (!is_cacheflow_steer_enabled())) {
+	if (likely(skb->destructor == sock_rfree) && (skb_cacheflow(skb) != SKB_CACHEFLOW_STEER)) {
 		sock_rfree(skb);
 		skb->destructor = NULL;
 		skb->sk = NULL;
@@ -5076,7 +5076,7 @@ static void __init tcp_struct_check(void)
 	CACHELINE_ASSERT_GROUP_MEMBER(struct tcp_sock, tcp_sock_write_rx, bytes_acked);
 	CACHELINE_ASSERT_GROUP_MEMBER(struct tcp_sock, tcp_sock_write_rx, rcv_rtt_est);
 	CACHELINE_ASSERT_GROUP_MEMBER(struct tcp_sock, tcp_sock_write_rx, rcvq_space);
-	CACHELINE_ASSERT_GROUP_SIZE(struct tcp_sock, tcp_sock_write_rx, 99);
+	CACHELINE_ASSERT_GROUP_SIZE(struct tcp_sock, tcp_sock_write_rx, 128);
 }
 
 void __init tcp_init(void)

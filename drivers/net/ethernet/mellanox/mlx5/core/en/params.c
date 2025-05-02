@@ -9,6 +9,9 @@
 #include <linux/dim.h>
 #include <net/page_pool/types.h>
 #include <net/xdp_sock_drv.h>
+#ifdef CONFIG_NET_CACHEFLOW
+#include <net/cacheflow.h>
+#endif
 
 static u8 mlx5e_mpwrq_min_page_shift(struct mlx5_core_dev *mdev)
 {
@@ -1260,6 +1263,11 @@ int mlx5e_build_channel_param(struct mlx5_core_dev *mdev,
 	if (err)
 		return err;
 
+#ifdef CONFIG_NET_CACHEFLOW
+	if (!is_cacheflow_steer_enabled()) {
+		cparam->rq.cacheflow_channel = 1;
+	}
+#endif
 	icosq_log_wq_sz = mlx5e_build_icosq_log_wq_sz(mdev, params, &cparam->rq);
 	async_icosq_log_wq_sz = mlx5e_build_async_icosq_log_wq_sz(mdev);
 

@@ -46,6 +46,7 @@
 
 #ifdef CONFIG_NET_CACHEFLOW
 #include <net/cacheflow.h>
+#include "en/cacheflow.h"
 #endif
 
 #include "eswitch.h"
@@ -934,8 +935,12 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		if (err)
 			goto err_rq_wq_destroy;
 
-		if (rq->wq_type != MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
+#ifdef CONFIG_PAGE_POOL_SINGLE_OWNER
+		if (rqp->cacheflow_channel) {
+			__set_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags);
 			__set_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags);
+		}
+#endif
 
 		pr_info("mlx5e: RQ[%d]: MTU RQ: %u, wq_sz %d, wqe_bulk %u, refill_unit %u, num_frags %u, frag_size [%d/%d %d/%d %d/%d %d/%d]\n",
 			rq->ix,
@@ -967,22 +972,17 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		pp_params.pool_size = pool_size;
 
 #ifdef CONFIG_NET_CACHEFLOW
-		pp_params.pool_size = get_cacheflow_pool_size();
-		__set_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags);
-
-		if (is_cacheflow_track_enabled()) {
-			pp_params.flags |= PP_FLAG_USAGE_TRACK;
+		if (rqp->cacheflow_channel) {
+			pp_params.pool_size = get_cacheflow_pool_size();
+			if (is_cacheflow_track_enabled()) {
+				pp_params.flags |= PP_FLAG_USAGE_TRACK;
+			}
+#ifdef CONFIG_PAGE_POOL_SINGLE_OWNER
+			if (rq->wq_type != MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
+				pp_params.flags |= PP_FLAG_SINGLE_OWNER;
+#endif
 		}
 
-		if (rq->wq_type != MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ)
-			pp_params.flags |= PP_FLAG_SINGLE_OWNER;
-
-		pr_info("mlx5e: RQ[%d]: cacheflow track: %s, mark: %s, steer: %s, pool size = %u\n", 
-			rq->ix, 
-			is_cacheflow_track_enabled() ? "enabled" : "disabled",
-			is_cacheflow_mark_enabled() ? "enabled" : "disabled",
-			is_cacheflow_steer_enabled() ? "enabled" : "disabled",
-			pp_params.pool_size);
 #endif
 
 		pp_params.nid       = node;
@@ -2721,7 +2721,6 @@ static int mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 	unsigned int irq;
 	int vec_ix;
 	int cpu;
-	int weight;
 	int err;
 
 	mdev = mlx5_sd_ch_ix_get_dev(priv->mdev, ix);
@@ -2763,17 +2762,19 @@ static int mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 	c->aff_mask = irq_get_effective_affinity_mask(irq);
 	c->lag_port = mlx5e_enumerate_lag_port(mdev, ix);
 
-	weight = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_LEGACY_RQ_WQE_BULK) ? 16 : NAPI_POLL_WEIGHT;
-
-	if (is_cacheflow_steer_enabled()) {
-		int core = get_cacheflow_steer_core();
-		netif_cacheflow_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, weight, core);
-		pr_info("mlx5e: RQ[%d]: add busy poll NAPI kthread on core %d, res: %s\n", ix, 
-			core, test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" : "fail");
-	} else {
-		netif_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, weight);
-		pr_info("mlx5e: RQ[%d]: add normal NAPI\n", ix);
-	}
+#ifdef CONFIG_NET_CACHEFLOW
+	int weight = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_LEGACY_RQ_WQE_BULK) ? 16 : NAPI_POLL_WEIGHT;
+	// if (!MLX5E_GET_PFLAG(params, MLX5E_PFLAG_CACHEFLOW_CHANNEL) && is_cacheflow_steer_enabled()) {
+	// 	int core = get_cacheflow_steer_core();
+	// 	netif_cacheflow_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, weight, core);
+	// 	pr_info("mlx5e: RQ[%d]: add busy poll NAPI kthread on core %d, res: %s\n", ix, 
+	// 		core, test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" : "fail");
+	// } else {
+	netif_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, weight);
+	// }
+#else
+	netif_napi_add(netdev, &c->napi, mlx5e_napi_poll);
+#endif
 
 	netif_napi_set_irq(&c->napi, irq);
 
@@ -2862,6 +2863,13 @@ int mlx5e_open_channels(struct mlx5e_priv *priv,
 	int err = -ENOMEM;
 	int i;
 
+#ifdef CONFIG_NET_CACHEFLOW
+	pr_info("cacheflow: control bits: track: %s, mark: %s, steer: %s\n", 
+		is_cacheflow_track_enabled() ? "on" : "off",
+		is_cacheflow_mark_enabled() ? "on" : "off",
+		is_cacheflow_steer_enabled() ? "on" : "off");
+#endif
+
 	chs->num = chs->params.num_channels;
 
 	chs->c = kcalloc(chs->num, sizeof(struct mlx5e_channel *), GFP_KERNEL);
@@ -2885,16 +2893,30 @@ int mlx5e_open_channels(struct mlx5e_priv *priv,
 			goto err_close_channels;
 	}
 
+#ifdef CONFIG_NET_CACHEFLOW
+	if (is_cacheflow_steer_enabled()) {
+		err = mlx5e_cacheflow_open(priv, &chs->params, chs->c[0]->lag_port, &chs->cacheflow);
+		if (err)
+			goto err_close_ptp;
+	}
+#endif
+
 	if (priv->htb) {
 		err = mlx5e_qos_open_queues(priv, chs);
 		if (err)
-			goto err_close_ptp;
+			goto err_close_cacheflow;
 	}
 
 	mlx5e_health_channels_update(priv);
 	return 0;
 
+err_close_cacheflow:
+#ifdef CONFIG_NET_CACHEFLOW
+	if (chs->cacheflow)
+		mlx5e_cacheflow_close(chs->cacheflow);
 err_close_ptp:
+#endif
+
 	if (chs->ptp)
 		mlx5e_ptp_close(chs->ptp);
 
@@ -2923,6 +2945,11 @@ static void mlx5e_activate_channels(struct mlx5e_priv *priv, struct mlx5e_channe
 
 	if (chs->ptp)
 		mlx5e_ptp_activate_channel(chs->ptp);
+
+#ifdef CONFIG_NET_CACHEFLOW
+	if (chs->cacheflow)
+		mlx5e_cacheflow_activate_channel(chs->cacheflow);
+#endif
 }
 
 static int mlx5e_wait_channels_min_rx_wqes(struct mlx5e_channels *chs)
@@ -2953,6 +2980,11 @@ static void mlx5e_deactivate_channels(struct mlx5e_channels *chs)
 
 	if (chs->ptp)
 		mlx5e_ptp_deactivate_channel(chs->ptp);
+
+#ifdef CONFIG_NET_CACHEFLOW
+	if (chs->cacheflow)
+		mlx5e_cacheflow_deactivate_channel(chs->cacheflow);
+#endif
 
 	for (i = 0; i < chs->num; i++)
 		mlx5e_deactivate_channel(chs->c[i]);
@@ -5770,6 +5802,9 @@ static int mlx5e_init_nic_rx(struct mlx5e_priv *priv)
 	}
 
 	features = MLX5E_RX_RES_FEATURE_PTP;
+#ifdef CONFIG_NET_CACHEFLOW
+	features |= MLX5E_RX_RES_FEATURE_CACHEFLOW;
+#endif
 	if (mlx5_tunnel_inner_ft_supported(mdev))
 		features |= MLX5E_RX_RES_FEATURE_INNER_FT;
 	if (mlx5_get_sd(priv->mdev))

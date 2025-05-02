@@ -36,6 +36,9 @@
 #include <trace/events/fib.h>
 #include <trace/events/qdisc.h>
 #include <trace/events/rps.h>
+#ifdef CONFIG_NET_CACHEFLOW
+#include <trace/events/cacheflow.h>
+#endif
 #if IS_ENABLED(CONFIG_BRIDGE)
 #include <trace/events/bridge.h>
 EXPORT_TRACEPOINT_SYMBOL_GPL(br_fdb_add);

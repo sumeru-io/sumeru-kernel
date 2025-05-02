@@ -168,8 +168,16 @@ static int rps_sock_flow_sysctl(const struct ctl_table *table, int write,
 					mutex_unlock(&sock_flow_mutex);
 					return -ENOMEM;
 				}
+#ifdef CONFIG_NET_CACHEFLOW
+				net_hotdata.rps_cpu_mask =
+					(roundup_pow_of_two(nr_cpu_ids) << 1) - 1;
+				net_hotdata.cacheflow_mask = roundup_pow_of_two(nr_cpu_ids);
+				pr_info("cacheflow: rps_cpu_mask: %u, cacheflow_mask: %u\n",
+					net_hotdata.rps_cpu_mask, net_hotdata.cacheflow_mask);
+#else
 				net_hotdata.rps_cpu_mask =
 					roundup_pow_of_two(nr_cpu_ids) - 1;
+#endif
 				sock_table->mask = size - 1;
 			} else
 				sock_table = orig_sock_table;

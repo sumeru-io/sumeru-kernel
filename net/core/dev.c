@@ -1486,7 +1486,11 @@ void netdev_notify_peers(struct net_device *dev)
 EXPORT_SYMBOL(netdev_notify_peers);
 
 static int napi_threaded_poll(void *data);
+
+#ifdef CONFIG_NET_CACHEFLOW
 static int napi_threaded_busy_poll(void *data);
+#endif
+
 #define NAPI_KTHREAD_CORE_ANY -1
 static int napi_kthread_create(struct napi_struct *n)
 {
@@ -1507,6 +1511,7 @@ static int napi_kthread_create(struct napi_struct *n)
 	return err;
 }
 
+#ifdef CONFIG_NET_CACHEFLOW
 static int napi_cacheflow_kthread_create(struct napi_struct *n, int core)
 {
 	int err = 0;
@@ -1527,6 +1532,7 @@ static int napi_cacheflow_kthread_create(struct napi_struct *n, int core)
 
 	return err;
 }
+#endif
 
 static int __dev_open(struct net_device *dev, struct netlink_ext_ack *extack)
 {
@@ -4608,6 +4614,7 @@ static inline void ____napi_schedule(struct softnet_data *sd,
 
 	lockdep_assert_irqs_disabled();
 
+#ifdef CONFIG_NET_CACHEFLOW
 	if (test_bit(NAPI_STATE_CACHEFLOW, &napi->state)) {
 		thread = READ_ONCE(napi->cacheflow_thread);
 		if (thread) {
@@ -4616,6 +4623,7 @@ static inline void ____napi_schedule(struct softnet_data *sd,
 			return;
 		}
 	}
+#endif
 
 	if (test_bit(NAPI_STATE_THREADED, &napi->state)) {
 		/* Paired with smp_mb__before_atomic() in
@@ -4656,7 +4664,7 @@ static struct rps_dev_flow *
 set_rps_cpu(struct net_device *dev, struct sk_buff *skb,
 	    struct rps_dev_flow *rflow, u16 next_cpu)
 {
-	if (next_cpu < nr_cpu_ids) {
+	if (rps_core(next_cpu) < nr_cpu_ids) {
 		u32 head;
 #ifdef CONFIG_RFS_ACCEL
 		struct netdev_rx_queue *rxqueue;
@@ -4670,11 +4678,21 @@ set_rps_cpu(struct net_device *dev, struct sk_buff *skb,
 		if (!skb_rx_queue_recorded(skb) || !dev->rx_cpu_rmap ||
 		    !(dev->features & NETIF_F_NTUPLE))
 			goto out;
-		rxq_index = cpu_rmap_lookup_index(dev->rx_cpu_rmap, next_cpu);
+
+		if (rps_core_is_cacheflow(next_cpu)) {
+			rxq_index = CACHEFLOW_RPS_CACHEFLOW_RX_QUEUE;
+		} else {
+			rxq_index = cpu_rmap_lookup_index(dev->rx_cpu_rmap, next_cpu);
+		}
 		if (rxq_index == skb_get_rx_queue(skb))
 			goto out;
+		
+		if (rps_core_is_cacheflow(next_cpu)) {
+			rxqueue = dev->_rx;
+		} else {
+			rxqueue = dev->_rx + rxq_index;
+		}
 
-		rxqueue = dev->_rx + rxq_index;
 		flow_table = rcu_dereference(rxqueue->rps_flow_table);
 		if (!flow_table)
 			goto out;
@@ -4685,10 +4703,13 @@ set_rps_cpu(struct net_device *dev, struct sk_buff *skb,
 			goto out;
 		old_rflow = rflow;
 		rflow = &flow_table->flows[flow_id];
+
 		WRITE_ONCE(rflow->filter, rc);
 		if (old_rflow->filter == rc)
 			WRITE_ONCE(old_rflow->filter, RPS_NO_FILTER);
-	out:
+
+		trace_sk_rps_flow_update(flow_id, rc, rxq_index);
+out:
 #endif
 		head = READ_ONCE(per_cpu(softnet_data, next_cpu).input_queue_head);
 		rps_input_queue_tail_save(&rflow->last_qtail, head);
@@ -4715,7 +4736,7 @@ static int get_rps_cpu(struct net_device *dev, struct sk_buff *skb,
 	u32 hash;
 
 	if (skb_rx_queue_recorded(skb)) {
-		u16 index = skb_get_rx_queue(skb);
+		u16 index = rps_rxq_index(skb_get_rx_queue(skb));
 
 		if (unlikely(index >= dev->real_num_rx_queues)) {
 			WARN_ONCE(dev->real_num_rx_queues > 1,
@@ -4772,16 +4793,16 @@ static int get_rps_cpu(struct net_device *dev, struct sk_buff *skb,
 		 *     have been dequeued, thus preserving in order delivery.
 		 */
 		if (unlikely(tcpu != next_cpu) &&
-		    (tcpu >= nr_cpu_ids || !cpu_online(tcpu) ||
-		     ((int)(READ_ONCE(per_cpu(softnet_data, tcpu).input_queue_head) -
+		    (rps_core(tcpu) >= nr_cpu_ids || !cpu_online(rps_core(tcpu)) ||
+		     ((int)(READ_ONCE(per_cpu(softnet_data, rps_core(tcpu)).input_queue_head) -
 		      rflow->last_qtail)) >= 0)) {
 			tcpu = next_cpu;
 			rflow = set_rps_cpu(dev, skb, rflow, next_cpu);
 		}
 
-		if (tcpu < nr_cpu_ids && cpu_online(tcpu)) {
+		if (rps_core(tcpu) < nr_cpu_ids && cpu_online(rps_core(tcpu))) {
 			*rflowp = rflow;
-			cpu = tcpu;
+			cpu = rps_core(tcpu);
 			goto done;
 		}
 	}
@@ -4816,7 +4837,7 @@ done:
 bool rps_may_expire_flow(struct net_device *dev, u16 rxq_index,
 			 u32 flow_id, u16 filter_id)
 {
-	struct netdev_rx_queue *rxqueue = dev->_rx + rxq_index;
+	struct netdev_rx_queue *rxqueue = dev->_rx + rps_rxq_index(rxq_index);
 	struct rps_dev_flow_table *flow_table;
 	struct rps_dev_flow *rflow;
 	bool expire = true;
@@ -4827,8 +4848,8 @@ bool rps_may_expire_flow(struct net_device *dev, u16 rxq_index,
 	if (flow_table && flow_id <= flow_table->mask) {
 		rflow = &flow_table->flows[flow_id];
 		cpu = READ_ONCE(rflow->cpu);
-		if (READ_ONCE(rflow->filter) == filter_id && cpu < nr_cpu_ids &&
-		    ((int)(READ_ONCE(per_cpu(softnet_data, cpu).input_queue_head) -
+		if (READ_ONCE(rflow->filter) == filter_id && rps_core(cpu) < nr_cpu_ids &&
+		    ((int)(READ_ONCE(per_cpu(softnet_data, rps_core(cpu)).input_queue_head) -
 			   READ_ONCE(rflow->last_qtail)) <
 		     (int)(10 * flow_table->mask)))
 			expire = false;
@@ -6443,6 +6464,27 @@ enum {
 	NAPI_F_THREADED_POLL	= 4,
 };
 
+#ifdef CONFIG_NET_CACHEFLOW
+static void napi_defer_flush(struct napi_struct *napi)
+{
+	struct sk_buff *skb, *next;
+
+	if (READ_ONCE(napi->defer_list)) {
+		spin_lock_bh(&napi->defer_lock);
+		skb = napi->defer_list;
+		napi->defer_list = NULL;
+		napi->defer_count = 0;
+		spin_unlock_bh(&napi->defer_lock);
+
+		while (skb != NULL) {
+			next = skb->next;
+			____kfree_skb(skb);
+			skb = next;
+		}
+	}
+}
+#endif
+
 static void busy_poll_stop(struct napi_struct *napi, void *have_poll_lock,
 			   unsigned flags, u16 budget)
 {
@@ -6501,9 +6543,9 @@ static void __napi_busy_loop(unsigned int napi_id,
 	struct bpf_net_context __bpf_net_ctx, *bpf_net_ctx;
 	void *have_poll_lock = NULL;
 	struct napi_struct *napi;
+#ifdef CONFIG_NET_CACHEFLOW
 	struct softnet_data *sd;
-	struct sk_buff *skb, *next;
-
+#endif
 	WARN_ON_ONCE(!rcu_read_lock_held());
 
 restart:
@@ -6521,10 +6563,12 @@ restart:
 		local_bh_disable();
 		bpf_net_ctx = bpf_net_ctx_set(&__bpf_net_ctx);
 
+#ifdef CONFIG_NET_CACHEFLOW
 		if (flags & NAPI_F_THREADED_POLL) {
 			sd = this_cpu_ptr(&softnet_data);
 			sd->in_napi_threaded_poll = true;
 		}
+#endif
 
 		if (!napi_poll) {
 			unsigned long val = READ_ONCE(napi->state);
@@ -6550,19 +6594,9 @@ restart:
 		}
 		WRITE_ONCE(napi->list_owner, smp_processor_id());
 
-		if (READ_ONCE(napi->defer_list)) {
-			spin_lock_bh(&napi->defer_lock);
-			skb = napi->defer_list;
-			napi->defer_list = NULL;
-			napi->defer_count = 0;
-			spin_unlock_bh(&napi->defer_lock);
-
-			while (skb != NULL) {
-				next = skb->next;
-				____kfree_skb(skb);
-				skb = next;
-			}
-		}
+#ifdef CONFIG_NET_CACHEFLOW
+		napi_defer_flush(napi);
+#endif
 
 		work = napi_poll(napi, budget);
 		trace_napi_poll(napi, work, budget);
@@ -6571,7 +6605,7 @@ count:
 		if (work > 0)
 			__NET_ADD_STATS(dev_net(napi->dev),
 					LINUX_MIB_BUSYPOLLRXPACKETS, work);
-
+#ifdef CONFIG_NET_CACHEFLOW
 		if (flags & NAPI_F_THREADED_POLL) {
 			sd->in_napi_threaded_poll = false;
 			barrier();
@@ -6581,6 +6615,7 @@ count:
 				net_rps_action_and_irq_enable(sd);
 			}
 		}
+#endif
 		bpf_net_ctx_clear(bpf_net_ctx);
 		local_bh_enable();
 
@@ -6900,8 +6935,10 @@ void napi_enable(struct napi_struct *n)
 		new = val & ~(NAPIF_STATE_SCHED | NAPIF_STATE_NPSVC);
 		if (n->dev->threaded && n->thread)
 			new |= NAPIF_STATE_THREADED;
+#ifdef CONFIG_NET_CACHEFLOW
 		if (is_cacheflow_steer_enabled() && n->cacheflow_thread)
 			new |= NAPIF_STATE_CACHEFLOW;
+#endif
 	} while (!try_cmpxchg(&n->state, &val, new));
 }
 EXPORT_SYMBOL(napi_enable);
@@ -7104,6 +7141,7 @@ static int napi_threaded_poll(void *data)
 	return 0;
 }
 
+#ifdef CONFIG_NET_CACHEFLOW
 static bool napi_busy_loop_end(void *p, unsigned long start_time) {
 	struct napi_struct *n = p;
 	int budget_usecs = n->dev->threaded_budget_usecs ? n->dev->threaded_budget_usecs : 1000;
@@ -7128,6 +7166,7 @@ static int napi_threaded_busy_poll(void *data)
 	}
 	return 0;
 }
+#endif
 
 static __latent_entropy void net_rx_action(void)
 {

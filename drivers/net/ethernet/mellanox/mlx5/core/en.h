@@ -216,6 +216,22 @@ static inline u8 mlx5e_get_max_sq_aligned_wqebbs(struct mlx5_core_dev *mdev)
 	return wqebbs;
 }
 
+
+struct arfs_tuple {
+	__be16 etype;
+	u8     ip_proto;
+	union {
+		__be32 src_ipv4;
+		struct in6_addr src_ipv6;
+	};
+	union {
+		__be32 dst_ipv4;
+		struct in6_addr dst_ipv6;
+	};
+	__be16 src_port;
+	__be16 dst_port;
+};
+
 struct mlx5e_tx_wqe {
 	struct mlx5_wqe_ctrl_seg ctrl;
 	struct mlx5_wqe_eth_seg  eth;
@@ -793,10 +809,13 @@ struct mlx5e_channel {
 struct mlx5e_ptp;
 
 struct mlx5e_channels {
-	struct mlx5e_channel **c;
-	struct mlx5e_ptp      *ptp;
-	unsigned int           num;
-	struct mlx5e_params    params;
+	struct mlx5e_channel 		**c;
+	struct mlx5e_ptp      		*ptp;
+#ifdef CONFIG_NET_CACHEFLOW
+	struct mlx5e_cacheflow 		*cacheflow;
+#endif
+	unsigned int           		num;
+	struct mlx5e_params    		params;
 };
 
 struct mlx5e_channel_stats {
@@ -815,6 +834,14 @@ struct mlx5e_ptp_stats {
 	struct mlx5e_ptp_cq_stats cq[MLX5_MAX_NUM_TC];
 	struct mlx5e_rq_stats rq;
 } ____cacheline_aligned_in_smp;
+
+#ifdef CONFIG_NET_CACHEFLOW
+struct mlx5e_cacheflow_stats {
+	struct mlx5e_ch_stats ch;
+	struct mlx5e_sq_stats sq[MLX5_MAX_NUM_TC];
+	struct mlx5e_rq_stats rq;
+} ____cacheline_aligned_in_smp;
+#endif
 
 enum {
 	MLX5E_STATE_OPENED,
@@ -902,6 +929,9 @@ struct mlx5e_priv {
 	struct mlx5e_channel_stats **channel_stats;
 	struct mlx5e_channel_stats trap_stats;
 	struct mlx5e_ptp_stats     ptp_stats;
+#ifdef CONFIG_NET_CACHEFLOW
+	struct mlx5e_cacheflow_stats cacheflow_stats;
+#endif
 	struct mlx5e_sq_stats      **htb_qos_sq_stats;
 	u16                        htb_max_qos_sqs;
 	u16                        stats_nch;
@@ -909,6 +939,9 @@ struct mlx5e_priv {
 	u8                         max_opened_tc;
 	bool                       tx_ptp_opened;
 	bool                       rx_ptp_opened;
+#ifdef CONFIG_NET_CACHEFLOW
+	bool                       cacheflow_opened;
+#endif
 	struct hwtstamp_config     tstamp;
 	u16                        q_counter[MLX5_SD_MAX_GROUP_SZ];
 	u16                        drop_rq_q_counter;

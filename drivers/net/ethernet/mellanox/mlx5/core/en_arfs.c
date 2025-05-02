@@ -36,6 +36,9 @@
 #include <linux/ipv6.h>
 #include <net/rps.h>
 #include "en.h"
+#ifdef CONFIG_NET_CACHEFLOW
+#include "diag/cacheflow_tracepoint.h"
+#endif
 
 #define ARFS_HASH_SHIFT BITS_PER_BYTE
 #define ARFS_HASH_SIZE BIT(BITS_PER_BYTE)
@@ -67,20 +70,6 @@ struct mlx5e_arfs_tables {
 	unsigned long                  state;
 };
 
-struct arfs_tuple {
-	__be16 etype;
-	u8     ip_proto;
-	union {
-		__be32 src_ipv4;
-		struct in6_addr src_ipv6;
-	};
-	union {
-		__be32 dst_ipv4;
-		struct in6_addr dst_ipv6;
-	};
-	__be16 src_port;
-	__be16 dst_port;
-};
 
 struct arfs_rule {
 	struct mlx5e_priv	*priv;
@@ -438,6 +427,7 @@ static void arfs_may_expire_flow(struct mlx5e_priv *priv)
 					arfs_rule->filter_id)) {
 			hlist_del_init(&arfs_rule->hlist);
 			hlist_add_head(&arfs_rule->hlist, &del_list);
+			trace_mlx5e_flow_rule_update(arfs_rule->flow_id, arfs_rule->filter_id, arfs_rule->rxq, &arfs_rule->tuple, 0);
 			if (quota++ > MLX5E_ARFS_EXPIRY_QUOTA)
 				break;
 		}
@@ -446,7 +436,7 @@ static void arfs_may_expire_flow(struct mlx5e_priv *priv)
 	hlist_for_each_entry_safe(arfs_rule, htmp, &del_list, hlist) {
 		if (arfs_rule->rule) {
 			mlx5_del_flow_rules(arfs_rule->rule);
-			priv->channel_stats[arfs_rule->rxq]->rq.arfs_expired++;
+			priv->channel_stats[rps_rxq_index(arfs_rule->rxq)]->rq.arfs_expired++;
 		}
 		hlist_del(&arfs_rule->hlist);
 		kfree(arfs_rule);
@@ -525,7 +515,7 @@ static struct mlx5_flow_handle *arfs_add_rule(struct mlx5e_priv *priv,
 
 	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec) {
-		priv->channel_stats[arfs_rule->rxq]->rq.arfs_err++;
+		priv->channel_stats[rps_rxq_index(arfs_rule->rxq)]->rq.arfs_err++;
 		err = -ENOMEM;
 		goto out;
 	}
@@ -594,17 +584,22 @@ static struct mlx5_flow_handle *arfs_add_rule(struct mlx5e_priv *priv,
 		       16);
 	}
 	dest.type = MLX5_FLOW_DESTINATION_TYPE_TIR;
-	dest.tir_num = mlx5e_rx_res_get_tirn_direct(priv->rx_res, arfs_rule->rxq);
+	if (rps_rxq_is_cacheflow(arfs_rule->rxq))
+		dest.tir_num = mlx5e_rx_res_get_tirn_cacheflow(priv->rx_res);
+	else
+		dest.tir_num = mlx5e_rx_res_get_tirn_direct(priv->rx_res, arfs_rule->rxq);
+
 	rule = mlx5_add_flow_rules(ft, spec, &flow_act, &dest, 1);
 	if (IS_ERR(rule)) {
 		err = PTR_ERR(rule);
-		priv->channel_stats[arfs_rule->rxq]->rq.arfs_err++;
+		priv->channel_stats[rps_rxq_index(arfs_rule->rxq)]->rq.arfs_err++;
 		netdev_dbg(priv->netdev,
 			   "%s: add rule(filter id=%d, rq idx=%d, ip proto=0x%x) failed,err=%d\n",
 			   __func__, arfs_rule->filter_id, arfs_rule->rxq,
 			   tuple->ip_proto, err);
 	}
 
+	trace_mlx5e_flow_rule_update(arfs_rule->flow_id, arfs_rule->filter_id, arfs_rule->rxq, tuple, 1);
 out:
 	kvfree(spec);
 	return err ? ERR_PTR(err) : rule;
@@ -617,10 +612,14 @@ static void arfs_modify_rule_rq(struct mlx5e_priv *priv,
 	int err = 0;
 
 	dst.type = MLX5_FLOW_DESTINATION_TYPE_TIR;
-	dst.tir_num = mlx5e_rx_res_get_tirn_direct(priv->rx_res, rxq);
+	if (rps_rxq_is_cacheflow(rxq)) {
+		dst.tir_num = mlx5e_rx_res_get_tirn_cacheflow(priv->rx_res);
+	} else {
+		dst.tir_num = mlx5e_rx_res_get_tirn_direct(priv->rx_res, rxq);
+	}
 	err =  mlx5_modify_rule_destination(rule, &dst, NULL);
 	if (err) {
-		priv->channel_stats[rxq]->rq.arfs_err++;
+		priv->channel_stats[rps_rxq_index(rxq)]->rq.arfs_err++;
 		netdev_warn(priv->netdev,
 			    "Failed to modify aRFS rule destination to rq=%d\n", rxq);
 	}
@@ -644,7 +643,7 @@ static void arfs_handle_work(struct work_struct *work)
 		if (IS_ERR(rule))
 			goto out;
 		arfs_rule->rule = rule;
-		priv->channel_stats[arfs_rule->rxq]->rq.arfs_add++;
+		priv->channel_stats[rps_rxq_index(arfs_rule->rxq)]->rq.arfs_add++;
 	} else {
 		arfs_modify_rule_rq(priv, arfs_rule->rule,
 				    arfs_rule->rxq);
@@ -664,7 +663,7 @@ static struct arfs_rule *arfs_alloc_rule(struct mlx5e_priv *priv,
 
 	rule = kzalloc(sizeof(*rule), GFP_ATOMIC);
 	if (!rule) {
-		priv->channel_stats[rxq]->rq.arfs_err++;
+		priv->channel_stats[rps_rxq_index(rxq)]->rq.arfs_err++;
 		return NULL;
 	}
 
@@ -764,9 +763,8 @@ int mlx5e_rx_flow_steer(struct net_device *dev, const struct sk_buff *skb,
 			spin_unlock_bh(&arfs->arfs_lock);
 			return arfs_rule->filter_id;
 		}
-
-		priv->channel_stats[rxq_index]->rq.arfs_request_in++;
-		priv->channel_stats[arfs_rule->rxq]->rq.arfs_request_out++;
+		priv->channel_stats[rps_rxq_index(rxq_index)]->rq.arfs_request_in++;
+		priv->channel_stats[rps_rxq_index(arfs_rule->rxq)]->rq.arfs_request_out++;
 		arfs_rule->rxq = rxq_index;
 	} else {
 		arfs_rule = arfs_alloc_rule(priv, arfs_t, &fk, rxq_index, flow_id);

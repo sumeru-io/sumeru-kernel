@@ -7,6 +7,9 @@
 #include <net/sock.h>
 #include <net/hotdata.h>
 #include <trace/events/rps.h>
+#ifdef CONFIG_NET_CACHEFLOW
+#include <net/cacheflow.h>
+#endif
 
 #ifdef CONFIG_RPS
 
@@ -66,6 +69,30 @@ struct rps_sock_flow_table {
 
 #define RPS_NO_CPU 0xffff
 
+#ifdef CONFIG_NET_CACHEFLOW
+static inline int rps_record_sock_flow_cacheflow(struct rps_sock_flow_table *table,
+					u32 hash, int cacheflow)
+{
+	unsigned int index = hash & table->mask;
+	u32 val = hash & ~net_hotdata.rps_cpu_mask;
+
+	/* We only give a hint, preemption can change CPU under us */
+	val |= raw_smp_processor_id();
+
+	if (cacheflow)
+		val |= net_hotdata.cacheflow_mask;
+
+	/* The following WRITE_ONCE() is paired with the READ_ONCE()
+	 * here, and another one in get_rps_cpu().
+	 */
+	if (READ_ONCE(table->ents[index]) != val) {
+		WRITE_ONCE(table->ents[index], val);
+		return (val & net_hotdata.rps_cpu_mask) + 1;
+	}
+	return 0;
+}
+#endif
+
 static inline int rps_record_sock_flow(struct rps_sock_flow_table *table,
 					u32 hash)
 {
@@ -85,7 +112,25 @@ static inline int rps_record_sock_flow(struct rps_sock_flow_table *table,
 	return 0;
 }
 
+
 #endif /* CONFIG_RPS */
+
+#ifdef CONFIG_NET_CACHEFLOW
+static inline int sock_rps_record_flow_hash_cacheflow(__u32 hash, int cacheflow)
+{
+	int cpu = 0;
+	struct rps_sock_flow_table *sock_flow_table;
+
+	if (!hash)
+		return cpu;
+	rcu_read_lock();
+	sock_flow_table = rcu_dereference(net_hotdata.rps_sock_flow_table);
+	if (sock_flow_table)
+		cpu = rps_record_sock_flow_cacheflow(sock_flow_table, hash, cacheflow);
+	rcu_read_unlock();
+	return cpu;
+}
+#endif
 
 static inline int sock_rps_record_flow_hash(__u32 hash)
 {
@@ -104,10 +149,11 @@ static inline int sock_rps_record_flow_hash(__u32 hash)
 #endif
 }
 
+#ifdef CONFIG_NET_CACHEFLOW
 static inline void sock_rps_record_flow(const struct sock *sk)
 {
-#ifdef CONFIG_RPS
 	if (static_branch_unlikely(&rfs_needed)) {
+		int cpu;
 		/* Reading sk->sk_rxhash might incur an expensive cache line
 		 * miss.
 		 *
@@ -122,7 +168,38 @@ static inline void sock_rps_record_flow(const struct sock *sk)
 			/* This READ_ONCE() is paired with the WRITE_ONCE()
 			 * from sock_rps_save_rxhash() and sock_rps_reset_rxhash().
 			 */
-			int cpu = sock_rps_record_flow_hash(READ_ONCE(sk->sk_rxhash));
+			if (sk->sk_protocol == IPPROTO_TCP && tcp_sk(sk)->elephant_flow && is_cacheflow_steer_enabled()) {
+				cpu = sock_rps_record_flow_hash_cacheflow(READ_ONCE(sk->sk_rxhash), 1);
+			} else {
+				cpu = sock_rps_record_flow_hash(READ_ONCE(sk->sk_rxhash));
+			}
+			if (cpu) {
+				trace_sk_rps_core_change(sk, READ_ONCE(sk->sk_rxhash), cpu - 1);
+			}
+		}
+	}
+}
+#else
+static inline void sock_rps_record_flow(const struct sock *sk)
+{
+#ifdef CONFIG_RPS
+	if (static_branch_unlikely(&rfs_needed)) {
+		int cpu;
+		/* Reading sk->sk_rxhash might incur an expensive cache line
+		 * miss.
+		 *
+		 * TCP_ESTABLISHED does cover almost all states where RFS
+		 * might be useful, and is cheaper [1] than testing :
+		 *	IPv4: inet_sk(sk)->inet_daddr
+		 * 	IPv6: ipv6_addr_any(&sk->sk_v6_daddr)
+		 * OR	an additional socket flag
+		 * [1] : sk_state and sk_prot are in the same cache line.
+		 */
+		if (sk->sk_state == TCP_ESTABLISHED) {
+			/* This READ_ONCE() is paired with the WRITE_ONCE()
+			 * from sock_rps_save_rxhash() and sock_rps_reset_rxhash().
+			 */
+			cpu = sock_rps_record_flow_hash(READ_ONCE(sk->sk_rxhash));
 			if (cpu) {
 				trace_sk_rps_core_change(sk, READ_ONCE(sk->sk_rxhash), cpu - 1);
 			}
@@ -130,6 +207,9 @@ static inline void sock_rps_record_flow(const struct sock *sk)
 	}
 #endif
 }
+#endif
+
+
 
 static inline u32 rps_input_queue_tail_incr(struct softnet_data *sd)
 {
@@ -157,6 +237,46 @@ static inline void rps_input_queue_head_add(struct softnet_data *sd, int val)
 static inline void rps_input_queue_head_incr(struct softnet_data *sd)
 {
 	rps_input_queue_head_add(sd, 1);
+}
+
+static inline int rps_core_is_cacheflow(u32 core)
+{
+#ifdef CONFIG_NET_CACHEFLOW
+	return (core & net_hotdata.cacheflow_mask) == net_hotdata.cacheflow_mask;
+#else
+	return 0;
+#endif
+}
+
+static inline int rps_core(u32 core)
+{
+#ifdef CONFIG_NET_CACHEFLOW
+	return core & ~net_hotdata.cacheflow_mask;
+#else
+	return core;
+#endif
+}
+
+static inline int rps_rxq_is_cacheflow(u16 rxq_index)
+{
+#ifdef CONFIG_NET_CACHEFLOW
+	return rxq_index== CACHEFLOW_RPS_CACHEFLOW_RX_QUEUE;
+#else
+	return 0;
+#endif
+}
+
+static inline int rps_rxq_index(u16 rxq_index)
+{
+#ifdef CONFIG_NET_CACHEFLOW
+	if (rxq_index == CACHEFLOW_RPS_CACHEFLOW_RX_QUEUE) {
+		return 0;
+	} else {
+		return rxq_index;
+	}
+#else
+	return rxq_index;
+#endif
 }
 
 #endif /* _NET_RPS_H */

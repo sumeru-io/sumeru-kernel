@@ -56,6 +56,9 @@
 #define MLX5E_DECLARE_PTP_CQ_STAT(type, fld) "ptp_cq%d_"#fld, offsetof(type, fld)
 #define MLX5E_DECLARE_PTP_RQ_STAT(type, fld) "ptp_rq%d_"#fld, offsetof(type, fld)
 
+#define MLX5E_DECLARE_CACHEFLOW_CH_STAT(type, fld) "cf_ch_"#fld, offsetof(type, fld)
+#define MLX5E_DECLARE_CACHEFLOW_RQ_STAT(type, fld) "cf_rq_"#fld, offsetof(type, fld)
+
 #define MLX5E_DECLARE_QOS_TX_STAT(type, fld) "qos_tx%d_"#fld, offsetof(type, fld)
 
 struct counter_desc {
@@ -534,6 +537,9 @@ extern MLX5E_DECLARE_STATS_GRP(per_port_buff_congest);
 extern MLX5E_DECLARE_STATS_GRP(ipsec_hw);
 extern MLX5E_DECLARE_STATS_GRP(ipsec_sw);
 extern MLX5E_DECLARE_STATS_GRP(ptp);
+#ifdef CONFIG_NET_CACHEFLOW
+extern MLX5E_DECLARE_STATS_GRP(cacheflow);
+#endif
 extern MLX5E_DECLARE_STATS_GRP(macsec_hw);
 
 #endif /* __MLX5_EN_STATS_H__ */

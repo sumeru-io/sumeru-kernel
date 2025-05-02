@@ -811,6 +811,43 @@ static void tcp_save_lrcv_flowlabel(struct sock *sk, const struct sk_buff *skb)
 #endif
 }
 
+static void tcp_rcv_rate_estimate(struct sock *sk)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+	u64 delta, bytes;
+
+	if (unlikely(tp->last_rcv_est_received == 0)) {
+		if (likely(tp->bytes_received != 0)) {
+			tp->last_rcv_est_mstamp = tp->tcp_mstamp;
+		}
+		tp->last_rcv_est_received = tp->bytes_received;
+		return;
+	}
+
+	delta = tp->tcp_mstamp - tp->last_rcv_est_mstamp;
+	if (likely((tp->rcv_rtt_est.rtt_us) && delta > (tp->rcv_rtt_est.rtt_us << 3))) {
+		bytes = tp->bytes_received - tp->last_rcv_est_received;
+		if (bytes > delta * 256 && !tp->elephant_flow) {
+			if (sk->sk_family == AF_INET) {
+				struct inet_sock *inet = inet_sk(sk);
+				pr_info("cacheflow: Elephant flow detected: %pI4:%u -> %pI4:%u, bytes: %llu, delta: %llu\n",
+					 &inet->inet_saddr, ntohs(inet->inet_sport),
+					 &inet->inet_daddr, ntohs(inet->inet_dport), bytes, delta);
+			} else if (sk->sk_family == AF_INET6) {
+				struct inet_sock *inet = inet_sk(sk);
+				pr_info("cacheflow: Elephant flow detected: [%pI6c]:%u -> [%pI6c]:%u, bytes: %llu, delta: %llu\n",
+					 &sk->sk_v6_rcv_saddr, ntohs(inet->inet_sport),
+					 &sk->sk_v6_daddr, ntohs(inet->inet_dport), bytes, delta);
+			}
+			tp->elephant_flow = 1;
+		}
+		tp->last_rcv_est_mstamp = tp->tcp_mstamp;
+		tp->last_rcv_est_received = tp->bytes_received;
+	}
+	
+	return;
+}
+
 /* There is something which you must keep in mind when you analyze the
  * behavior of the tp->ato delayed ack timeout interval.  When a
  * connection starts up, we want to ack as quickly as possible.  The
@@ -5304,6 +5341,9 @@ queue_and_out:
 		eaten = tcp_queue_rcv(sk, skb, &fragstolen);
 		if (skb->len)
 			tcp_event_data_recv(sk, skb);
+		
+		tcp_rcv_rate_estimate(sk);
+
 		if (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN)
 			tcp_fin(sk);
 
@@ -6231,6 +6271,8 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 			eaten = tcp_queue_rcv(sk, skb, &fragstolen);
 
 			tcp_event_data_recv(sk, skb);
+
+			tcp_rcv_rate_estimate(sk);
 
 			if (TCP_SKB_CB(skb)->ack_seq != tp->snd_una) {
 				/* Well, only one small jumplet in fast path... */
