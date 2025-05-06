@@ -2762,19 +2762,7 @@ static int mlx5e_open_channel(struct mlx5e_priv *priv, int ix,
 	c->aff_mask = irq_get_effective_affinity_mask(irq);
 	c->lag_port = mlx5e_enumerate_lag_port(mdev, ix);
 
-#ifdef CONFIG_NET_CACHEFLOW
-	int weight = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_LEGACY_RQ_WQE_BULK) ? 16 : NAPI_POLL_WEIGHT;
-	// if (!MLX5E_GET_PFLAG(params, MLX5E_PFLAG_CACHEFLOW_CHANNEL) && is_cacheflow_steer_enabled()) {
-	// 	int core = get_cacheflow_steer_core();
-	// 	netif_cacheflow_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, weight, core);
-	// 	pr_info("mlx5e: RQ[%d]: add busy poll NAPI kthread on core %d, res: %s\n", ix, 
-	// 		core, test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" : "fail");
-	// } else {
-	netif_napi_add_weight(netdev, &c->napi, mlx5e_napi_poll, weight);
-	// }
-#else
 	netif_napi_add(netdev, &c->napi, mlx5e_napi_poll);
-#endif
 
 	netif_napi_set_irq(&c->napi, irq);
 

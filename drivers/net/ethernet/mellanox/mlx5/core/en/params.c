@@ -789,13 +789,7 @@ out:
 	 * of WQEs can be allocated in a row. Bulking also influences how well
 	 * deferred page release works.
 	 */
-	if MLX5E_GET_PFLAG(params, MLX5E_PFLAG_LEGACY_RQ_WQE_BULK) {
-		pr_info("cacheflow: use legacy fast RQ\n");
-		info->wqe_bulk = max_t(u16, info->wqe_index_mask + 1, 8);
-		info->refill_unit = info->wqe_bulk;
-	} else {
-		mlx5e_rx_compute_wqe_bulk_params(params, info);
-	}
+	mlx5e_rx_compute_wqe_bulk_params(params, info);
 
 	mlx5_core_dbg(mdev, "%s: wqe_bulk = %u, wqe_bulk_refill_unit = %u\n",
 		      __func__, info->wqe_bulk, info->refill_unit);

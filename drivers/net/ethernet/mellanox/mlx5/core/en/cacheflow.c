@@ -18,7 +18,11 @@ static void mlx5e_cacheflow_build_rq_param(struct mlx5_core_dev *mdev,
 
 	params->rq_wq_type = MLX5_WQ_TYPE_CYCLIC;
 	params->log_rq_mtu_frames = cacheflow_channel_descriptor;
+
 	mlx5e_build_rq_param(mdev, params, NULL, rq_param);
+	rq_param->frags_info.wqe_bulk = max_t(u16, rq_param->frags_info.wqe_index_mask + 1, 8);
+	rq_param->frags_info.refill_unit = rq_param->frags_info.wqe_bulk;
+
 	rq_param->cacheflow_channel = 1;
 }
 
@@ -158,6 +162,51 @@ static void mlx5e_cacheflow_close_queues(struct mlx5e_cacheflow *c)
 	mlx5e_close_cq(&c->rq.cq);
 }
 
+static void mlx5e_cacheflow_print_params(struct mlx5e_cacheflow_params *cparams)
+{
+	struct mlx5e_params *params = &cparams->params;
+	struct mlx5e_rq_param *rq_param = &cparams->rq_param;
+
+	pr_info("cacheflow channel params:\n");
+	pr_info("  mlx5e_params: log_sq_size=%u, rq_wq_type=%u, log_rq_mtu_frames=%u, num_channels=%u\n",
+		params->log_sq_size, params->rq_wq_type, params->log_rq_mtu_frames, params->num_channels);
+	pr_info("  mqprio: mode=%u, num_tc=%u\n",
+		params->mqprio.mode, params->mqprio.num_tc);
+	pr_info("  cqe_compress_def=%d, vlan_strip_disable=%d, scatter_fcs=%d\n",
+		params->rx_cqe_compress_def, params->vlan_strip_disable, params->scatter_fcs_en);
+	pr_info("  dim: rx_en=%d, tx_en=%d, rx_use_cqe=%d, tx_use_cqe=%d\n",
+		params->rx_dim_enabled, params->tx_dim_enabled, params->rx_moder_use_cqe_mode, params->tx_moder_use_cqe_mode);
+	pr_info("  packet_merge: type=%d, timeout=%u, shampo(match_type=%u, align_gran=%u)\n",
+		params->packet_merge.type, params->packet_merge.timeout,
+		params->packet_merge.shampo.match_criteria_type, params->packet_merge.shampo.alignment_granularity);
+	pr_info("  tx_min_inline=%u, pflags=0x%x, sw_mtu=%u, hard_mtu=%d, ptp_rx=%d, lkey=0x%x\n",
+		params->tx_min_inline_mode, params->pflags, params->sw_mtu, params->hard_mtu,
+		params->ptp_rx, be32_to_cpu(params->terminate_lkey_be));
+
+	pr_info("  mlx5e_rq_param:\n");
+	pr_info("    cqp: eq_ix=%u, cq_period_mode=%u, cqc_size=%zu\n",
+		rq_param->cqp.eq_ix, rq_param->cqp.cq_period_mode, sizeof(rq_param->cqp.cqc));
+	pr_info("      cqp.wq: buf_numa_node=%d, db_numa_node=%d\n",
+		rq_param->cqp.wq.buf_numa_node, rq_param->cqp.wq.db_numa_node);
+	pr_info("    rqc_size: %zu\n", sizeof(rq_param->rqc));
+	pr_info("    wq: buf_numa_node=%d, db_numa_node=%d\n",
+		rq_param->wq.buf_numa_node, rq_param->wq.db_numa_node);
+	pr_info("    frags_info: num_frags=%u, log_num_frags=%u, wqe_bulk=%u, refill_unit=%u, wqe_index_mask=0x%x\n",
+		rq_param->frags_info.num_frags, rq_param->frags_info.log_num_frags,
+		rq_param->frags_info.wqe_bulk, rq_param->frags_info.refill_unit,
+		rq_param->frags_info.wqe_index_mask);
+	if (rq_param->frags_info.num_frags > 0) {
+		pr_info("      frags_info.arr[0]: frag_size=%d, frag_stride=%d\n",
+			rq_param->frags_info.arr[0].frag_size, rq_param->frags_info.arr[0].frag_stride);
+	}
+	for (int i = 0; i < rq_param->frags_info.num_frags; i++) {
+		pr_info("      frags_info.arr[%d]: frag_size=%d, frag_stride=%d\n",
+			i, rq_param->frags_info.arr[i].frag_size, rq_param->frags_info.arr[i].frag_stride);
+	}
+	pr_info("    xdp_frag_size=%u, cacheflow_channel=%u\n",
+		rq_param->xdp_frag_size, rq_param->cacheflow_channel);
+}
+
 int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 			 u8 lag_port, struct mlx5e_cacheflow **cc) {
 
@@ -165,33 +214,7 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5e_cacheflow_params *cparams;
 	struct mlx5e_cacheflow *c;
-	int weight;
 	int err;
-
-	pr_info("cacheflow channel params: ");
-	pr_info("log_sq_size: %u\n", params->log_sq_size);
-	pr_info("rq_wq_type: %u\n", params->rq_wq_type);
-	pr_info("log_rq_mtu_frames: %u\n", params->log_rq_mtu_frames);
-	pr_info("num_channels: %u\n", params->num_channels);
-	pr_info("mqprio.mode: %u\n", params->mqprio.mode);
-	pr_info("mqprio.num_tc: %u\n", params->mqprio.num_tc);
-	pr_info("rx_cqe_compress_def: %d\n", params->rx_cqe_compress_def);
-	pr_info("packet_merge.type: %d\n", params->packet_merge.type);
-	pr_info("packet_merge.timeout: %u\n", params->packet_merge.timeout);
-	pr_info("packet_merge.shampo.match_criteria_type: %u\n", params->packet_merge.shampo.match_criteria_type);
-	pr_info("packet_merge.shampo.alignment_granularity: %u\n", params->packet_merge.shampo.alignment_granularity);
-	pr_info("tx_min_inline_mode: %u\n", params->tx_min_inline_mode);
-	pr_info("vlan_strip_disable: %d\n", params->vlan_strip_disable);
-	pr_info("scatter_fcs_en: %d\n", params->scatter_fcs_en);
-	pr_info("rx_dim_enabled: %d\n", params->rx_dim_enabled);
-	pr_info("tx_dim_enabled: %d\n", params->tx_dim_enabled);
-	pr_info("rx_moder_use_cqe_mode: %d\n", params->rx_moder_use_cqe_mode);
-	pr_info("tx_moder_use_cqe_mode: %d\n", params->tx_moder_use_cqe_mode);
-	pr_info("pflags: %x\n", params->pflags);
-	pr_info("sw_mtu: %u\n", params->sw_mtu);
-	pr_info("hard_mtu: %d\n", params->hard_mtu);
-	pr_info("ptp_rx: %d\n", params->ptp_rx);
-	pr_info("terminate_lkey_be: %u\n", be32_to_cpu(params->terminate_lkey_be));
 
 	c = kvzalloc_node(sizeof(*c), GFP_KERNEL, dev_to_node(mlx5_core_dma_dev(mdev)));
 	cparams = kvzalloc(sizeof(*cparams), GFP_KERNEL);
@@ -210,14 +233,13 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	c->stats = &priv->cacheflow_stats.ch;
 	c->lag_port = lag_port;
 
-	weight = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_LEGACY_RQ_WQE_BULK) ? 16 : NAPI_POLL_WEIGHT;
+	mlx5e_cacheflow_build_params(c, cparams, params);
+	mlx5e_cacheflow_print_params(cparams);
 
 	int core = get_cacheflow_steer_core();
-	netif_cacheflow_napi_add_weight(netdev, &c->napi, mlx5e_cacheflow_napi_poll, weight, core);
+	netif_cacheflow_napi_add_weight(netdev, &c->napi, mlx5e_cacheflow_napi_poll, 16, core);
 	pr_info("cacheflow: add NAPI (kthread) on core %d, res: %s\n", 
 		core, test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" : "fail");
-
-	mlx5e_cacheflow_build_params(c, cparams, params);
 
 	err = mlx5e_cacheflow_open_queues(c, cparams);
 	if (unlikely(err))
