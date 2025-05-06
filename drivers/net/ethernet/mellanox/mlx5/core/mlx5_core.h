@@ -44,6 +44,7 @@
 #include "lib/devcom.h"
 
 extern uint mlx5_core_debug_mask;
+extern uint cacheflow_channel_descriptor;
 
 #define mlx5_core_dbg(__dev, format, ...)				\
 	dev_dbg((__dev)->device, "%s:%d:(pid %d): " format,		\

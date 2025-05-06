@@ -17,7 +17,7 @@ static void mlx5e_cacheflow_build_rq_param(struct mlx5_core_dev *mdev,
 	struct mlx5e_rq_param *rq_param = &cparams->rq_param;
 
 	params->rq_wq_type = MLX5_WQ_TYPE_CYCLIC;
-	mlx5e_init_rq_type_params(mdev, params);
+	params->log_rq_mtu_frames = cacheflow_channel_descriptor;
 	mlx5e_build_rq_param(mdev, params, NULL, rq_param);
 	rq_param->cacheflow_channel = 1;
 }

@@ -790,6 +790,7 @@ out:
 	 * deferred page release works.
 	 */
 	if MLX5E_GET_PFLAG(params, MLX5E_PFLAG_LEGACY_RQ_WQE_BULK) {
+		pr_info("cacheflow: use legacy fast RQ\n");
 		info->wqe_bulk = max_t(u16, info->wqe_index_mask + 1, 8);
 		info->refill_unit = info->wqe_bulk;
 	} else {

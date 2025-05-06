@@ -87,6 +87,10 @@ static unsigned int prof_sel = MLX5_DEFAULT_PROF;
 module_param_named(prof_sel, prof_sel, uint, 0444);
 MODULE_PARM_DESC(prof_sel, "profile selector. Valid range 0 - 2");
 
+unsigned int cacheflow_channel_descriptor = 7;
+module_param_named(cacheflow_channel_descriptor, cacheflow_channel_descriptor, uint, 0644);
+MODULE_PARM_DESC(cacheflow_channel_descriptor, "cacheflow channel descriptor. Valid range 64 - 8192");
+
 static u32 sw_owner_id[4];
 #define MAX_SW_VHCA_ID (BIT(__mlx5_bit_sz(cmd_hca_cap_2, sw_vhca_id)) - 1)
 static DEFINE_IDA(sw_vhca_ida);
