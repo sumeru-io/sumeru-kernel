@@ -229,6 +229,7 @@ struct page_pool {
 	u32 xdp_mem_id;
 
 #ifdef CONFIG_NET_CACHEFLOW
+	spinlock_t usage_lock;
 	u32 array_pages;
 	u32 ring_pages;
 	u32 allocated_pages;

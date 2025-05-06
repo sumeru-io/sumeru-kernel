@@ -176,6 +176,11 @@ static struct proc_dir_entry *page_pool_root_dir;
 static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref netmem, int old_state, int new_state) {
 	if (!pool->usage_track)
 		return 0;
+	
+	bool is_steer_enabled = is_cacheflow_steer_enabled();
+
+	if (!is_steer_enabled)
+		spin_lock_bh(&pool->usage_lock);
 
 	if (old_state == PAGE_POOL_ALLOC) {
 #if IS_ENABLED(CONFIG_NET_CACHEFLOW_DEBUG)
@@ -213,6 +218,9 @@ static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref net
 	} else if (new_state == PAGE_POOL_RING) {
 		pool->ring_pages++;
 	}
+
+	if (!is_steer_enabled)
+		spin_unlock_bh(&pool->usage_lock);
 
 	trace_page_pool_page_move(pool, netmem, old_state, new_state, 
 			pool->allocated_pages,
@@ -596,6 +604,7 @@ static int page_pool_init(struct page_pool *pool,
 #endif
 		pool->usage_track = 1;
 
+		spin_lock_init(&pool->usage_lock);
 		pool->array_pages = 0;
 		pool->ring_pages = 0;
 		pool->allocated_pages = 0;
