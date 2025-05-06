@@ -187,15 +187,10 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 
 	weight = MLX5E_GET_PFLAG(params, MLX5E_PFLAG_LEGACY_RQ_WQE_BULK) ? 16 : NAPI_POLL_WEIGHT;
 
-	// if (is_cacheflow_steer_enabled()) {
 	int core = get_cacheflow_steer_core();
 	netif_cacheflow_napi_add_weight(netdev, &c->napi, mlx5e_cacheflow_napi_poll, weight, core);
 	pr_info("cacheflow: add NAPI (kthread) on core %d, res: %s\n", 
 		core, test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" : "fail");
-	// } else {
-	// 	netif_napi_add_weight(netdev, &c->napi, mlx5e_cacheflow_napi_poll, weight);
-	// 	pr_info("cacheflow: add NAPI (softirq)\n");
-	// }
 
 	mlx5e_cacheflow_build_params(c, cparams, params);
 

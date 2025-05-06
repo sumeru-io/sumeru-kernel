@@ -462,12 +462,10 @@ static struct ctl_table net_core_table[] = {
 	},
 	{
 		.procname	= "cacheflow_steer_enable",
-		.data 		= &cacheflow_steer_enable,
-		.maxlen		= sizeof(u8),
+		.data 		= &cacheflow_steer_enable.key,
+		.maxlen		= sizeof(cacheflow_steer_enable),
 		.mode		= 0644,
-		.proc_handler	= proc_dou8vec_minmax,
-		.extra1		= SYSCTL_ZERO,
-		.extra2		= SYSCTL_ONE,
+		.proc_handler	= proc_do_static_key,
 	},
 	{
 		.procname 	= "cacheflow_buffer_size",

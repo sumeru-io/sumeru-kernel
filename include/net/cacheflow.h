@@ -6,12 +6,13 @@
 #include <linux/types.h>
 #include <linux/compiler.h>
 #include <linux/skbuff.h>
-
+#include <linux/jump_label.h>
 #include <net/page_pool/helpers.h>
 
 extern u8 cacheflow_mark_enable;
 extern u8 cacheflow_track_enable;
-extern u8 cacheflow_steer_enable;
+
+extern struct static_key_false cacheflow_steer_enable;
 
 extern int cacheflow_steer_core;
 extern int cacheflow_buffer_size;
@@ -29,7 +30,7 @@ static inline bool is_cacheflow_mark_enabled(void)
 
 static inline bool is_cacheflow_steer_enabled(void)
 {
-	return READ_ONCE(cacheflow_steer_enable) > 0;
+	return static_branch_likely(&cacheflow_steer_enable);
 }
 
 static inline int get_cacheflow_pool_size(void) {

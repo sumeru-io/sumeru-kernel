@@ -9,9 +9,9 @@
 #include <trace/events/net_probe_common.h>
 
 #if IS_ENABLED(CONFIG_IPV6)
-#define TP_STORE_ADDRS(__entry, family, saddr, daddr, saddr6, daddr6)		\
+#define TP_CF_STORE_ADDRS(__entry, family, saddr, daddr, saddr6, daddr6)\
 	do {								\
-		if (family == ETH_P_IPV6) {			\
+		if (family == ETH_P_IPV6) {				\
 			struct in6_addr *pin6;				\
 									\
 			pin6 = (struct in6_addr *)__entry->saddr_v6;	\
@@ -23,7 +23,7 @@
 		}							\
 	} while (0)
 #else
-#define TP_STORE_ADDRS(__entry, saddr, daddr, saddr6, daddr6)	\
+#define TP_CF_STORE_ADDRS(__entry, saddr, daddr, saddr6, daddr6)	\
 	TP_STORE_V4MAPPED(__entry, saddr, daddr)
 #endif
 
@@ -95,8 +95,6 @@ TRACE_EVENT(mlx5e_flow_rule_update,
 		__array(__u8, daddr_v6, 16)
 	),
 	TP_fast_assign(
-		__be32 *p32;
-
 		__entry->flow_id = flow_id;
 		__entry->filter_id = filter_id;
 		__entry->rxq = rxq;
@@ -107,14 +105,13 @@ TRACE_EVENT(mlx5e_flow_rule_update,
 		__entry->sport = ntohs(tuple->src_port);
 		__entry->dport = ntohs(tuple->dst_port);
 
-		TP_STORE_ADDRS(__entry, tuple->etype, tuple->src_ipv4, tuple->dst_ipv4,
+		TP_CF_STORE_ADDRS(__entry, tuple->etype, tuple->src_ipv4, tuple->dst_ipv4,
 			       tuple->src_ipv6, tuple->dst_ipv6);
 	),
 	TP_printk("family=%d protocol=%d sport=%u dport=%u saddr=%pI4 daddr=%pI4 saddrv6=%pI6c daddrv6=%pI6c flow_id=%d filter_id=%d rxq=%d add=%d",
 		  __entry->family, __entry->protocol, __entry->sport, __entry->dport, __entry->saddr, __entry->daddr, __entry->saddr_v6, __entry->daddr_v6, __entry->flow_id, __entry->filter_id, __entry->rxq, __entry->add)
 );
 
-#undef TP_STORE_ADDRS
 #endif /* _MLX5_CACHEFLOW_TP_H_ */
 
 /* This part must be outside protection */
