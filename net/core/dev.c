@@ -6973,6 +6973,12 @@ void __netif_napi_del(struct napi_struct *napi)
 		kthread_stop(napi->thread);
 		napi->thread = NULL;
 	}
+#ifdef CONFIG_NET_CACHEFLOW
+	if (napi->cacheflow_thread) {
+		kthread_stop(napi->cacheflow_thread);
+		napi->cacheflow_thread = NULL;
+	}
+#endif
 }
 EXPORT_SYMBOL(__netif_napi_del);
 

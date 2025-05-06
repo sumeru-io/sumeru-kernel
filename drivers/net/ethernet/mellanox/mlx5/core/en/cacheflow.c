@@ -168,6 +168,31 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	int weight;
 	int err;
 
+	pr_info("cacheflow channel params: ");
+	pr_info("log_sq_size: %u\n", params->log_sq_size);
+	pr_info("rq_wq_type: %u\n", params->rq_wq_type);
+	pr_info("log_rq_mtu_frames: %u\n", params->log_rq_mtu_frames);
+	pr_info("num_channels: %u\n", params->num_channels);
+	pr_info("mqprio.mode: %u\n", params->mqprio.mode);
+	pr_info("mqprio.num_tc: %u\n", params->mqprio.num_tc);
+	pr_info("rx_cqe_compress_def: %d\n", params->rx_cqe_compress_def);
+	pr_info("packet_merge.type: %d\n", params->packet_merge.type);
+	pr_info("packet_merge.timeout: %u\n", params->packet_merge.timeout);
+	pr_info("packet_merge.shampo.match_criteria_type: %u\n", params->packet_merge.shampo.match_criteria_type);
+	pr_info("packet_merge.shampo.alignment_granularity: %u\n", params->packet_merge.shampo.alignment_granularity);
+	pr_info("tx_min_inline_mode: %u\n", params->tx_min_inline_mode);
+	pr_info("vlan_strip_disable: %d\n", params->vlan_strip_disable);
+	pr_info("scatter_fcs_en: %d\n", params->scatter_fcs_en);
+	pr_info("rx_dim_enabled: %d\n", params->rx_dim_enabled);
+	pr_info("tx_dim_enabled: %d\n", params->tx_dim_enabled);
+	pr_info("rx_moder_use_cqe_mode: %d\n", params->rx_moder_use_cqe_mode);
+	pr_info("tx_moder_use_cqe_mode: %d\n", params->tx_moder_use_cqe_mode);
+	pr_info("pflags: %x\n", params->pflags);
+	pr_info("sw_mtu: %u\n", params->sw_mtu);
+	pr_info("hard_mtu: %d\n", params->hard_mtu);
+	pr_info("ptp_rx: %d\n", params->ptp_rx);
+	pr_info("terminate_lkey_be: %u\n", be32_to_cpu(params->terminate_lkey_be));
+
 	c = kvzalloc_node(sizeof(*c), GFP_KERNEL, dev_to_node(mlx5_core_dma_dev(mdev)));
 	cparams = kvzalloc(sizeof(*cparams), GFP_KERNEL);
 	if (!c || !cparams) {

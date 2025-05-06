@@ -2999,6 +2999,12 @@ void mlx5e_close_channels(struct mlx5e_channels *chs)
 		mlx5e_ptp_close(chs->ptp);
 		chs->ptp = NULL;
 	}
+#ifdef CONFIG_NET_CACHEFLOW
+	if (chs->cacheflow) {
+		mlx5e_cacheflow_close(chs->cacheflow);
+		chs->cacheflow = NULL;
+	}
+#endif
 	for (i = 0; i < chs->num; i++)
 		mlx5e_close_channel(chs->c[i]);
 
