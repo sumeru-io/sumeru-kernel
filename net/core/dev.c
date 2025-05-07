@@ -1516,7 +1516,7 @@ static int napi_cacheflow_kthread_create(struct napi_struct *n, int core)
 {
 	int err = 0;
 
-	n->cacheflow_thread = kthread_create(napi_threaded_busy_poll, n, "napi/%s-%d", n->dev->name, n->napi_id);
+	n->cacheflow_thread = kthread_create(napi_threaded_busy_poll, n, "cacheflow/%s", n->dev->name);
 
 	if (IS_ERR(n->cacheflow_thread)) {
 		err = PTR_ERR(n->cacheflow_thread);

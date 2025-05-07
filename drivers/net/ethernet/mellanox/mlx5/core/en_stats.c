@@ -36,6 +36,9 @@
 #include "en_accel/en_accel.h"
 #include "en/ptp.h"
 #include "en/port.h"
+#ifdef CONFIG_NET_CACHEFLOW
+#include "en/cacheflow.h"
+#endif
 
 #ifdef CONFIG_PAGE_POOL_STATS
 #include <net/page_pool/helpers.h>
@@ -496,6 +499,23 @@ static void mlx5e_stats_grp_sw_update_stats_qos(struct mlx5e_priv *priv,
 	}
 }
 
+
+#ifdef CONFIG_NET_CACHEFLOW
+static void mlx5e_stats_grp_sw_update_stats_cacheflow(struct mlx5e_priv *priv,
+						      struct mlx5e_sw_stats *s)
+{
+	if (!priv->channels.cacheflow)
+		return;
+
+	mlx5e_stats_grp_sw_update_stats_ch_stats(s, &priv->cacheflow_stats.ch);
+
+	mlx5e_stats_grp_sw_update_stats_rq_stats(s, &priv->cacheflow_stats.rq);
+
+	/* https://gcc.gnu.org/bugzilla/show_bug.cgi?id=92657 */
+	barrier();
+}
+#endif
+
 #ifdef CONFIG_PAGE_POOL_STATS
 static void mlx5e_stats_update_stats_rq_page_pool(struct mlx5e_channel *c)
 {
@@ -519,12 +539,36 @@ static void mlx5e_stats_update_stats_rq_page_pool(struct mlx5e_channel *c)
 	rq_stats->pp_recycle_ring_full = stats.recycle_stats.ring_full;
 	rq_stats->pp_recycle_released_ref = stats.recycle_stats.released_refcnt;
 }
+
+#ifdef CONFIG_NET_CACHEFLOW
+static void mlx5e_stats_update_stats_cacheflow_rq_page_pool(struct mlx5e_cacheflow *c)
+{
+	struct mlx5e_rq_stats *rq_stats = c->rq.stats;
+	struct page_pool *pool = c->rq.page_pool;
+	struct page_pool_stats stats = { 0 };
+
+	if (!page_pool_get_stats(pool, &stats))
+		return;
+
+	rq_stats->pp_alloc_fast = stats.alloc_stats.fast;
+	rq_stats->pp_alloc_slow = stats.alloc_stats.slow;
+	rq_stats->pp_alloc_slow_high_order = stats.alloc_stats.slow_high_order;
+	rq_stats->pp_alloc_empty = stats.alloc_stats.empty;
+	rq_stats->pp_alloc_waive = stats.alloc_stats.waive;
+	rq_stats->pp_alloc_refill = stats.alloc_stats.refill;
+
+	rq_stats->pp_recycle_cached = stats.recycle_stats.cached;
+	rq_stats->pp_recycle_cache_full = stats.recycle_stats.cache_full;
+	rq_stats->pp_recycle_ring = stats.recycle_stats.ring;
+	rq_stats->pp_recycle_ring_full = stats.recycle_stats.ring_full;
+	rq_stats->pp_recycle_released_ref = stats.recycle_stats.released_refcnt;
+}
+#endif
 #else
 static void mlx5e_stats_update_stats_rq_page_pool(struct mlx5e_channel *c)
 {
 }
 #endif
-
 static MLX5E_DECLARE_STATS_GRP_OP_UPDATE_STATS(sw)
 {
 	struct mlx5e_sw_stats *s = &priv->stats.sw;
@@ -534,6 +578,11 @@ static MLX5E_DECLARE_STATS_GRP_OP_UPDATE_STATS(sw)
 
 	for (i = 0; i < priv->channels.num; i++) /* for active channels only */
 		mlx5e_stats_update_stats_rq_page_pool(priv->channels.c[i]);
+
+#ifdef CONFIG_NET_CACHEFLOW
+	if (priv->channels.cacheflow)
+		mlx5e_stats_update_stats_cacheflow_rq_page_pool(priv->channels.cacheflow);
+#endif
 
 	for (i = 0; i < priv->stats_nch; i++) {
 		struct mlx5e_channel_stats *channel_stats =
@@ -559,6 +608,10 @@ static MLX5E_DECLARE_STATS_GRP_OP_UPDATE_STATS(sw)
 	}
 	mlx5e_stats_grp_sw_update_stats_ptp(priv, s);
 	mlx5e_stats_grp_sw_update_stats_qos(priv, s);
+
+#ifdef CONFIG_NET_CACHEFLOW
+	mlx5e_stats_grp_sw_update_stats_cacheflow(priv, s);
+#endif
 }
 
 static const struct counter_desc q_stats_desc[] = {
