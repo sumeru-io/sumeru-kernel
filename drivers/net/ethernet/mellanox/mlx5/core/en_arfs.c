@@ -43,6 +43,14 @@
 #define ARFS_HASH_SHIFT BITS_PER_BYTE
 #define ARFS_HASH_SIZE BIT(BITS_PER_BYTE)
 
+#define ARFS_STATS_INC(priv, rxq, stat) 					\
+	do { 									\
+		if (rps_rxq_is_cacheflow(rxq)) 					\
+			priv->cacheflow_stats.rq.stat++; 			\
+		else 								\
+			priv->channel_stats[rps_rxq_index(rxq)]->rq.stat++; 	\
+	} while (0)
+
 struct arfs_table {
 	struct mlx5e_flow_table  ft;
 	struct mlx5_flow_handle	 *default_rule;
@@ -436,7 +444,7 @@ static void arfs_may_expire_flow(struct mlx5e_priv *priv)
 	hlist_for_each_entry_safe(arfs_rule, htmp, &del_list, hlist) {
 		if (arfs_rule->rule) {
 			mlx5_del_flow_rules(arfs_rule->rule);
-			priv->channel_stats[rps_rxq_index(arfs_rule->rxq)]->rq.arfs_expired++;
+			ARFS_STATS_INC(priv, arfs_rule->rxq, arfs_expired);
 		}
 		hlist_del(&arfs_rule->hlist);
 		kfree(arfs_rule);
@@ -515,7 +523,7 @@ static struct mlx5_flow_handle *arfs_add_rule(struct mlx5e_priv *priv,
 
 	spec = kvzalloc(sizeof(*spec), GFP_KERNEL);
 	if (!spec) {
-		priv->channel_stats[rps_rxq_index(arfs_rule->rxq)]->rq.arfs_err++;
+		ARFS_STATS_INC(priv, arfs_rule->rxq, arfs_err);
 		err = -ENOMEM;
 		goto out;
 	}
@@ -592,7 +600,7 @@ static struct mlx5_flow_handle *arfs_add_rule(struct mlx5e_priv *priv,
 	rule = mlx5_add_flow_rules(ft, spec, &flow_act, &dest, 1);
 	if (IS_ERR(rule)) {
 		err = PTR_ERR(rule);
-		priv->channel_stats[rps_rxq_index(arfs_rule->rxq)]->rq.arfs_err++;
+		ARFS_STATS_INC(priv, arfs_rule->rxq, arfs_err);
 		netdev_dbg(priv->netdev,
 			   "%s: add rule(filter id=%d, rq idx=%d, ip proto=0x%x) failed,err=%d\n",
 			   __func__, arfs_rule->filter_id, arfs_rule->rxq,
@@ -619,7 +627,7 @@ static void arfs_modify_rule_rq(struct mlx5e_priv *priv,
 	}
 	err =  mlx5_modify_rule_destination(rule, &dst, NULL);
 	if (err) {
-		priv->channel_stats[rps_rxq_index(rxq)]->rq.arfs_err++;
+		ARFS_STATS_INC(priv, rxq, arfs_err);
 		netdev_warn(priv->netdev,
 			    "Failed to modify aRFS rule destination to rq=%d\n", rxq);
 	}
@@ -643,7 +651,7 @@ static void arfs_handle_work(struct work_struct *work)
 		if (IS_ERR(rule))
 			goto out;
 		arfs_rule->rule = rule;
-		priv->channel_stats[rps_rxq_index(arfs_rule->rxq)]->rq.arfs_add++;
+		ARFS_STATS_INC(priv, arfs_rule->rxq, arfs_add);
 	} else {
 		arfs_modify_rule_rq(priv, arfs_rule->rule,
 				    arfs_rule->rxq);
@@ -763,8 +771,9 @@ int mlx5e_rx_flow_steer(struct net_device *dev, const struct sk_buff *skb,
 			spin_unlock_bh(&arfs->arfs_lock);
 			return arfs_rule->filter_id;
 		}
-		priv->channel_stats[rps_rxq_index(rxq_index)]->rq.arfs_request_in++;
-		priv->channel_stats[rps_rxq_index(arfs_rule->rxq)]->rq.arfs_request_out++;
+
+		ARFS_STATS_INC(priv, rxq_index, arfs_request_in);
+		ARFS_STATS_INC(priv, arfs_rule->rxq, arfs_request_out);
 		arfs_rule->rxq = rxq_index;
 	} else {
 		arfs_rule = arfs_alloc_rule(priv, arfs_t, &fk, rxq_index, flow_id);
