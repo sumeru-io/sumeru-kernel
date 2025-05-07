@@ -173,6 +173,68 @@ enum {
 #ifdef CONFIG_NET_CACHEFLOW
 static struct proc_dir_entry *page_pool_root_dir;
 
+static inline int page_pool_account_usages(struct page_pool *pool, netmem_ref* netmem, int n, int old_state, int new_state) {
+	if (!pool->usage_track)
+		return 0;
+
+	bool is_steer_enabled = is_cacheflow_steer_enabled();
+
+	if (!is_steer_enabled)
+		spin_lock_bh(&pool->usage_lock);
+
+	if (old_state == PAGE_POOL_ALLOC) {
+#if IS_ENABLED(CONFIG_NET_CACHEFLOW_DEBUG)
+		if (unlikely(pool->allocated_pages == 0)) {
+			pr_err("page_pool: alloc pages = %u, array_pages = %u, ring_pages = %u\n",
+				pool->allocated_pages, pool->array_pages, pool->ring_pages);
+			BUG();
+		}
+#endif
+		pool->allocated_pages -= n;
+	} else if (old_state == PAGE_POOL_ARRAY) {
+#if IS_ENABLED(CONFIG_NET_CACHEFLOW_DEBUG)
+		if (unlikely(pool->array_pages == 0)) {
+			pr_err("page_pool: alloc pages = %u, array_pages = %u, ring_pages = %u\n",
+				pool->allocated_pages, pool->array_pages, pool->ring_pages);
+			BUG();
+		}
+#endif
+		pool->array_pages -= n;
+	} else if (old_state == PAGE_POOL_RING) {
+#if IS_ENABLED(CONFIG_NET_CACHEFLOW_DEBUG)
+		if (unlikely(pool->ring_pages == 0)) {
+			pr_err("page_pool: alloc pages = %u, array_pages = %u, ring_pages = %u\n",
+				pool->allocated_pages, pool->array_pages, pool->ring_pages);
+			BUG();
+		}
+#endif
+		pool->ring_pages -= n;
+	}
+
+	if (new_state == PAGE_POOL_ALLOC) {
+		pool->allocated_pages += n;
+	} else if (new_state == PAGE_POOL_ARRAY) {
+		pool->array_pages += n;
+	} else if (new_state == PAGE_POOL_RING) {
+		pool->ring_pages += n;
+	}
+
+	if (!is_steer_enabled)
+		spin_unlock_bh(&pool->usage_lock);
+
+	if (tracepoint_enabled(page_pool_page_move)) {
+		int i;
+		for (i = 0; i < n; i++) {
+			trace_page_pool_page_move(pool, netmem[i], old_state, new_state, 
+				pool->allocated_pages,
+				pool->array_pages,
+				pool->ring_pages);
+		}
+	}
+
+	return 0;
+}
+
 static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref netmem, int old_state, int new_state) {
 	if (!pool->usage_track)
 		return 0;
@@ -350,6 +412,9 @@ static void free_proc_entry(struct page_pool *pool) {
 	pool->proc = NULL;
 }
 #else
+static inline int page_pool_account_usages(struct page_pool *pool, netmem_ref* netmem, int n, int old_state, int new_state) {
+	return 0;
+}
 static inline int page_pool_account_usage(struct page_pool *pool, netmem_ref netmem,int old_state, int new_state) {
 	return 0;
 }
@@ -397,17 +462,15 @@ static void page_pool_recycle_mini_array(struct page_pool *pool) {
 		}
 
 		if (unlikely(ret)) {
+			page_pool_account_usages(pool, pool->alloc.bulk[i], PP_ALLOC_CACHE_BULK, PAGE_POOL_ARRAY, PAGE_POOL_UNALLOC);
 			for (j = 0; j < PP_ALLOC_CACHE_BULK; j++) {
 				recycle_stat_inc(pool, ring_full);
-				page_pool_account_usage(pool, pool->alloc.bulk[i][j], PAGE_POOL_ARRAY, PAGE_POOL_UNALLOC);
 				page_pool_return_page(pool, pool->alloc.bulk[i][j]);
 			}
 			kmem_cache_free(netmem_mini_array_cache, pool->alloc.bulk[i]);
 			pool->alloc.bulk[i] = 0;
 		} else {
-			for (j = 0; j < PP_ALLOC_CACHE_BULK; j++) {
-				page_pool_account_usage(pool, pool->alloc.bulk[i][j], PAGE_POOL_ARRAY, PAGE_POOL_RING);
-			}
+			page_pool_account_usages(pool, pool->alloc.bulk[i], PP_ALLOC_CACHE_BULK, PAGE_POOL_ARRAY, PAGE_POOL_RING);
 		}
 	}
 
@@ -708,7 +771,6 @@ static noinline netmem_ref page_pool_refill_alloc_cache(struct page_pool *pool)
 	netmem_ref netmem = 0;
 #ifdef CONFIG_PAGE_POOL_BULK
 	netmem_mini_array_t bulk;
-	int i;
 #endif
 	int pref_nid; /* preferred NUMA node */
 
@@ -745,9 +807,7 @@ static noinline netmem_ref page_pool_refill_alloc_cache(struct page_pool *pool)
 		if (unlikely(!bulk))
 			break;
 		
-		for (i = 0; i < PP_ALLOC_CACHE_BULK; i++) {
-			page_pool_account_usage(pool, bulk[i], PAGE_POOL_RING, PAGE_POOL_ARRAY);
-		}
+		page_pool_account_usages(pool, bulk, PP_ALLOC_CACHE_BULK, PAGE_POOL_RING, PAGE_POOL_ARRAY);
 
 		pool->alloc.bulk[pool->alloc.bulk_count++] = bulk;
 
@@ -1551,13 +1611,11 @@ static void page_pool_empty_ring(struct page_pool *pool)
 	while ((mini_array = ptr_ring_consume_bh(&pool->ring)))
 #endif
 	{
+		page_pool_account_usages(pool, mini_array, PP_ALLOC_CACHE_BULK, PAGE_POOL_RING, PAGE_POOL_UNALLOC);
 		for (i = 0; i < PP_ALLOC_CACHE_BULK; i++) {
 			if (!(netmem_ref_count(mini_array[i]) == 1))
 				pr_crit("%s() page_pool refcnt %d violation\n",
 					__func__, netmem_ref_count(mini_array[i]));
-
-			page_pool_account_usage(pool, (__force netmem_ref)mini_array[i], PAGE_POOL_RING, PAGE_POOL_UNALLOC);
-
 			page_pool_return_page(pool, (__force netmem_ref)mini_array[i]);
 		}
 		kmem_cache_free(netmem_mini_array_cache, mini_array);
@@ -1617,8 +1675,8 @@ static void __page_pool_destroy(struct page_pool *pool)
 static void page_pool_empty_mini_array(struct page_pool *pool, netmem_mini_array_t mini_array, int n)
 {
 	int i;
+	page_pool_account_usages(pool, mini_array, n, PAGE_POOL_ARRAY, PAGE_POOL_UNALLOC);
 	for (i = 0; i < n; i++) {
-		page_pool_account_usage(pool, (__force netmem_ref)mini_array[i], PAGE_POOL_ARRAY, PAGE_POOL_UNALLOC);
 		page_pool_release_return_page(pool, (__force netmem_ref)mini_array[i]);
 	}
 	if (mini_array)

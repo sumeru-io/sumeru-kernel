@@ -847,9 +847,7 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 
 	rq->buff.map_dir = params->xdp_prog ? DMA_BIDIRECTIONAL : DMA_FROM_DEVICE;
 	rq->buff.headroom = mlx5e_get_rq_headroom(mdev, params, xsk);
-	pool_size = 8 << params->log_rq_mtu_frames;
-
-	mlx5e_params_print_info(mdev, params);
+	pool_size = 1 << params->log_rq_mtu_frames;
 
 	rq->mkey_be = cpu_to_be32(mdev->mlx5e_res.hw_objs.mkey);
 

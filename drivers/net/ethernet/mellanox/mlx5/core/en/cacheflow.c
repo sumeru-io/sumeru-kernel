@@ -131,7 +131,6 @@ static int mlx5e_cacheflow_open_rq(struct mlx5e_cacheflow *c, struct mlx5e_param
 
 	sd_ix = mlx5_sd_ch_ix_get_dev_ix(c->mdev, 0);
 	q_counter = c->priv->q_counter[sd_ix];
-	pr_info("cacheflow: open rq on node %d, q_counter %d\n", node, q_counter);
 
 	return mlx5e_open_rq(params, rq_param, NULL, node, q_counter, &c->rq);
 }
@@ -195,10 +194,6 @@ static void mlx5e_cacheflow_print_params(struct mlx5e_cacheflow_params *cparams)
 		rq_param->frags_info.num_frags, rq_param->frags_info.log_num_frags,
 		rq_param->frags_info.wqe_bulk, rq_param->frags_info.refill_unit,
 		rq_param->frags_info.wqe_index_mask);
-	if (rq_param->frags_info.num_frags > 0) {
-		pr_info("      frags_info.arr[0]: frag_size=%d, frag_stride=%d\n",
-			rq_param->frags_info.arr[0].frag_size, rq_param->frags_info.arr[0].frag_stride);
-	}
 	for (int i = 0; i < rq_param->frags_info.num_frags; i++) {
 		pr_info("      frags_info.arr[%d]: frag_size=%d, frag_stride=%d\n",
 			i, rq_param->frags_info.arr[i].frag_size, rq_param->frags_info.arr[i].frag_stride);
