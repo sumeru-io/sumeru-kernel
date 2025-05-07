@@ -6465,6 +6465,18 @@ enum {
 };
 
 #ifdef CONFIG_NET_CACHEFLOW
+static void kfree_skb_cacheflow(struct sk_buff *skb)
+{
+	/* if SKB is a clone, don't handle this case */
+	if (skb->fclone != SKB_FCLONE_UNAVAILABLE) {
+		____kfree_skb(skb);
+		return;
+	}
+	local_bh_disable();
+	__napi_kfree_skb(skb, SKB_CONSUMED);
+	local_bh_enable();
+}
+
 static void napi_defer_flush(struct napi_struct *napi)
 {
 	struct sk_buff *skb, *next;
@@ -6478,7 +6490,7 @@ static void napi_defer_flush(struct napi_struct *napi)
 
 		while (skb != NULL) {
 			next = skb->next;
-			____kfree_skb(skb);
+			kfree_skb_cacheflow(skb);
 			skb = next;
 		}
 	}
