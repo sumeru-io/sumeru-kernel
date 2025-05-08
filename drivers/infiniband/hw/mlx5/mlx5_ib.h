@@ -947,10 +947,6 @@ struct mlx5_ib_dbg_cc_params {
 	struct mlx5_ib_dbg_param	params[MLX5_IB_DBG_CC_MAX];
 };
 
-enum {
-	MLX5_MAX_DELAY_DROP_TIMEOUT_MS = 100,
-};
-
 struct mlx5_ib_delay_drop {
 	struct mlx5_ib_dev     *dev;
 	struct work_struct	delay_drop_work;

@@ -232,6 +232,10 @@ enum mlx5_port_status {
 	MLX5_PORT_DOWN      = 2,
 };
 
+enum {
+	MLX5_MAX_DELAY_DROP_TIMEOUT_MS = 100,
+};
+
 enum mlx5_cmdif_state {
 	MLX5_CMDIF_STATE_UNINITIALIZED,
 	MLX5_CMDIF_STATE_UP,

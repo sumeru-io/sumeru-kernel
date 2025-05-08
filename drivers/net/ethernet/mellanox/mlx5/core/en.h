@@ -267,6 +267,7 @@ enum mlx5e_priv_flag {
 	MLX5E_PFLAG_XDP_TX_MPWQE,
 	MLX5E_PFLAG_SKB_TX_MPWQE,
 	MLX5E_PFLAG_TX_PORT_TS,
+	MLX5E_PFLAG_DROPLESS_RQ,
 	MLX5E_NUM_PFLAGS, /* Keep last */
 };
 
@@ -889,6 +890,14 @@ struct mlx5e_scratchpad {
 	cpumask_var_t cpumask;
 };
 
+struct mlx5e_delay_drop {
+	struct work_struct	work;
+	/* serialize setting of delay drop */
+	struct mutex		lock;
+	u32			usec_timeout;
+	bool			activate;
+};
+
 struct mlx5e_trap;
 struct mlx5e_htb;
 
@@ -963,6 +972,7 @@ struct mlx5e_priv {
 #ifdef CONFIG_MLX5_EN_TLS
 	struct mlx5e_tls          *tls;
 #endif
+	struct mlx5e_delay_drop delay_drop;
 	struct devlink_health_reporter *tx_reporter;
 	struct devlink_health_reporter *rx_reporter;
 	struct mlx5e_xsk           xsk;
@@ -1257,6 +1267,12 @@ int mlx5e_netdev_change_profile(struct mlx5e_priv *priv,
 void mlx5e_netdev_attach_nic_profile(struct mlx5e_priv *priv);
 void mlx5e_set_netdev_mtu_boundaries(struct mlx5e_priv *priv);
 void mlx5e_build_nic_params(struct mlx5e_priv *priv, struct mlx5e_xsk *xsk, u16 mtu);
+
+static inline bool mlx5e_dropless_rq_supported(struct mlx5_core_dev *mdev)
+{
+	return (MLX5_CAP_GEN(mdev, rq_delay_drop) &&
+		MLX5_CAP_GEN(mdev, general_notification_event));
+}
 
 void mlx5e_set_xdp_feature(struct net_device *netdev);
 netdev_features_t mlx5e_features_check(struct sk_buff *skb,
