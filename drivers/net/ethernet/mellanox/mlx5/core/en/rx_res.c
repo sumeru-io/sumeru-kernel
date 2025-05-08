@@ -450,7 +450,7 @@ static int mlx5e_rx_res_cacheflow_init(struct mlx5e_rx_res *res)
 				    mlx5e_rqt_get_rqtn(&res->cacheflow.rqt),
 				    inner_ft_support);
 	mlx5e_tir_builder_build_packet_merge(builder, &res->pkt_merge_param);
-	mlx5e_tir_builder_build_direct(builder);
+	mlx5e_tir_builder_build_cacheflow(builder);
 
 	err = mlx5e_tir_init(&res->cacheflow.tir, builder, res->mdev, true);
 	if (err)
