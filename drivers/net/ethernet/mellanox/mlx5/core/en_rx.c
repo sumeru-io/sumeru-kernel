@@ -1840,8 +1840,11 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi
 	skb_mark_for_recycle(skb);
 
 #if IS_ENABLED(CONFIG_NET_CACHEFLOW)
-	if (test_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags))
-		skb->cacheflow = is_cacheflow_steer_enabled() ? SKB_CACHEFLOW_STEER : SKB_CACHEFLOW_NORMAL;
+	if (test_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags)) {
+		CACHEFLOW_SET_FLAG(skb, SKB_CACHEFLOW, true);
+		if (is_cacheflow_steer_enabled())
+			CACHEFLOW_SET_FLAG(skb, SKB_CACHEFLOW_STEER, true);
+	}
 #endif
 
 	mlx5e_frag_ref_inc(rq, head_wi->frag_page);

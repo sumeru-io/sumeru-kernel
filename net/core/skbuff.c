@@ -1213,11 +1213,11 @@ static void skb_release_all(struct sk_buff *skb, enum skb_drop_reason reason)
 void __kfree_skb(struct sk_buff *skb)
 {
 #ifdef CONFIG_NET_CACHEFLOW
-	if (skb_cacheflow(skb) && is_cacheflow_steer_enabled()) {
+	if (CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW) && is_cacheflow_steer_enabled()) {
 		bool kick;
 		unsigned int defer_max;
 		struct napi_struct *napi;
-		
+
 		skb_dst_drop(skb);
 		if (skb->destructor) {
 			INDIRECT_CALL_1(skb->destructor, sock_rfree, skb);
@@ -7188,7 +7188,7 @@ nodefer:	kfree_skb_napi_cache(skb);
 
 	sd = &per_cpu(softnet_data, cpu);
 	defer_max = READ_ONCE(net_hotdata.sysctl_skb_defer_max);
-	if (READ_ONCE(sd->defer_count) >= defer_max && !skb_cacheflow(skb))
+	if (READ_ONCE(sd->defer_count) >= defer_max && !CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW))
 		goto nodefer;
 
 	spin_lock_bh(&sd->defer_lock);

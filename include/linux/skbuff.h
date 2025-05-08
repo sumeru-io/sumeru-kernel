@@ -1022,7 +1022,7 @@ struct sk_buff {
 #endif
 	__u8			unreadable:1;
 #if IS_ENABLED(CONFIG_NET_CACHEFLOW)
-	__u8			cacheflow:2;
+	__u8			cacheflow;
 #endif
 #if defined(CONFIG_NET_SCHED) || defined(CONFIG_NET_XGRESS)
 	__u16			tc_index;	/* traffic control index */
@@ -4974,18 +4974,23 @@ static inline bool skb_irq_freeable(const struct sk_buff *skb)
 		!skb_has_frag_list(skb);
 }
 
-#define SKB_CACHEFLOW_NORMAL 0x01
-#define SKB_CACHEFLOW_STEER 0x02
-#define CACHEFLOW_RPS_CACHEFLOW_RX_QUEUE 0x8000
+enum skb_cacheflow_flag {
+	SKB_CACHEFLOW,
+	SKB_CACHEFLOW_STEER,
+	SKB_CACHEFLOW_NUM_FLAGS
+};
 
-static inline u8 skb_cacheflow(const struct sk_buff *skb)
-{
-#ifdef CONFIG_NET_CACHEFLOW
-	return skb->cacheflow;
-#else
-	return 0;
-#endif
-}
+#define CACHEFLOW_SET_FLAG(skb, pflag, enable)			\
+	do {							\
+		if (enable)					\
+			(skb)->cacheflow |= BIT(pflag);		\
+		else						\
+			(skb)->cacheflow &= ~(BIT(pflag));	\
+	} while (0)
+
+#define CACHEFLOW_GET_PFLAG(skb, pflag) (!!((skb)->cacheflow & (BIT(pflag))))
+
+#define CACHEFLOW_RPS_CACHEFLOW_RX_QUEUE 0x8000
 
 static inline void skb_set_queue_mapping(struct sk_buff *skb, u16 queue_mapping)
 {
@@ -5010,7 +5015,7 @@ static inline void skb_record_rx_queue(struct sk_buff *skb, u16 rx_queue)
 static inline u16 skb_get_rx_queue(const struct sk_buff *skb)
 {
 #ifdef CONFIG_NET_CACHEFLOW
-	if (skb_cacheflow(skb) == SKB_CACHEFLOW_STEER) {
+	if (CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW_STEER)) {
 		return CACHEFLOW_RPS_CACHEFLOW_RX_QUEUE;
 	} else {
 		return skb->queue_mapping - 1;
