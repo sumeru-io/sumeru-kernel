@@ -112,6 +112,43 @@ TRACE_EVENT(mlx5e_flow_rule_update,
 		  __entry->family, __entry->protocol, __entry->sport, __entry->dport, __entry->saddr, __entry->daddr, __entry->saddr_v6, __entry->daddr_v6, __entry->flow_id, __entry->filter_id, __entry->rxq, __entry->add)
 );
 
+TRACE_EVENT(mlx5e_cacheflow_bh_cqe,
+	TP_PROTO(int rq_index, int cqe_bcnt, struct page **t_pages, int cpu),
+	TP_ARGS(rq_index, cqe_bcnt, t_pages, cpu),
+	TP_STRUCT__entry(
+		__field(int, rq_index)
+		__field(int, cqe_bcnt)
+		__array(struct page *, pages, 4)
+		__field(int, cpu)
+	),
+	TP_fast_assign(
+		__entry->rq_index = rq_index;
+		__entry->cqe_bcnt = cqe_bcnt;
+		memcpy(__entry->pages, t_pages, sizeof(struct page *) * 4);
+		__entry->cpu = cpu;
+	),
+	TP_printk("rq_index=%d cqe_bcnt=%d pages[0]=%px pages[1]=%px pages[2]=%px pages[3]=%px cpu=%d",
+		  __entry->rq_index, __entry->cqe_bcnt,
+		  __entry->pages[0], __entry->pages[1],
+		  __entry->pages[2], __entry->pages[3],
+		  __entry->cpu)
+);
+
+TRACE_EVENT(mlx5e_cacheflow_th_skb,
+	TP_PROTO(int cpu, struct sk_buff *skb),
+	TP_ARGS(cpu, skb),
+	TP_STRUCT__entry(
+		__field(int, cpu)
+		__field(int, len)
+	),
+	TP_fast_assign(
+		__entry->cpu = cpu;
+		__entry->len = skb->len;
+	),
+	TP_printk("cpu=%d len=%d",
+		  __entry->cpu, __entry->len)
+);
+
 #endif /* _MLX5_CACHEFLOW_TP_H_ */
 
 /* This part must be outside protection */

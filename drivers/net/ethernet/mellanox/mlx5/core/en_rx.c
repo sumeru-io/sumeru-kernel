@@ -44,9 +44,8 @@
 #include <net/xdp_sock_drv.h>
 #ifdef CONFIG_NET_CACHEFLOW
 #include <net/cacheflow.h>
-#endif
-#ifdef CONFIG_NET_CACHEFLOW
-#include <net/cacheflow.h>
+#include <net/rps.h>
+#include "en/cacheflow.h"
 #endif
 #include "en.h"
 #include "en/txrx.h"
@@ -1862,6 +1861,8 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi
 	return skb;
 }
 
+
+
 static void trigger_report(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 {
 	struct mlx5_err_cqe *err_cqe = (struct mlx5_err_cqe *)cqe;
@@ -2604,6 +2605,256 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget)
 
 	return work_done;
 }
+
+#ifdef CONFIG_NET_CACHEFLOW
+static void
+mlx5e_cacheflow_add_skb_shared_info_frag(struct mlx5e_rq *rq, struct skb_shared_info *sinfo, struct xdp_buff *xdp, struct page *frag_page, u32 frag_offset, u32 len)
+{
+	skb_frag_t *frag;
+
+	dma_addr_t addr = page_pool_get_dma_addr(frag_page);
+
+	dma_sync_single_for_cpu(rq->pdev, addr + frag_offset, len, rq->buff.map_dir);
+	if (!xdp_buff_has_frags(xdp)) {
+		/* Init on the first fragment to avoid cold cache access
+		 * when possible.
+		 */
+		sinfo->nr_frags = 0;
+		sinfo->xdp_frags_size = 0;
+		xdp_buff_set_frags_flag(xdp);
+	}
+
+	frag = &sinfo->frags[sinfo->nr_frags++];
+	skb_frag_fill_page_desc(frag, frag_page, frag_offset, len);
+
+	if (page_is_pfmemalloc(frag_page))
+		xdp_buff_set_frag_pfmemalloc(xdp);
+	sinfo->xdp_frags_size += len;
+}
+
+static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_rq *rq, struct mlx5e_cacheflow_cqe *cqe)
+{
+	struct mlx5e_rq_frag_info *frag_info = &rq->wqe.info.arr[0];
+	u16 rx_headroom = rq->buff.headroom;
+	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
+	struct mlx5e_wqe_frag_info *wi, *head_wi;
+	struct skb_shared_info *sinfo;
+	struct mlx5e_xdp_buff mxbuf;
+	u32 frag_consumed_bytes;
+	struct bpf_prog *prog;
+	dma_addr_t addr;
+	int page_index = 0;
+	struct page *frag_page = cqe->page[page_index];
+	u32 cqe_bcnt;
+	u16 ci;
+	struct sk_buff *skb;
+	u32 truesize;
+	void *va;
+
+	ci       = mlx5_wq_cyc_ctr2ix(wq, be16_to_cpu(cqe->cqe.wqe_counter));
+	wi       = get_frag(rq, ci);
+	head_wi  = wi;
+	cqe_bcnt = be32_to_cpu(cqe->cqe.byte_cnt);
+
+	va = page_address(frag_page) + wi->offset;
+	frag_consumed_bytes = min_t(u32, frag_info->frag_size, cqe_bcnt);
+
+	addr = page_pool_get_dma_addr(frag_page);
+	dma_sync_single_range_for_cpu(rq->pdev, addr, wi->offset, rq->buff.frame0_sz, rq->buff.map_dir);
+	net_prefetchw(va); /* xdp_frame data area */
+	net_prefetch(va + rx_headroom);
+
+	mlx5e_fill_mxbuf(rq, &cqe->cqe, va, rx_headroom, rq->buff.frame0_sz,
+			 frag_consumed_bytes, &mxbuf);
+	sinfo = xdp_get_shared_info_from_buff(&mxbuf.xdp);
+	truesize = 0;
+
+	cqe_bcnt -= frag_consumed_bytes;
+	frag_info++;
+	wi++;
+	page_index++;
+
+	while (cqe_bcnt) {
+		frag_consumed_bytes = min_t(u32, frag_info->frag_size, cqe_bcnt);
+	
+		mlx5e_cacheflow_add_skb_shared_info_frag(rq, sinfo, &mxbuf.xdp, cqe->page[page_index], wi->offset, frag_consumed_bytes);
+		truesize += frag_info->frag_stride;
+
+		cqe_bcnt -= frag_consumed_bytes;
+		frag_info++;
+		wi++;
+		page_index++;
+	}
+
+	prog = rcu_dereference(rq->xdp_prog);
+	if (prog && mlx5e_xdp_handle(rq, prog, &mxbuf)) {
+		clear_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
+		return NULL; /* page/packet was consumed by XDP */
+	}
+
+	skb = mlx5e_build_linear_skb(rq, mxbuf.xdp.data_hard_start, rq->buff.frame0_sz,
+				     mxbuf.xdp.data - mxbuf.xdp.data_hard_start,
+				     mxbuf.xdp.data_end - mxbuf.xdp.data,
+				     mxbuf.xdp.data - mxbuf.xdp.data_meta);
+
+
+	if (unlikely(!skb))
+		return NULL;
+
+	skb_mark_for_recycle(skb);
+
+	CACHEFLOW_SET_FLAG(skb, SKB_CACHEFLOW, true);
+	if (is_cacheflow_steer_enabled())
+		CACHEFLOW_SET_FLAG(skb, SKB_CACHEFLOW_STEER, true);
+
+	if (xdp_buff_has_frags(&mxbuf.xdp)) {
+		/* sinfo->nr_frags is reset by build_skb, calculate again. */
+		xdp_update_skb_shared_info(skb, wi - head_wi - 1,
+					   sinfo->xdp_frags_size, truesize,
+					   xdp_buff_is_frag_pfmemalloc(&mxbuf.xdp));
+	}
+
+	return skb;
+}
+
+int mlx5e_cacheflow_th_napi_poll(struct napi_struct *napi, int budget)
+{
+	struct mlx5e_cacheflow_th *c = container_of(napi, struct mlx5e_cacheflow_th, napi);
+	struct mlx5e_cacheflow_cqe cqe;
+	struct sk_buff *skb;
+	int work_done = 0;
+	int n;
+
+	while (work_done < budget && (n = kfifo_out(&c->cqe_fifo, &cqe, 1))) {
+		if (n != 1) {
+			pr_err("cacheflow: kfifo_out returns %d\n", n);
+			BUG();
+		}
+
+		skb = mlx5e_cacheflow_skb_from_cqe(c->rq, &cqe);
+		if (!skb) {
+			pr_err("cacheflow: fail to build skb on the tophalf handler\n");
+			continue;
+		}
+
+		mlx5e_complete_rx_cqe(c->rq, &cqe.cqe, be32_to_cpu(cqe.cqe.byte_cnt), skb);
+
+		trace_mlx5e_cacheflow_th_skb(smp_processor_id(), skb);
+
+		napi_gro_receive(napi, skb);
+
+		work_done++;
+	}
+
+	if (work_done == budget)
+		goto out;
+	
+	if (unlikely(!napi_complete_done(napi, work_done)))
+		goto out;
+
+	smp_store_release(&c->ipi_scheduled, 0);
+out:
+	return work_done;
+}
+
+static int mlx5e_cacheflow_get_cpu(u32 hash)
+{
+	const struct rps_sock_flow_table *sock_flow_table;
+	u32 ident;
+
+	sock_flow_table = rcu_dereference(net_hotdata.rps_sock_flow_table);
+	if (sock_flow_table) {
+		ident = READ_ONCE(sock_flow_table->ents[hash & sock_flow_table->mask]);
+		if ((ident ^ hash) & ~net_hotdata.rps_cpu_mask)
+			return 0;
+
+		return rps_core(ident & net_hotdata.rps_cpu_mask);
+	}
+
+	return 0;
+}
+
+static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
+{
+	struct mlx5e_cacheflow* cacheflow = container_of(rq, struct mlx5e_cacheflow, rq);
+	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
+	struct mlx5e_wqe_frag_info *wi;
+	u32 cqe_bcnt;
+	u16 ci;
+	int tcpu;
+	struct mlx5e_cacheflow_th *th;
+	struct mlx5e_cacheflow_cqe cacheflow_cqe;
+	int i;
+	int n;
+
+	ci       = mlx5_wq_cyc_ctr2ix(wq, be16_to_cpu(cqe->wqe_counter));
+	wi       = get_frag(rq, ci);
+	cqe_bcnt = be32_to_cpu(cqe->byte_cnt);
+
+	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
+		mlx5e_handle_rx_err_cqe(rq, cqe);
+		goto wq_cyc_pop;
+	}
+
+	memcpy(&cacheflow_cqe.cqe, cqe, sizeof(struct mlx5_cqe64));
+	for (i = 0; i < rq->wqe.info.num_frags; i++) {
+		cacheflow_cqe.page[i] = wi->frag_page->page;
+		mlx5e_frag_ref_inc(rq, wi->frag_page);
+		wi++;
+	}
+
+	tcpu = mlx5e_cacheflow_get_cpu(be32_to_cpu(cqe->rss_hash_result));
+	th = &cacheflow->th_array[tcpu];
+
+	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe.page, tcpu);
+
+	cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
+
+	n = kfifo_in(&th->cqe_fifo, &cacheflow_cqe, 1);
+
+	if (n != 1) {
+		pr_err("cacheflow: kfifo_in core %d returns %d, len=%d, size=%d\n", tcpu, n, kfifo_len(&th->cqe_fifo), kfifo_size(&th->cqe_fifo));
+	}
+
+wq_cyc_pop:
+	mlx5_wq_cyc_pop(wq);
+}
+
+int mlx5e_cacheflow_bh_poll_rx_cq(struct mlx5e_cacheflow *c, int budget)
+{
+	struct mlx5e_rq *rq = &c->rq;
+	struct mlx5e_cq *cq = &c->rq.cq;
+	struct mlx5_cqwq *cqwq = &cq->wq;
+	struct mlx5_cqe64 *cqe;
+	int cpu, work_done = 0;
+
+	if (unlikely(!test_bit(MLX5E_RQ_STATE_ENABLED, &rq->state)))
+		return 0;
+
+	while (work_done < budget && (cqe = mlx5_cqwq_get_cqe(cqwq))) {
+		mlx5_cqwq_pop(cqwq);
+		mlx5e_cacheflow_handle_rx_cqe(rq, cqe);
+		work_done++;
+	}
+
+	if (work_done == 0)
+		return 0;
+
+	mlx5_cqwq_update_db_record(cqwq);
+
+	/* ensure cq space is freed before enabling more cqes */
+	wmb();
+
+	for_each_cpu(cpu, &c->notify_cpu_set) {
+		if (!cmpxchg(&c->th_array[cpu].ipi_scheduled, 0, 1)) {
+			smp_call_function_single_async(cpu, &c->th_array[cpu].csd);
+			cpumask_clear_cpu(cpu, &c->notify_cpu_set);
+		}
+	}
+
+	return work_done;
+}
+#endif
 
 #ifdef CONFIG_MLX5_CORE_IPOIB
 

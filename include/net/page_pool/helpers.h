@@ -310,7 +310,7 @@ static inline bool page_pool_is_last_ref(netmem_ref netmem)
 
 static inline bool page_pool_is_single_owner(struct page_pool *pool)
 {
-#ifdef CONFIG_PAGE_POOL_SINGLE_OWNER
+#ifdef CONFIG_NET_CACHEFLOW
 	return pool->single_owner;
 #else
 	return false;

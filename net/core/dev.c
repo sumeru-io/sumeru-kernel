@@ -6464,39 +6464,6 @@ enum {
 	NAPI_F_THREADED_POLL	= 4,
 };
 
-#ifdef CONFIG_NET_CACHEFLOW
-static void kfree_skb_cacheflow(struct sk_buff *skb)
-{
-	/* if SKB is a clone, don't handle this case */
-	if (skb->fclone != SKB_FCLONE_UNAVAILABLE) {
-		____kfree_skb(skb);
-		return;
-	}
-	local_bh_disable();
-	__napi_kfree_skb(skb, SKB_CONSUMED);
-	local_bh_enable();
-}
-
-static void napi_defer_flush(struct napi_struct *napi)
-{
-	struct sk_buff *skb, *next;
-
-	if (READ_ONCE(napi->defer_list)) {
-		spin_lock_bh(&napi->defer_lock);
-		skb = napi->defer_list;
-		napi->defer_list = NULL;
-		napi->defer_count = 0;
-		spin_unlock_bh(&napi->defer_lock);
-
-		while (skb != NULL) {
-			next = skb->next;
-			kfree_skb_cacheflow(skb);
-			skb = next;
-		}
-	}
-}
-#endif
-
 static void busy_poll_stop(struct napi_struct *napi, void *have_poll_lock,
 			   unsigned flags, u16 budget)
 {
@@ -6605,10 +6572,6 @@ restart:
 			napi_poll = napi->poll;
 		}
 		WRITE_ONCE(napi->list_owner, smp_processor_id());
-
-#ifdef CONFIG_NET_CACHEFLOW
-		napi_defer_flush(napi);
-#endif
 
 		work = napi_poll(napi, budget);
 		trace_napi_poll(napi, work, budget);
@@ -6896,9 +6859,6 @@ void netif_cacheflow_napi_add_weight(struct net_device *dev, struct napi_struct 
 	 */
 	if (!napi_cacheflow_kthread_create(napi, core)) {
 		assign_bit(NAPI_STATE_CACHEFLOW, &napi->state, 1);
-		napi->defer_count = 0;
-		napi->defer_list = NULL;
-		spin_lock_init(&napi->defer_lock);
 	}
 
 	netif_napi_set_irq(napi, -1);

@@ -36,13 +36,12 @@
 #include <linux/ipv6.h>
 #include <net/rps.h>
 #include "en.h"
-#ifdef CONFIG_NET_CACHEFLOW
 #include "diag/cacheflow_tracepoint.h"
-#endif
 
 #define ARFS_HASH_SHIFT BITS_PER_BYTE
 #define ARFS_HASH_SIZE BIT(BITS_PER_BYTE)
 
+#ifdef CONFIG_NET_CACHEFLOW
 #define ARFS_STATS_INC(priv, rxq, stat) 					\
 	do { 									\
 		if (rps_rxq_is_cacheflow(rxq)) 					\
@@ -50,6 +49,12 @@
 		else 								\
 			priv->channel_stats[rps_rxq_index(rxq)]->rq.stat++; 	\
 	} while (0)
+#else
+#define ARFS_STATS_INC(priv, rxq, stat) 					\
+	do { 									\
+		priv->channel_stats[rps_rxq_index(rxq)]->rq.stat++; 		\
+	} while (0)
+#endif
 
 struct arfs_table {
 	struct mlx5e_flow_table  ft;

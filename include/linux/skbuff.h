@@ -4974,6 +4974,7 @@ static inline bool skb_irq_freeable(const struct sk_buff *skb)
 		!skb_has_frag_list(skb);
 }
 
+#ifdef CONFIG_NET_CACHEFLOW
 enum skb_cacheflow_flag {
 	SKB_CACHEFLOW,
 	SKB_CACHEFLOW_STEER,
@@ -4989,6 +4990,10 @@ enum skb_cacheflow_flag {
 	} while (0)
 
 #define CACHEFLOW_GET_PFLAG(skb, pflag) (!!((skb)->cacheflow & (BIT(pflag))))
+#else
+#define CACHEFLOW_SET_FLAG(skb, pflag, enable)
+#define CACHEFLOW_GET_PFLAG(skb, pflag) 0
+#endif
 
 #define CACHEFLOW_RPS_CACHEFLOW_RX_QUEUE 0x8000
 

@@ -212,6 +212,8 @@ struct page_pool {
 #ifdef CONFIG_NET_CACHEFLOW
 	bool single_owner:1;
 	bool usage_track:1;
+
+	struct ptr_ring recycle_ring;
 #endif
 
 	__cacheline_group_begin_aligned(frag, PAGE_POOL_FRAG_GROUP_ALIGN);
@@ -308,7 +310,9 @@ netmem_ref page_pool_alloc_frag_netmem(struct page_pool *pool,
 struct page_pool *page_pool_create(const struct page_pool_params *params);
 struct page_pool *page_pool_create_percpu(const struct page_pool_params *params,
 					  int cpuid);
-
+#ifdef CONFIG_NET_CACHEFLOW
+void page_pool_recycle_ring(struct page_pool *pool);
+#endif
 struct xdp_mem_info;
 
 #ifdef CONFIG_PAGE_POOL

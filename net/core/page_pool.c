@@ -177,6 +177,9 @@ static inline int page_pool_account_usages(struct page_pool *pool, netmem_ref* n
 	if (!pool->usage_track)
 		return 0;
 
+	if (unlikely(n == 0))
+		return 0;
+
 	bool is_steer_enabled = is_cacheflow_steer_enabled();
 
 	if (!is_steer_enabled)
@@ -411,6 +414,7 @@ static void free_proc_entry(struct page_pool *pool) {
     	kfree(proc);
 	pool->proc = NULL;
 }
+
 #else
 static inline int page_pool_account_usages(struct page_pool *pool, netmem_ref* netmem, int n, int old_state, int new_state) {
 	return 0;
@@ -715,8 +719,10 @@ static int page_pool_init(struct page_pool *pool,
 		}
 	}
 
-	if (pool->slow.flags & PP_FLAG_SINGLE_OWNER)
+	if (pool->slow.flags & PP_FLAG_SINGLE_OWNER) {
 		pool->single_owner = 1;
+		ptr_ring_init(&pool->recycle_ring, 1024, GFP_KERNEL);
+	}
 #endif
 
 	return 0;
@@ -1439,11 +1445,12 @@ void page_pool_put_unrefed_netmem(struct page_pool *pool, netmem_ref netmem,
 	if (!allow_direct)
 		allow_direct = page_pool_napi_local(pool);
 	
-	netmem =
-		__page_pool_put_page(pool, netmem, dma_sync_size, allow_direct);
+	netmem = __page_pool_put_page(pool, netmem, dma_sync_size, allow_direct);
 
 #ifdef CONFIG_PAGE_POOL_BULK
 	if (netmem) {
+		if (pool->single_owner && !ptr_ring_produce_bh(&pool->recycle_ring, (__force void *)netmem))
+			return;
 		recycle_stat_inc(pool, ring_full);
 		page_pool_account_usage(pool, netmem, PAGE_POOL_ALLOC, PAGE_POOL_UNALLOC);
 		page_pool_return_page(pool, netmem);
@@ -1747,10 +1754,25 @@ static void page_pool_empty_alloc_cache_once(struct page_pool *pool)
 
 }
 
+#ifdef CONFIG_NET_CACHEFLOW
+static void page_pool_scrub_recycle_ring(struct page_pool *pool) {
+	netmem_ref netmem;
+
+	while((netmem = (netmem_ref)__ptr_ring_consume(&pool->recycle_ring))) {
+		page_pool_return_page(pool, netmem);
+		page_pool_account_usage(pool, netmem, PAGE_POOL_ALLOC, PAGE_POOL_UNALLOC);
+	}
+}
+#endif
+
 static void page_pool_scrub(struct page_pool *pool)
 {
 	page_pool_empty_alloc_cache_once(pool);
 	pool->destroy_cnt++;
+
+#ifdef CONFIG_NET_CACHEFLOW
+	page_pool_scrub_recycle_ring(pool);
+#endif
 
 	/* No more consumers should exist, but producers could still
 	 * be in-flight.
@@ -1875,6 +1897,17 @@ void page_pool_update_nid(struct page_pool *pool, int new_nid)
 EXPORT_SYMBOL(page_pool_update_nid);
 
 #ifdef CONFIG_NET_CACHEFLOW
+void page_pool_recycle_ring(struct page_pool *pool) {
+	netmem_ref netmem;
+
+	if (!page_pool_napi_local(pool))
+		BUG();
+
+	while((netmem = (netmem_ref)__ptr_ring_consume(&pool->recycle_ring))) {
+		page_pool_put_full_netmem(pool, netmem, true);
+	}
+}
+
 static int __init page_pool_proc_init(void)
 {
     /* Create the parent directory /proc/pagepool/ */

@@ -78,6 +78,45 @@ out:
 	return work_done;
 }
 
+static int mlx5e_cacheflow_bh_napi_poll(struct napi_struct *napi, int budget)
+{
+	struct mlx5e_cacheflow *c = container_of(napi, struct mlx5e_cacheflow, napi);
+	struct mlx5e_ch_stats *ch_stats = c->stats;
+	struct mlx5e_rq *rq = &c->rq;
+	bool busy = false;
+	int work_done = 0;
+
+	rcu_read_lock();
+
+	ch_stats->poll++;
+
+	if (unlikely(!budget))
+		goto out;
+
+	page_pool_recycle_ring(c->rq.page_pool);
+
+	if (likely(budget - work_done))
+		work_done = mlx5e_cacheflow_bh_poll_rx_cq(c, budget);
+
+	busy |= work_done == budget;
+	busy |= INDIRECT_CALL_2(rq->post_wqes,
+				mlx5e_post_rx_mpwqes,
+				mlx5e_post_rx_wqes,
+				rq);
+
+	if (unlikely(!napi_complete_done(napi, work_done)))
+		goto out;
+
+	ch_stats->arm++;
+
+	mlx5e_cq_arm(&rq->cq);
+out:
+	rcu_read_unlock();
+	if (work_done)
+		trace_cacheflow_napi_poll(napi->dev, smp_processor_id(), work_done);
+	return work_done;
+}
+
 static int mlx5e_cacheflow_open_rx_cq(struct mlx5e_cacheflow *c, struct mlx5e_cacheflow_params *cparams)
 {
 	int err;
@@ -112,6 +151,7 @@ static int mlx5e_cacheflow_init_rq(struct mlx5e_cacheflow *c, struct mlx5e_param
 	rq->ix           = 0;
 	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
 
+	xdp_rxq_info_unused(&rq->xdp_rxq);
 	return mlx5e_rq_set_handlers(rq, params, false);
 }
 
@@ -202,6 +242,24 @@ static void mlx5e_cacheflow_print_params(struct mlx5e_cacheflow_params *cparams)
 		rq_param->xdp_frag_size, rq_param->cacheflow_channel);
 }
 
+static void cacheflow_raise_softirq(void *data)
+{
+	struct mlx5e_cacheflow_th *th = data;
+
+	napi_schedule_irqoff(&th->napi);
+}
+
+static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu, struct mlx5e_rq *rq)
+{
+	th->rq = rq;
+	th->cpu = cpu;
+	th->ipi_scheduled = 0;
+	INIT_CSD(&th->csd, cacheflow_raise_softirq, th);
+	INIT_KFIFO(th->cqe_fifo);
+
+	return 0;
+}
+
 int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 			 u8 lag_port, struct mlx5e_cacheflow **cc) {
 
@@ -209,11 +267,13 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5e_cacheflow_params *cparams;
 	struct mlx5e_cacheflow *c;
-	int err;
+	struct mlx5e_cacheflow_th *th;
+	int err, cpu;
 
 	c = kvzalloc_node(sizeof(*c), GFP_KERNEL, dev_to_node(mlx5_core_dma_dev(mdev)));
 	cparams = kvzalloc(sizeof(*cparams), GFP_KERNEL);
-	if (!c || !cparams) {
+	th = kvzalloc(sizeof(*th) * num_possible_cpus(), GFP_KERNEL);
+	if (!c || !cparams || !th) {
 		err = -ENOMEM;
 		goto err_free;
 	}
@@ -232,13 +292,20 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	mlx5e_cacheflow_print_params(cparams);
 
 	int core = get_cacheflow_steer_core();
-	netif_cacheflow_napi_add_weight(netdev, &c->napi, mlx5e_cacheflow_napi_poll, 16, core);
-	pr_info("cacheflow: add NAPI (kthread) on core %d, res: %s\n", 
-		core, test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" : "fail");
+	netif_cacheflow_napi_add_weight(netdev, &c->napi, mlx5e_cacheflow_bh_napi_poll, 16, core);
+	pr_info("cacheflow: add NAPI %d (kthread) on core %d, res: %s\n", 
+		c->napi.napi_id, core, test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" : "fail");
 
 	err = mlx5e_cacheflow_open_queues(c, cparams);
 	if (unlikely(err))
 		goto err_napi_del;
+	
+	c->th_array = th;
+	cpumask_clear(&c->notify_cpu_set);
+	for_each_possible_cpu(cpu) {
+		mlx5e_cacheflow_th_init(&c->th_array[cpu], cpu, &c->rq);
+		netif_napi_add(netdev, &c->th_array[cpu].napi, mlx5e_cacheflow_th_napi_poll);
+	}
 
 	priv->cacheflow_opened = true;
 
@@ -250,6 +317,7 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 err_napi_del:
 	netif_napi_del(&c->napi);
 err_free:
+	kvfree(th);
 	kvfree(cparams);
 	kvfree(c);
 	return err;
@@ -257,23 +325,42 @@ err_free:
 
 void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
 {
+	int cpu;
 	mlx5e_cacheflow_close_queues(c);
 	netif_napi_del(&c->napi);
+
+	for_each_possible_cpu(cpu) {
+		netif_napi_del(&c->th_array[cpu].napi);
+	}
 
 	kvfree(c);
 }
 
 void mlx5e_cacheflow_activate_channel(struct mlx5e_cacheflow *c)
 {
+	int cpu;
 	napi_enable(&c->napi);
+
+	for_each_possible_cpu(cpu) {
+		napi_enable(&c->th_array[cpu].napi);
+	}
 
 	mlx5e_activate_rq(&c->rq);
 
 	mlx5e_trigger_napi_sched(&c->napi);
+
+	for_each_possible_cpu(cpu) {
+		smp_call_function_single_async(cpu, &c->th_array[cpu].csd);
+	}
 }
 
 void mlx5e_cacheflow_deactivate_channel(struct mlx5e_cacheflow *c)
 {
+	int cpu;
 	mlx5e_deactivate_rq(&c->rq);
 	napi_disable(&c->napi);
+
+	for_each_possible_cpu(cpu) {
+		napi_disable(&c->th_array[cpu].napi);
+	}
 }

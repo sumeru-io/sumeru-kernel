@@ -52,7 +52,9 @@
 #include <net/net_trackers.h>
 #include <net/net_debug.h>
 #include <net/dropreason-core.h>
-
+#ifdef CONFIG_NET_CACHEFLOW
+#include <linux/ptr_ring.h>
+#endif
 struct netpoll_info;
 struct device;
 struct ethtool_ops;
@@ -375,10 +377,6 @@ struct napi_struct {
 	struct task_struct	*thread;
 #ifdef CONFIG_NET_CACHEFLOW
 	struct task_struct	*cacheflow_thread;
-	/* Another possibly contended cache line */
-	spinlock_t		defer_lock ____cacheline_aligned_in_smp;
-	int			defer_count;
-	struct sk_buff		*defer_list;
 #endif
 	/* control-path-only fields follow */
 	struct list_head	dev_list;
