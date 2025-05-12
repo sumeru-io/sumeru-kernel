@@ -5,7 +5,8 @@
 #include "en.h"
 #include "en/dim.h"
 #include "en/ptp.h"
-#include "en/cacheflow.h"
+#include "en/cacheflow/cacheflow.h"
+
 unsigned int mlx5e_channels_get_num(struct mlx5e_channels *chs)
 {
 	return chs->num;

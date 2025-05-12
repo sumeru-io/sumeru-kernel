@@ -1028,9 +1028,9 @@ struct sk_buff {
 	__u16			tc_index;	/* traffic control index */
 #endif
 #if defined(CONFIG_NET_CACHEFLOW)
-	struct page_pool 	*page_pool;
-	u32			used_pages;
-	u32			free_pages;
+	struct cacheflow_page_pool 	*page_pool;
+	u32				used_pages;
+	u32				free_pages;
 #endif
 	u16			alloc_cpu;
 

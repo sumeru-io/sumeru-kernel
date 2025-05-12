@@ -46,7 +46,7 @@
 
 #ifdef CONFIG_NET_CACHEFLOW
 #include <net/cacheflow/cacheflow.h>
-#include "en/cacheflow.h"
+#include "en/cacheflow/cacheflow.h"
 #endif
 
 #include "eswitch.h"

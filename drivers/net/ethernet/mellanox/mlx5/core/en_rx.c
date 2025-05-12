@@ -44,8 +44,8 @@
 #include <net/xdp_sock_drv.h>
 #ifdef CONFIG_NET_CACHEFLOW
 #include <net/cacheflow/cacheflow.h>
-#include <net/rps.h>
-#include "en/cacheflow.h"
+#include <net/cacheflow/page_pool.h>
+#include "en/cacheflow/cacheflow.h"
 #endif
 #include "en.h"
 #include "en/txrx.h"
@@ -65,8 +65,8 @@
 #include "devlink.h"
 #include "en/devlink.h"
 #include "trace/events/skb.h"
-#define CREATE_TRACE_POINTS
 #include "diag/cacheflow_tracepoint.h"
+
 
 static struct sk_buff *
 mlx5e_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
@@ -1640,12 +1640,6 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 
 	skb->mark = be32_to_cpu(cqe->sop_drop_qpn) & MLX5E_TC_FLOW_ID_MASK;
 
-#if IS_ENABLED(CONFIG_NET_CACHEFLOW)
-	skb->page_pool  = rq->page_pool;
-	skb->used_pages = rq->page_pool->allocated_pages;
-	skb->free_pages = rq->page_pool->array_pages + rq->page_pool->ring_pages;
-#endif
-
 	mlx5e_handle_csum(netdev, cqe, rq, skb, !!lro_num_seg);
 	/* checking CE bit in cqe - MSB in ml_path field */
 	if (unlikely(cqe->ml_path & MLX5E_CE_BIT_MASK))
@@ -2607,14 +2601,168 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget)
 }
 
 #ifdef CONFIG_NET_CACHEFLOW
+static inline void mlx5e_cacheflow_handle_csum(struct net_device *netdev,
+						struct mlx5_cqe64 *cqe,
+						struct mlx5e_cacheflow_rq *rq,
+						struct sk_buff *skb,
+						bool   lro)
+{
+	struct mlx5e_rq_stats *stats = rq->stats;
+	int network_depth = 0;
+	__be16 proto;
+
+	if (unlikely(!(netdev->features & NETIF_F_RXCSUM)))
+		goto csum_none;
+
+	if (lro) {
+		skb->ip_summed = CHECKSUM_UNNECESSARY;
+		stats->csum_unnecessary++;
+		return;
+	}
+
+	/* True when explicitly set via priv flag, or XDP prog is loaded */
+	if (test_bit(MLX5E_RQ_STATE_NO_CSUM_COMPLETE, &rq->state) ||
+	    get_cqe_tls_offload(cqe))
+		goto csum_unnecessary;
+
+	/* CQE csum doesn't cover padding octets in short ethernet
+	 * frames. And the pad field is appended prior to calculating
+	 * and appending the FCS field.
+	 *
+	 * Detecting these padded frames requires to verify and parse
+	 * IP headers, so we simply force all those small frames to be
+	 * CHECKSUM_UNNECESSARY even if they are not padded.
+	 */
+	if (short_frame(skb->len))
+		goto csum_unnecessary;
+
+	if (likely(is_last_ethertype_ip(skb, &network_depth, &proto))) {
+		if (unlikely(get_ip_proto(skb, network_depth, proto) == IPPROTO_SCTP))
+			goto csum_unnecessary;
+
+		stats->csum_complete++;
+		skb->ip_summed = CHECKSUM_COMPLETE;
+		skb->csum = csum_unfold((__force __sum16)cqe->check_sum);
+
+		if (test_bit(MLX5E_RQ_STATE_CSUM_FULL, &rq->state))
+			return; /* CQE csum covers all received bytes */
+
+		/* csum might need some fixups ...*/
+		mlx5e_skb_csum_fixup(skb, network_depth, proto, stats);
+		return;
+	}
+
+csum_unnecessary:
+	if (likely((cqe->hds_ip_ext & CQE_L3_OK) &&
+		   (cqe->hds_ip_ext & CQE_L4_OK))) {
+		skb->ip_summed = CHECKSUM_UNNECESSARY;
+		if (cqe_is_tunneled(cqe)) {
+			skb->csum_level = 1;
+			skb->encapsulation = 1;
+			stats->csum_unnecessary_inner++;
+			return;
+		}
+		stats->csum_unnecessary++;
+		return;
+	}
+csum_none:
+	skb->ip_summed = CHECKSUM_NONE;
+	stats->csum_none++;
+}
+
+static inline void mlx5e_cacheflow_enable_ecn(struct mlx5e_cacheflow_rq *rq, struct sk_buff *skb)
+{
+	int network_depth = 0;
+	__be16 proto;
+	void *ip;
+	int rc;
+
+	if (unlikely(!is_last_ethertype_ip(skb, &network_depth, &proto)))
+		return;
+
+	ip = skb->data + network_depth;
+	rc = ((proto == htons(ETH_P_IP)) ? IP_ECN_set_ce((struct iphdr *)ip) :
+					 IP6_ECN_set_ce(skb, (struct ipv6hdr *)ip));
+
+	rq->stats->ecn_mark += !!rc;
+}
+
+static inline void mlx5e_cacheflow_build_rx_skb(struct mlx5_cqe64 *cqe,
+				      u32 cqe_bcnt,
+				      struct mlx5e_cacheflow_rq *rq,
+				      struct sk_buff *skb)
+{
+	u8 lro_num_seg = be32_to_cpu(cqe->srqn) >> 24;
+	struct mlx5e_rq_stats *stats = rq->stats;
+	struct net_device *netdev = rq->netdev;
+
+	skb->mac_len = ETH_HLEN;
+
+	if (unlikely(mlx5e_rx_hw_stamp(rq->tstamp))) {
+		skb_hwtstamps(skb)->hwtstamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time,
+								  rq->clock, get_cqe_ts(cqe));
+		if (tracepoint_enabled(skb_ring_timestamp)) {
+			int network_depth = 0;
+			__be16 proto;
+			if (likely(is_last_ethertype_ip(skb, &network_depth, &proto))) {
+				if (likely(get_ip_proto(skb, network_depth, proto) == IPPROTO_TCP)) {
+					skb_shinfo(skb)->ms_timestamp.valid = 1;
+					skb_shinfo(skb)->ms_timestamp.receive_timestamp = skb_hwtstamps(skb)->hwtstamp;
+					skb_shinfo(skb)->ms_timestamp.process_timestamp = ktime_get_real_ns();
+	
+					trace_skb_ring_timestamp(skb, rq->ix, skb_shinfo(skb)->ms_timestamp.receive_timestamp, skb_shinfo(skb)->ms_timestamp.process_timestamp);
+				}
+			}
+		}
+	}
+	skb_record_rx_queue(skb, rq->ix);
+
+	if (likely(netdev->features & NETIF_F_RXHASH))
+		mlx5e_skb_set_hash(cqe, skb);
+
+	if (cqe_has_vlan(cqe)) {
+		__vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q),
+				       be16_to_cpu(cqe->vlan_info));
+		stats->removed_vlan_packets++;
+	}
+
+	skb->mark = be32_to_cpu(cqe->sop_drop_qpn) & MLX5E_TC_FLOW_ID_MASK;
+
+	skb->page_pool  = rq->page_pool;
+	skb->used_pages = rq->page_pool->allocated_pages;
+	skb->free_pages = rq->page_pool->array_pages + rq->page_pool->ring_pages;
+
+	mlx5e_cacheflow_handle_csum(netdev, cqe, rq, skb, !!lro_num_seg);
+	/* checking CE bit in cqe - MSB in ml_path field */
+	if (unlikely(cqe->ml_path & MLX5E_CE_BIT_MASK))
+		mlx5e_cacheflow_enable_ecn(rq, skb);
+
+	skb->protocol = eth_type_trans(skb, netdev);
+
+	if (unlikely(mlx5e_skb_is_multicast(skb)))
+		stats->mcast_packets++;
+}
+
+static inline void mlx5e_cacheflow_complete_rx_cqe(struct mlx5e_cacheflow_rq *rq,
+					 struct mlx5_cqe64 *cqe,
+					 u32 cqe_bcnt,
+					 struct sk_buff *skb)
+{
+	struct mlx5e_rq_stats *stats = rq->stats;
+
+	stats->packets++;
+	stats->bytes += cqe_bcnt;
+	mlx5e_cacheflow_build_rx_skb(cqe, cqe_bcnt, rq, skb);
+}
+
 static void
-mlx5e_cacheflow_add_skb_shared_info_frag(struct mlx5e_rq *rq, struct skb_shared_info *sinfo, struct xdp_buff *xdp, struct page *frag_page, u32 frag_offset, u32 len)
+mlx5e_cacheflow_add_skb_shared_info_frag(struct mlx5e_cacheflow_rq *rq, struct skb_shared_info *sinfo, struct xdp_buff *xdp, struct page *page, u32 len)
 {
 	skb_frag_t *frag;
 
-	dma_addr_t addr = page_pool_get_dma_addr(frag_page);
+	dma_addr_t addr = page_pool_get_dma_addr(page);
 
-	dma_sync_single_for_cpu(rq->pdev, addr + frag_offset, len, rq->buff.map_dir);
+	dma_sync_single_for_cpu(rq->pdev, addr, len, rq->buff.map_dir);
 	if (!xdp_buff_has_frags(xdp)) {
 		/* Init on the first fragment to avoid cold cache access
 		 * when possible.
@@ -2625,26 +2773,58 @@ mlx5e_cacheflow_add_skb_shared_info_frag(struct mlx5e_rq *rq, struct skb_shared_
 	}
 
 	frag = &sinfo->frags[sinfo->nr_frags++];
-	skb_frag_fill_page_desc(frag, frag_page, frag_offset, len);
+	skb_frag_fill_page_desc(frag, page, 0, len);
 
-	if (page_is_pfmemalloc(frag_page))
+	if (page_is_pfmemalloc(page))
 		xdp_buff_set_frag_pfmemalloc(xdp);
 	sinfo->xdp_frags_size += len;
 }
 
-static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_rq *rq, struct mlx5e_cacheflow_cqe *cqe)
+
+static void mlx5e_cacheflow_fill_mxbuf(struct mlx5e_cacheflow_rq *rq, struct mlx5_cqe64 *cqe,
+			     void *va, u16 headroom, u32 frame_sz, u32 len,
+			     struct mlx5e_cacheflow_xdp_buff *mxbuf)
+{
+	xdp_init_buff(&mxbuf->xdp, frame_sz, &rq->xdp_rxq);
+	xdp_prepare_buff(&mxbuf->xdp, va, headroom, len, true);
+	mxbuf->cqe = cqe;
+	mxbuf->rq = rq;
+}
+
+static inline
+struct sk_buff *mlx5e_cacheflow_build_linear_skb(struct mlx5e_cacheflow_rq *rq, void *va,
+				       u32 frag_size, u16 headroom,
+				       u32 cqe_bcnt, u32 metasize)
+{
+	struct sk_buff *skb = napi_build_skb(va, frag_size);
+
+	if (unlikely(!skb)) {
+		rq->stats->buff_alloc_err++;
+		return NULL;
+	}
+
+	skb_reserve(skb, headroom);
+	skb_put(skb, cqe_bcnt);
+
+	if (metasize)
+		skb_metadata_set(skb, metasize);
+
+	return skb;
+}
+
+
+static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *rq, struct mlx5e_cacheflow_cqe *cqe)
 {
 	struct mlx5e_rq_frag_info *frag_info = &rq->wqe.info.arr[0];
 	u16 rx_headroom = rq->buff.headroom;
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
-	struct mlx5e_wqe_frag_info *wi, *head_wi;
+	struct mlx5e_cacheflow_wqe_frag_info *wi, *head_wi;
 	struct skb_shared_info *sinfo;
-	struct mlx5e_xdp_buff mxbuf;
+	struct mlx5e_cacheflow_xdp_buff mxbuf;
 	u32 frag_consumed_bytes;
-	struct bpf_prog *prog;
 	dma_addr_t addr;
 	int page_index = 0;
-	struct page *frag_page = cqe->page[page_index];
+	struct page **frag_page = cqe->page;
 	u32 cqe_bcnt;
 	u16 ci;
 	struct sk_buff *skb;
@@ -2652,19 +2832,19 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_rq *rq, struct
 	void *va;
 
 	ci       = mlx5_wq_cyc_ctr2ix(wq, be16_to_cpu(cqe->cqe.wqe_counter));
-	wi       = get_frag(rq, ci);
+	wi       = &rq->wqe.frags[ci << rq->wqe.info.log_num_frags];
 	head_wi  = wi;
 	cqe_bcnt = be32_to_cpu(cqe->cqe.byte_cnt);
 
-	va = page_address(frag_page) + wi->offset;
+	va = page_address(*frag_page);
 	frag_consumed_bytes = min_t(u32, frag_info->frag_size, cqe_bcnt);
 
-	addr = page_pool_get_dma_addr(frag_page);
-	dma_sync_single_range_for_cpu(rq->pdev, addr, wi->offset, rq->buff.frame0_sz, rq->buff.map_dir);
+	addr = page_pool_get_dma_addr(*frag_page);
+	dma_sync_single_range_for_cpu(rq->pdev, addr, 0, rq->buff.frame0_sz, rq->buff.map_dir);
 	net_prefetchw(va); /* xdp_frame data area */
 	net_prefetch(va + rx_headroom);
 
-	mlx5e_fill_mxbuf(rq, &cqe->cqe, va, rx_headroom, rq->buff.frame0_sz,
+	mlx5e_cacheflow_fill_mxbuf(rq, &cqe->cqe, va, rx_headroom, rq->buff.frame0_sz,
 			 frag_consumed_bytes, &mxbuf);
 	sinfo = xdp_get_shared_info_from_buff(&mxbuf.xdp);
 	truesize = 0;
@@ -2677,7 +2857,7 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_rq *rq, struct
 	while (cqe_bcnt) {
 		frag_consumed_bytes = min_t(u32, frag_info->frag_size, cqe_bcnt);
 	
-		mlx5e_cacheflow_add_skb_shared_info_frag(rq, sinfo, &mxbuf.xdp, cqe->page[page_index], wi->offset, frag_consumed_bytes);
+		mlx5e_cacheflow_add_skb_shared_info_frag(rq, sinfo, &mxbuf.xdp, cqe->page[page_index], frag_consumed_bytes);
 		truesize += frag_info->frag_stride;
 
 		cqe_bcnt -= frag_consumed_bytes;
@@ -2686,13 +2866,8 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_rq *rq, struct
 		page_index++;
 	}
 
-	prog = rcu_dereference(rq->xdp_prog);
-	if (prog && mlx5e_xdp_handle(rq, prog, &mxbuf)) {
-		clear_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags);
-		return NULL; /* page/packet was consumed by XDP */
-	}
 
-	skb = mlx5e_build_linear_skb(rq, mxbuf.xdp.data_hard_start, rq->buff.frame0_sz,
+	skb = mlx5e_cacheflow_build_linear_skb(rq, mxbuf.xdp.data_hard_start, rq->buff.frame0_sz,
 				     mxbuf.xdp.data - mxbuf.xdp.data_hard_start,
 				     mxbuf.xdp.data_end - mxbuf.xdp.data,
 				     mxbuf.xdp.data - mxbuf.xdp.data_meta);
@@ -2717,6 +2892,7 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_rq *rq, struct
 	return skb;
 }
 
+
 int mlx5e_cacheflow_th_napi_poll(struct napi_struct *napi, int budget)
 {
 	struct mlx5e_cacheflow_th *c = container_of(napi, struct mlx5e_cacheflow_th, napi);
@@ -2737,7 +2913,7 @@ int mlx5e_cacheflow_th_napi_poll(struct napi_struct *napi, int budget)
 			continue;
 		}
 
-		mlx5e_complete_rx_cqe(c->rq, &cqe.cqe, be32_to_cpu(cqe.cqe.byte_cnt), skb);
+		mlx5e_cacheflow_complete_rx_cqe(c->rq, &cqe.cqe, be32_to_cpu(cqe.cqe.byte_cnt), skb);
 
 		trace_mlx5e_cacheflow_th_skb(smp_processor_id(), skb);
 
@@ -2754,104 +2930,6 @@ int mlx5e_cacheflow_th_napi_poll(struct napi_struct *napi, int budget)
 
 	smp_store_release(&c->ipi_scheduled, 0);
 out:
-	return work_done;
-}
-
-static int mlx5e_cacheflow_get_cpu(u32 hash)
-{
-	const struct rps_sock_flow_table *sock_flow_table;
-	u32 ident;
-
-	sock_flow_table = rcu_dereference(net_hotdata.rps_sock_flow_table);
-	if (sock_flow_table) {
-		ident = READ_ONCE(sock_flow_table->ents[hash & sock_flow_table->mask]);
-		if ((ident ^ hash) & ~net_hotdata.rps_cpu_mask)
-			return 0;
-
-		return rps_core(ident & net_hotdata.rps_cpu_mask);
-	}
-
-	return 0;
-}
-
-static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
-{
-	struct mlx5e_cacheflow* cacheflow = container_of(rq, struct mlx5e_cacheflow, rq);
-	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
-	struct mlx5e_wqe_frag_info *wi;
-	u32 cqe_bcnt;
-	u16 ci;
-	int tcpu;
-	struct mlx5e_cacheflow_th *th;
-	struct mlx5e_cacheflow_cqe cacheflow_cqe;
-	int i;
-	int n;
-
-	ci       = mlx5_wq_cyc_ctr2ix(wq, be16_to_cpu(cqe->wqe_counter));
-	wi       = get_frag(rq, ci);
-	cqe_bcnt = be32_to_cpu(cqe->byte_cnt);
-
-	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
-		mlx5e_handle_rx_err_cqe(rq, cqe);
-		goto wq_cyc_pop;
-	}
-
-	memcpy(&cacheflow_cqe.cqe, cqe, sizeof(struct mlx5_cqe64));
-	for (i = 0; i < rq->wqe.info.num_frags; i++) {
-		cacheflow_cqe.page[i] = wi->frag_page->page;
-		mlx5e_frag_ref_inc(rq, wi->frag_page);
-		wi++;
-	}
-
-	tcpu = mlx5e_cacheflow_get_cpu(be32_to_cpu(cqe->rss_hash_result));
-	th = &cacheflow->th_array[tcpu];
-
-	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe.page, tcpu);
-
-	cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
-
-	n = kfifo_in(&th->cqe_fifo, &cacheflow_cqe, 1);
-
-	if (n != 1) {
-		pr_err("cacheflow: kfifo_in core %d returns %d, len=%d, size=%d\n", tcpu, n, kfifo_len(&th->cqe_fifo), kfifo_size(&th->cqe_fifo));
-	}
-
-wq_cyc_pop:
-	mlx5_wq_cyc_pop(wq);
-}
-
-int mlx5e_cacheflow_bh_poll_rx_cq(struct mlx5e_cacheflow *c, int budget)
-{
-	struct mlx5e_rq *rq = &c->rq;
-	struct mlx5e_cq *cq = &c->rq.cq;
-	struct mlx5_cqwq *cqwq = &cq->wq;
-	struct mlx5_cqe64 *cqe;
-	int cpu, work_done = 0;
-
-	if (unlikely(!test_bit(MLX5E_RQ_STATE_ENABLED, &rq->state)))
-		return 0;
-
-	while (work_done < budget && (cqe = mlx5_cqwq_get_cqe(cqwq))) {
-		mlx5_cqwq_pop(cqwq);
-		mlx5e_cacheflow_handle_rx_cqe(rq, cqe);
-		work_done++;
-	}
-
-	if (work_done == 0)
-		return 0;
-
-	mlx5_cqwq_update_db_record(cqwq);
-
-	/* ensure cq space is freed before enabling more cqes */
-	wmb();
-
-	for_each_cpu(cpu, &c->notify_cpu_set) {
-		if (!cmpxchg(&c->th_array[cpu].ipi_scheduled, 0, 1)) {
-			smp_call_function_single_async(cpu, &c->th_array[cpu].csd);
-			cpumask_clear_cpu(cpu, &c->notify_cpu_set);
-		}
-	}
-
 	return work_done;
 }
 #endif
