@@ -1,4 +1,4 @@
-#include <net/cacheflow.h>
+#include <net/cacheflow/cacheflow.h>
 #include <trace/events/cacheflow.h>
 
 #include "en/cacheflow.h"

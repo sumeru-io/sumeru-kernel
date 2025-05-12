@@ -45,7 +45,7 @@
 #include <net/xdp_sock_drv.h>
 
 #ifdef CONFIG_NET_CACHEFLOW
-#include <net/cacheflow.h>
+#include <net/cacheflow/cacheflow.h>
 #include "en/cacheflow.h"
 #endif
 

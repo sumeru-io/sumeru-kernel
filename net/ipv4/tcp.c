@@ -286,7 +286,7 @@
 #include <trace/events/skb.h>
 #include <net/rps.h>
 #if IS_ENABLED(CONFIG_NET_CACHEFLOW)
-#include <net/cacheflow.h>
+#include <net/cacheflow/cacheflow.h>
 #endif
 
 

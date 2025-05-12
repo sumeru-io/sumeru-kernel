@@ -16,7 +16,7 @@
 #include <net/xdp.h>
 
 #ifdef CONFIG_NET_CACHEFLOW
-#include <net/cacheflow.h>
+#include <net/cacheflow/cacheflow.h>
 #endif
 
 #include <linux/dma-direction.h>

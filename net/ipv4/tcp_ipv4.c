@@ -72,7 +72,7 @@
 #include <net/busy_poll.h>
 #include <net/rstreason.h>
 #ifdef CONFIG_NET_CACHEFLOW
-#include <net/cacheflow.h>
+#include <net/cacheflow/cacheflow.h>
 #endif
 
 #include <linux/inet.h>

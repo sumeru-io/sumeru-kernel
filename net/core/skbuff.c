@@ -79,7 +79,7 @@
 #include <net/mctp.h>
 #include <net/page_pool/helpers.h>
 #include <net/dropreason.h>
-#include <net/cacheflow.h>
+#include <net/cacheflow/cacheflow.h>
 
 #include <linux/uaccess.h>
 #include <trace/events/skb.h>

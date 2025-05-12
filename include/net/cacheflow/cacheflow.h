@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
-#ifndef __CACHEFLOW_H
-#define __CACHEFLOW_H
+#ifndef __CACHEFLOW_CACHEFLOW_H
+#define __CACHEFLOW_CACHEFLOW_H
 
 #include <linux/types.h>
 #include <linux/compiler.h>
@@ -45,4 +45,4 @@ static inline int get_cacheflow_steer_core(void) {
 	return READ_ONCE(cacheflow_steer_core);
 }
 
-#endif /* __CACHEFLOW_H */
+#endif /* __CACHEFLOW_CACHEFLOW_H */

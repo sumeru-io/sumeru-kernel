@@ -28,7 +28,7 @@
 #include <net/rps.h>
 
 #ifdef CONFIG_NET_CACHEFLOW
-#include <net/cacheflow.h>
+#include <net/cacheflow/cacheflow.h>
 #endif
 
 #include "dev.h"

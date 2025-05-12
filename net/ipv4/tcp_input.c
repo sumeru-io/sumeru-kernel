@@ -83,7 +83,7 @@
 #include <net/mptcp.h>
 
 #ifdef CONFIG_NET_CACHEFLOW
-#include <net/cacheflow.h>
+#include <net/cacheflow/cacheflow.h>
 #endif
 
 int sysctl_tcp_max_orphans __read_mostly = NR_FILE;
