@@ -2806,7 +2806,7 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64
 	tcpu = mlx5e_cacheflow_get_cpu(be32_to_cpu(cqe->rss_hash_result));
 	th = &cacheflow->th_array[tcpu];
 
-	// trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe.page, tcpu);
+	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe.page, tcpu);
 
 	cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
 
