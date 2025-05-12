@@ -1292,6 +1292,7 @@ void skb_release_head_state(struct sk_buff *skb);
 void kfree_skb_list_reason(struct sk_buff *segs,
 			   enum skb_drop_reason reason);
 void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt);
+void skb_mdump(const char *level, const struct sk_buff *skb);
 void skb_tx_error(struct sk_buff *skb);
 
 static inline void kfree_skb_list(struct sk_buff *segs)

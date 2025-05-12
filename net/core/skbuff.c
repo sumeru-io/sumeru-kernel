@@ -95,6 +95,10 @@
 #include "netmem_priv.h"
 #include "sock_destructor.h"
 
+#ifdef CONFIG_NET_CACHEFLOW
+#include <net/cacheflow/page_pool.h>
+#endif
+
 #ifdef CONFIG_SKB_EXTENSIONS
 static struct kmem_cache *skbuff_ext_cache __ro_after_init;
 #endif
@@ -563,10 +567,16 @@ static struct sk_buff *__napi_build_skb(void *data, unsigned int frag_size)
 struct sk_buff *napi_build_skb(void *data, unsigned int frag_size)
 {
 	struct sk_buff *skb = __napi_build_skb(data, frag_size);
+	struct page *page;
 
 	if (likely(skb) && frag_size) {
 		skb->head_frag = 1;
-		skb_propagate_pfmemalloc(virt_to_head_page(data), skb);
+		page = virt_to_page(data);
+		if (CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW)) {
+			pr_info("cacheflow: build skb, data=%px", data);
+			dump_page(page, "cacheflow");
+		}
+		skb_propagate_pfmemalloc(page, skb);
 	}
 
 	return skb;
@@ -933,6 +943,13 @@ static bool is_pp_netmem(netmem_ref netmem)
 	return (netmem_get_pp_magic(netmem) & ~0x3UL) == PP_SIGNATURE;
 }
 
+#ifdef CONFIG_NET_CACHEFLOW
+static bool is_cacheflow_pp_netmem(netmem_ref netmem)
+{
+	return (netmem_get_pp_magic(netmem) & ~0x3UL) == CACHEFLOW_PP_SIGNATURE;
+}
+#endif
+
 int skb_pp_cow_data(struct page_pool *pool, struct sk_buff **pskb,
 		    unsigned int headroom)
 {
@@ -1030,6 +1047,13 @@ bool napi_pp_put_page(netmem_ref netmem)
 {
 	netmem = netmem_compound_head(netmem);
 
+#ifdef CONFIG_NET_CACHEFLOW
+	if (is_cacheflow_pp_netmem(netmem)) {
+		cacheflow_page_pool_put_netmem(netmem_get_cacheflow_pp(netmem), netmem, -1, false);
+		return true;
+	}
+#endif
+
 	/* page->pp_magic is OR'ed with PP_SIGNATURE after the allocation
 	 * in order to preserve any existing bits, such as bit 0 for the
 	 * head page of compound page and bit 1 for pfmemalloc page, so
@@ -1077,6 +1101,12 @@ static int skb_pp_frag_ref(struct sk_buff *skb)
 
 	for (i = 0; i < shinfo->nr_frags; i++) {
 		head_netmem = netmem_compound_head(shinfo->frags[i].netmem);
+
+#ifdef CONFIG_NET_CACHEFLOW
+		if (is_cacheflow_pp_netmem(head_netmem))
+			BUG();
+#endif
+
 		if (likely(is_pp_netmem(head_netmem)))
 			page_pool_ref_netmem(head_netmem);
 		else
@@ -1310,7 +1340,7 @@ EXPORT_SYMBOL(kfree_skb_list_reason);
  *
  * Dumps whole packets if full_pkt, only headers otherwise.
  */
-void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
+void skb_mdump(const char *level, const struct sk_buff *skb)
 {
 	struct skb_shared_info *sh = skb_shinfo(skb);
 	struct net_device *dev = skb->dev;
@@ -1318,12 +1348,7 @@ void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 	struct sk_buff *list_skb;
 	bool has_mac, has_trans;
 	int headroom, tailroom;
-	int i, len, seg_len;
-
-	if (full_pkt)
-		len = skb->len;
-	else
-		len = min_t(int, skb->len, MAX_HEADER + 128);
+	int i;
 
 	headroom = skb_headroom(skb);
 	tailroom = skb_tailroom(skb);
@@ -1331,6 +1356,7 @@ void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 	has_mac = skb_mac_header_was_set(skb);
 	has_trans = skb_transport_header_was_set(skb);
 
+	printk("========================================\n");
 	printk("%sskb len=%u headroom=%u headlen=%u tailroom=%u\n"
 	       "mac=(%d,%d) mac_len=%u net=(%d,%d) trans=%d\n"
 	       "shinfo(txflags=%u nr_frags=%u gso(size=%hu type=%u segs=%hu))\n"
@@ -1361,6 +1387,91 @@ void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 	if (sk)
 		printk("%ssk family=%hu type=%u proto=%u\n",
 		       level, sk->sk_family, sk->sk_type, sk->sk_protocol);
+
+	pr_info("head=%px, headroom=%u, data=%px, headlen=%u, tailroom=%u\n", 
+		skb->head, skb_headroom(skb), skb->data, skb_headlen(skb), skb_tailroom(skb));
+
+	for (i = 0; i < sh->nr_frags; i++) {
+		printk("frag[%d], va=%px, len=%u, offset=%u\n", i,
+		(void *)sh->frags[i].netmem, skb_frag_size(&sh->frags[i]),
+		skb_frag_off(&sh->frags[i]));
+	}
+
+	if (skb_has_frag_list(skb)) {
+		printk("skb fraglist:\n");
+		skb_walk_frags(skb, list_skb)
+			skb_mdump(level, list_skb);
+	}
+
+	printk("========================================\n");
+}
+EXPORT_SYMBOL(skb_mdump);
+
+/* Dump skb information and contents.
+ *
+ * Must only be called from net_ratelimit()-ed paths.
+ *
+ * Dumps whole packets if full_pkt, only headers otherwise.
+ */
+void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
+{
+	struct skb_shared_info *sh = skb_shinfo(skb);
+	struct net_device *dev = skb->dev;
+	struct sock *sk = skb->sk;
+	struct sk_buff *list_skb;
+	bool has_mac, has_trans;
+	int headroom, tailroom;
+	int i, len, seg_len;
+
+	if (full_pkt)
+		len = skb->len;
+	else
+		len = min_t(int, skb->len, MAX_HEADER + 128);
+
+	headroom = skb_headroom(skb);
+	tailroom = skb_tailroom(skb);
+
+	has_mac = skb_mac_header_was_set(skb);
+	has_trans = skb_transport_header_was_set(skb);
+
+	printk("========================================\n");
+	printk("%sskb len=%u headroom=%u headlen=%u tailroom=%u\n"
+	       "mac=(%d,%d) mac_len=%u net=(%d,%d) trans=%d\n"
+	       "shinfo(txflags=%u nr_frags=%u gso(size=%hu type=%u segs=%hu))\n"
+	       "csum(0x%x start=%u offset=%u ip_summed=%u complete_sw=%u valid=%u level=%u)\n"
+	       "hash(0x%x sw=%u l4=%u) proto=0x%04x pkttype=%u iif=%d\n"
+	       "priority=0x%x mark=0x%x alloc_cpu=%u vlan_all=0x%x\n"
+	       "encapsulation=%d inner(proto=0x%04x, mac=%u, net=%u, trans=%u)\n",
+	       level, skb->len, headroom, skb_headlen(skb), tailroom,
+	       has_mac ? skb->mac_header : -1,
+	       has_mac ? skb_mac_header_len(skb) : -1,
+	       skb->mac_len,
+	       skb->network_header,
+	       has_trans ? skb_network_header_len(skb) : -1,
+	       has_trans ? skb->transport_header : -1,
+	       sh->tx_flags, sh->nr_frags,
+	       sh->gso_size, sh->gso_type, sh->gso_segs,
+	       skb->csum, skb->csum_start, skb->csum_offset, skb->ip_summed,
+	       skb->csum_complete_sw, skb->csum_valid, skb->csum_level,
+	       skb->hash, skb->sw_hash, skb->l4_hash,
+	       ntohs(skb->protocol), skb->pkt_type, skb->skb_iif,
+	       skb->priority, skb->mark, skb->alloc_cpu, skb->vlan_all,
+	       skb->encapsulation, skb->inner_protocol, skb->inner_mac_header,
+	       skb->inner_network_header, skb->inner_transport_header);
+
+	if (dev)
+		printk("%sdev name=%s feat=%pNF\n",
+		       level, dev->name, &dev->features);
+	if (sk)
+		printk("%ssk family=%hu type=%u proto=%u\n",
+		       level, sk->sk_family, sk->sk_type, sk->sk_protocol);
+
+	if (!full_pkt)
+		for (i = 0; i < sh->nr_frags; i++) {
+			printk("frag[%d], va=%px, len=%u, offset=%u\n", i,
+			(void *)sh->frags[i].netmem, skb_frag_size(&sh->frags[i]),
+			skb_frag_off(&sh->frags[i]));
+		}
 
 	if (full_pkt && headroom)
 		print_hex_dump(level, "skb headroom: ", DUMP_PREFIX_OFFSET,
@@ -1410,6 +1521,8 @@ void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 		skb_walk_frags(skb, list_skb)
 			skb_dump(level, list_skb, true);
 	}
+
+	printk("========================================\n");
 }
 EXPORT_SYMBOL(skb_dump);
 

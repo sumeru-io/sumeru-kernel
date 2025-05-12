@@ -264,6 +264,31 @@ TRACE_EVENT(cacheflow_page_pool_state_hold,
 		  __entry->netmem & NET_IOV, __entry->pfn, __entry->hold)
 );
 
+TRACE_EVENT(cacheflow_page_pool_state_release,
+
+	TP_PROTO(const struct cacheflow_page_pool *pool,
+		 netmem_ref netmem, u32 release),
+
+	TP_ARGS(pool, netmem, release),
+
+	TP_STRUCT__entry(
+		__field(const struct cacheflow_page_pool *,	pool)
+		__field(unsigned long,				netmem)
+		__field(u32,					release)
+		__field(unsigned long,				pfn)
+	),
+
+	TP_fast_assign(
+		__entry->pool		= pool;
+		__entry->netmem		= (__force unsigned long)netmem;
+		__entry->release	= release;
+		__entry->pfn		= netmem_pfn_trace(netmem);
+	),
+
+	TP_printk("page_pool=%p netmem=%p is_net_iov=%lu pfn=0x%lx release=%u",
+		  __entry->pool, (void *)__entry->netmem,
+		  __entry->netmem & NET_IOV, __entry->pfn, __entry->release)
+);
 
 #endif /* _TRACE_PAGE_POOL_H */
 

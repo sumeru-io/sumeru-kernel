@@ -4708,10 +4708,10 @@ set_rps_cpu(struct net_device *dev, struct sk_buff *skb,
 		if (old_rflow->filter == rc)
 			WRITE_ONCE(old_rflow->filter, RPS_NO_FILTER);
 
-		trace_sk_rps_flow_update(flow_id, rc, rxq_index);
+		trace_sk_rps_flow_update(flow_id, rc, rxq_index, next_cpu);
 out:
 #endif
-		head = READ_ONCE(per_cpu(softnet_data, next_cpu).input_queue_head);
+		head = READ_ONCE(per_cpu(softnet_data, rps_core(next_cpu)).input_queue_head);
 		rps_input_queue_tail_save(&rflow->last_qtail, head);
 	}
 
@@ -5913,6 +5913,7 @@ static void __netif_receive_skb_list(struct list_head *head)
 	unsigned long noreclaim_flag = 0;
 	struct sk_buff *skb, *next;
 	bool pfmemalloc = false; /* Is current sublist PF_MEMALLOC? */
+
 
 	list_for_each_entry_safe(skb, next, head, list) {
 		if ((sk_memalloc_socks() && skb_pfmemalloc(skb)) != pfmemalloc) {

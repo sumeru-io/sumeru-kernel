@@ -106,46 +106,73 @@ static void cacheflow_page_pool_return_page(struct cacheflow_page_pool *pool, ne
 
 static inline void cacheflow_page_pool_put_empty_mini_array(struct cacheflow_page_pool *pool, struct netmem_mini_array* mini_array) {
 	int i;
-	if (!kasan_mempool_poison_object(mini_array))
-		return;
 
-	if (pool->alloc.empty_mini_array_count == PP_ALLOC_CACHE_BULK_FREE_CACHE_SIZE) {
-		pool->alloc.empty_mini_array_count -= PP_ALLOC_CACHE_BULK_SIZE;
-		for (i = 0; i < PP_ALLOC_CACHE_BULK_SIZE; i++) {
+#if IS_ENABLED(CONFIG_NET_CACHEFLOW_DEBUG)
+	if (unlikely(mini_array->count))
+		BUG();
+#endif
+
+	if (!kasan_mempool_poison_object(mini_array)) {
+		pr_warn_once("cacheflow: put_empty_mini_array: failed to poison\n");
+		kmem_cache_free(netmem_mini_array_cache, mini_array);
+		return;
+	}
+
+	if (pool->alloc.empty_mini_array_count == CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_SIZE) {
+		pool->alloc.empty_mini_array_count -= CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+		for (i = 0; i < CF_PP_FULL_MINI_ARRAY_CACHE_SIZE; i++) {
 			kasan_mempool_unpoison_object(pool->alloc.empty_mini_array_cache[pool->alloc.empty_mini_array_count + i], kmem_cache_size(netmem_mini_array_cache));
 		}
-		kmem_cache_free_bulk(netmem_mini_array_cache, PP_ALLOC_CACHE_BULK_SIZE, 
+		kmem_cache_free_bulk(netmem_mini_array_cache, CF_PP_FULL_MINI_ARRAY_CACHE_SIZE, 
 					(void **) (pool->alloc.empty_mini_array_cache + pool->alloc.empty_mini_array_count));
 	}
 	pool->alloc.empty_mini_array_cache[pool->alloc.empty_mini_array_count++] = mini_array;
 }
 
-static inline struct netmem_mini_array* cacheflow_page_pool_get_mini_array(struct cacheflow_page_pool *pool) {
-	int n;
+static inline struct netmem_mini_array* cacheflow_page_pool_get_empty_mini_array(struct cacheflow_page_pool *pool) {
+	int i, n;
 	struct netmem_mini_array* mini_array;
 
 	if (pool->alloc.empty_mini_array_count == 0) {
-		n = kmem_cache_alloc_bulk(netmem_mini_array_cache, GFP_ATOMIC|GFP_NOWAIT, PP_ALLOC_CACHE_BULK_SIZE, 
+		n = kmem_cache_alloc_bulk(netmem_mini_array_cache, GFP_ATOMIC|GFP_NOWAIT, CF_PP_FULL_MINI_ARRAY_CACHE_SIZE, 
 					(void **) (pool->alloc.empty_mini_array_cache + pool->alloc.empty_mini_array_count));
+		for (i = 0; i < n; i++) {
+			mini_array = pool->alloc.empty_mini_array_cache[pool->alloc.empty_mini_array_count + i];
+			memset(mini_array, 0, sizeof(struct netmem_mini_array));
+			kasan_mempool_poison_object(mini_array);
+		}
 		pool->alloc.empty_mini_array_count += n;
 	}
 	if (likely(pool->alloc.empty_mini_array_count > 0)) {
-		mini_array = pool->alloc.empty_mini_array_cache[--pool->alloc.empty_mini_array_count];
+		mini_array = pool->alloc.empty_mini_array_cache[pool->alloc.empty_mini_array_count - 1];
+		pool->alloc.empty_mini_array_cache[pool->alloc.empty_mini_array_count] = NULL;
+		pool->alloc.empty_mini_array_count--;
 		kasan_mempool_unpoison_object(mini_array, kmem_cache_size(netmem_mini_array_cache));
+
+#if IS_ENABLED(CONFIG_NET_CACHEFLOW_DEBUG)
+		if (unlikely(mini_array->count))
+			BUG();
+#endif
+
 		return mini_array;
 	}
 	return NULL;
 }
 
-static inline bool cacheflow_page_pool_pop_mini_array(struct cacheflow_page_pool *pool) {
+static inline bool cacheflow_page_pool_pop_full_mini_array(struct cacheflow_page_pool *pool) {
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
-	if (unlikely(pool->alloc.array || pool->alloc.array->count)) { 
+	if (unlikely(pool->alloc.mini_array)) { 
 		BUG();
 	}
 #endif
 
 	if (likely(pool->alloc.full_mini_array_count)) {
-		pool->alloc.array = pool->alloc.full_mini_array_cache[--pool->alloc.full_mini_array_count];
+		pool->alloc.mini_array = pool->alloc.full_mini_array_cache[--pool->alloc.full_mini_array_count];
+#ifdef CONFIG_NET_CACHEFLOW_DEBUG
+		if (unlikely(pool->alloc.mini_array->count != CF_PP_MINI_ARRAY_SIZE)) {
+			BUG();
+		}
+#endif
 		return true;
 	}
 
@@ -154,58 +181,57 @@ static inline bool cacheflow_page_pool_pop_mini_array(struct cacheflow_page_pool
 
 static void cacheflow_page_pool_recycle_mini_array(struct cacheflow_page_pool *pool) {
 	int i, j, ret;
+	int free_n = pool->alloc.full_mini_array_count / 2;
+	struct netmem_mini_array *mini_array;
 
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
-	if (unlikely(pool->alloc.full_mini_array_count != PP_ALLOC_CACHE_BULK_SIZE || pool->alloc.array->count != PP_ALLOC_CACHE_BULK)) {
+	if (unlikely(pool->alloc.full_mini_array_count != CF_PP_FULL_MINI_ARRAY_CACHE_SIZE || pool->alloc.mini_array->count != CF_PP_MINI_ARRAY_SIZE)) {
 		BUG();
 	}
 #endif
 
-	for (i = 0; i < pool->alloc.full_mini_array_count / 2; i++) {
-		ret = __ptr_stack_push(&pool->stack, (__force void *)pool->alloc.full_mini_array_cache[i]);
+	for (i = 0; i < free_n; i++) {
+		mini_array = pool->alloc.full_mini_array_cache[i];
+		ret = __ptr_stack_push(&pool->stack, (__force void *)mini_array);
 
 		if (likely(!ret)) {
-			cacheflow_page_pool_account_usages(pool, pool->alloc.full_mini_array_cache[i]->array, pool->alloc.full_mini_array_cache[i]->count, PAGE_POOL_ARRAY, PAGE_POOL_RING);
+			cacheflow_page_pool_account_usages(pool, mini_array->array, mini_array->count, PAGE_POOL_ARRAY, PAGE_POOL_RING);
 		} else {
-			cacheflow_page_pool_account_usages(pool, pool->alloc.full_mini_array_cache[i]->array, pool->alloc.full_mini_array_cache[i]->count, PAGE_POOL_ARRAY, PAGE_POOL_UNALLOC);
+			cacheflow_page_pool_account_usages(pool, mini_array->array, mini_array->count, PAGE_POOL_ARRAY, PAGE_POOL_UNALLOC);
 
-			for (j = 0; j < pool->alloc.full_mini_array_cache[i]->count; j++) {
-				cacheflow_page_pool_return_page(pool, pool->alloc.full_mini_array_cache[i]->array[j]);
+			for (j = 0; j < mini_array->count; j++) {
+				cacheflow_page_pool_return_page(pool, mini_array->array[j]);
+				mini_array->array[j] = 0;
 			}
-			pool->alloc.full_mini_array_cache[i]->count = 0;
+			mini_array->count = 0;
 
-			cacheflow_page_pool_put_empty_mini_array(pool, pool->alloc.full_mini_array_cache[i]);
+			cacheflow_page_pool_put_empty_mini_array(pool, mini_array);
 		}
 
 		pool->alloc.full_mini_array_cache[i] = NULL;
 	}
 
-	for (i = pool->alloc.full_mini_array_count / 2; i < pool->alloc.full_mini_array_count; i++) {
-		pool->alloc.full_mini_array_cache[i - pool->alloc.full_mini_array_count / 2] = pool->alloc.full_mini_array_cache[i];
+	for (i = free_n; i < pool->alloc.full_mini_array_count; i++) {
+		pool->alloc.full_mini_array_cache[i - free_n] = pool->alloc.full_mini_array_cache[i];
 	}
-	pool->alloc.full_mini_array_count = pool->alloc.full_mini_array_count - pool->alloc.full_mini_array_count / 2;
+	pool->alloc.full_mini_array_count = pool->alloc.full_mini_array_count - free_n;
 }
 
 
-static inline bool cacheflow_page_pool_push_mini_array(struct cacheflow_page_pool *pool) {
+static inline bool cacheflow_page_pool_push_full_mini_array(struct cacheflow_page_pool *pool) {
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
-	if (unlikely(!pool->alloc.array || (pool->alloc.array->count != PP_ALLOC_CACHE_BULK))) { 
+	if (unlikely(!pool->alloc.mini_array || (pool->alloc.mini_array->count != CF_PP_MINI_ARRAY_SIZE))) { 
 		BUG();
 	}
 #endif
 
-	if (unlikely(pool->alloc.full_mini_array_count >= PP_ALLOC_CACHE_BULK)) {
+	if (unlikely(pool->alloc.full_mini_array_count >= CF_PP_FULL_MINI_ARRAY_CACHE_SIZE)) {
 		cacheflow_page_pool_recycle_mini_array(pool);
 	}
 
-	pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count++] = pool->alloc.array;
-	pool->alloc.array = cacheflow_page_pool_get_mini_array(pool);
+	pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count++] = pool->alloc.mini_array;
+	pool->alloc.mini_array = cacheflow_page_pool_get_empty_mini_array(pool);
 
-#ifdef CONFIG_NET_CACHEFLOW_DEBUG
-	if (unlikely(!pool->alloc.array || pool->alloc.array->count)) {
-		BUG();
-	}
-#endif
 	return true;
 }
 
@@ -342,19 +368,23 @@ static noinline netmem_ref cacheflow_page_pool_refill_alloc_cache(struct cachefl
 
 		if (unlikely(!mini_array))
 			break;
-		
+
+#ifdef CONFIG_NET_CACHEFLOW_DEBUG
+		if (unlikely(mini_array->count != CF_PP_MINI_ARRAY_SIZE))
+			BUG();
+#endif
+
 		cacheflow_page_pool_account_usages(pool, mini_array->array, mini_array->count, PAGE_POOL_RING, PAGE_POOL_ARRAY);
 
 		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count++] = mini_array;
 
-	} while (pool->alloc.full_mini_array_count < PP_ALLOC_CACHE_BULK_REFILL);
+	} while (pool->alloc.full_mini_array_count < CF_PP_MINI_ARRAY_REFILL_BATCH_SIZE);
 
-	cacheflow_page_pool_pop_mini_array(pool);
-
+	cacheflow_page_pool_pop_full_mini_array(pool);
 
 	/* Return last page */
-	if (likely(pool->alloc.array->count > 0)) {
-		netmem = pool->alloc.array->array[--pool->alloc.array->count];
+	if (likely(pool->alloc.mini_array && pool->alloc.mini_array->count > 0)) {
+		netmem = pool->alloc.mini_array->array[--pool->alloc.mini_array->count];
 
 		cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_ARRAY, PAGE_POOL_ALLOC);
 	}
@@ -368,21 +398,21 @@ static netmem_ref __cacheflow_page_pool_get_cached(struct cacheflow_page_pool *p
 
 recheck:
 	/* Caller MUST guarantee safe non-concurrent access, e.g. softirq */
-	if (likely(pool->alloc.array->count)) {
+	if (likely(pool->alloc.mini_array && pool->alloc.mini_array->count)) {
 		/* Fast-path */
-		netmem = pool->alloc.array->array[--pool->alloc.array->count];
+		netmem = pool->alloc.mini_array->array[--pool->alloc.mini_array->count];
 		cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_ARRAY, PAGE_POOL_ALLOC);
 
 		return netmem;
 	}
 
-	if (likely(pool->alloc.array)) {
-		cacheflow_page_pool_put_empty_mini_array(pool, pool->alloc.array);
-		pool->alloc.array = NULL;
+	if (likely(pool->alloc.mini_array)) {
+		cacheflow_page_pool_put_empty_mini_array(pool, pool->alloc.mini_array);
+		pool->alloc.mini_array = NULL;
 	}
 
 	if (likely(pool->alloc.full_mini_array_count)) {
-		cacheflow_page_pool_pop_mini_array(pool);
+		cacheflow_page_pool_pop_full_mini_array(pool);
 		goto recheck;
 	} else {
 		netmem = cacheflow_page_pool_refill_alloc_cache(pool);
@@ -452,6 +482,7 @@ static struct page *__cacheflow_page_pool_alloc_page_order(struct cacheflow_page
 		return NULL;
 
 	if (unlikely(!cacheflow_page_pool_dma_map(pool, page_to_netmem(page)))) {
+		pr_warn("cacheflow: failed to dma map page %px\n", lowmem_page_address(page));
 		put_page(page);
 		return NULL;
 	}
@@ -468,9 +499,8 @@ static struct page *__cacheflow_page_pool_alloc_page_order(struct cacheflow_page
 /* slow path */
 static noinline netmem_ref __cacheflow_page_pool_alloc_pages_slow(struct cacheflow_page_pool *pool, gfp_t gfp)
 {
-	const int bulk = PP_ALLOC_CACHE_REFILL;
 	unsigned int pp_order = pool->p.order;
-	netmem_ref netmem;
+	netmem_ref netmem = 0;
 	int i, nr_pages;
 
 	/* Don't support bulk alloc for high-order pages */
@@ -481,30 +511,29 @@ static noinline netmem_ref __cacheflow_page_pool_alloc_pages_slow(struct cachefl
 	}
 
 	/* Unnecessary as alloc cache is empty, but guarantees zero count */
-	if (unlikely(pool->alloc.array->count > 0)) {
-		netmem = pool->alloc.array->array[--pool->alloc.array->count];
+	if (unlikely(pool->alloc.mini_array && pool->alloc.mini_array->count > 0)) {
+		netmem = pool->alloc.mini_array->array[--pool->alloc.mini_array->count];
 
 		cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_ARRAY, PAGE_POOL_ALLOC);
 		return netmem;
 	}
 
 	int j;
-	for (i = 0; i < bulk / PP_ALLOC_CACHE_BULK; i++) {
-		pool->alloc.array = cacheflow_page_pool_get_mini_array(pool);
-		if (unlikely(!pool->alloc.array))
+	for (i = 0; i < CF_PP_MINI_ARRAY_REFILL_BATCH_SIZE; i++) {
+		pool->alloc.mini_array = cacheflow_page_pool_get_empty_mini_array(pool);
+		if (unlikely(!pool->alloc.mini_array))
 			goto out;
 
-		pool->alloc.array->count = 0;
-
-		memset(pool->alloc.array, 0, sizeof(void *) * PP_ALLOC_CACHE_BULK);
+		memset(pool->alloc.mini_array->array, 0, sizeof(void *) * CF_PP_MINI_ARRAY_SIZE);
 
 		nr_pages = alloc_pages_bulk_array_node(gfp,
-						pool->p.nid, PP_ALLOC_CACHE_BULK,
-						(struct page **)pool->alloc.array);
+						pool->p.nid, CF_PP_MINI_ARRAY_SIZE,
+						(struct page **)pool->alloc.mini_array->array);
 
 		if (unlikely(!nr_pages)) {
-			cacheflow_page_pool_put_empty_mini_array(pool, pool->alloc.array);
-			pool->alloc.array = 0;
+			pr_err("cacheflow: alloc_pages_bulk_array_node() fail \n");
+			cacheflow_page_pool_put_empty_mini_array(pool, pool->alloc.mini_array);
+			pool->alloc.mini_array = NULL;
 			goto out;
 		}
 
@@ -512,14 +541,17 @@ static noinline netmem_ref __cacheflow_page_pool_alloc_pages_slow(struct cachefl
 		* page element have not been (possibly) DMA mapped.
 		*/
 		for (j = 0; j < nr_pages; j++) {
-			netmem = pool->alloc.array->array[j];
+			netmem = pool->alloc.mini_array->array[j];
+
 			if (unlikely(!cacheflow_page_pool_dma_map(pool, netmem))) {
+				pr_warn("cacheflow: failed to dma map page %px\n", lowmem_page_address(netmem_to_page(netmem)));
 				put_page(netmem_to_page(netmem));
+				pool->alloc.mini_array->array[j] = 0;
 				continue;
 			}
 
 			cacheflow_page_pool_set_pp_info(pool, netmem);
-			pool->alloc.array->array[pool->alloc.array->count++] = netmem;
+			pool->alloc.mini_array->array[pool->alloc.mini_array->count++] = netmem;
 
 			/* Track how many pages are held 'in-flight' */
 			pool->pages_state_hold_cnt++;
@@ -528,33 +560,23 @@ static noinline netmem_ref __cacheflow_page_pool_alloc_pages_slow(struct cachefl
 			cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_UNALLOC, PAGE_POOL_ARRAY);
 		}
 
-		if (likely(pool->alloc.array->count == PP_ALLOC_CACHE_BULK)) {
-			pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count++] = pool->alloc.array;
-			pool->alloc.array = 0;
-			pool->alloc.array->count = 0;
-		} else if (unlikely(pool->alloc.array->count == 0)) {
-			cacheflow_page_pool_put_empty_mini_array(pool, pool->alloc.array);
-			pool->alloc.array = 0;
+		if (likely(pool->alloc.mini_array->count == CF_PP_MINI_ARRAY_SIZE)) {
+			pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count++] = pool->alloc.mini_array;
+			pool->alloc.mini_array = NULL;
+		} else if (unlikely(pool->alloc.mini_array->count == 0)) {
+			cacheflow_page_pool_put_empty_mini_array(pool, pool->alloc.mini_array);
+			pool->alloc.mini_array = NULL;
 			break;
 		} else {
 			break;
 		}
 	}
 out:
-	if (pool->alloc.full_mini_array_count == 0) {
-		cacheflow_page_pool_pop_mini_array(pool);
-	}
-
-	/* Return last page */
-	if (likely(pool->alloc.array->count > 0)) {
-		netmem = pool->alloc.array->array[--pool->alloc.array->count];
-
+	if (likely((pool->alloc.mini_array == NULL) && cacheflow_page_pool_pop_full_mini_array(pool))) {
+		netmem = pool->alloc.mini_array->array[--pool->alloc.mini_array->count];
 		cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_ARRAY, PAGE_POOL_ALLOC);
-	} else {
-		netmem = 0;
 	}
 
-	/* When page just alloc'ed is should/must have refcnt 1. */
 	return netmem;
 }
 
@@ -609,7 +631,7 @@ static s32 cacheflow_page_pool_inflight(const struct cacheflow_page_pool *pool, 
 void cacheflow_page_pool_set_pp_info(struct cacheflow_page_pool *pool, netmem_ref netmem)
 {
 	netmem_set_pp(netmem, pool);
-	netmem_or_pp_magic(netmem, PP_SIGNATURE);
+	netmem_or_pp_magic(netmem, CACHEFLOW_PP_SIGNATURE);
 }
 
 static void cacheflow_page_pool_clear_pp_info(netmem_ref netmem)
@@ -647,9 +669,10 @@ static void cacheflow_page_pool_return_page(struct cacheflow_page_pool *pool, ne
 	 * it is not safe to reference pool afterwards.
 	 */
 	count = atomic_inc_return_relaxed(&pool->pages_state_release_cnt);
-	// trace_page_pool_state_release(pool, netmem, count);
+	trace_cacheflow_page_pool_state_release(pool, netmem, count);
 
 	cacheflow_page_pool_clear_pp_info(netmem);
+
 	put_page(netmem_to_page(netmem));
 	/* An optimization would be to call __free_pages(page, pool->p.order)
 	 * knowing page is not part of page-cache (thus avoiding a
@@ -665,12 +688,17 @@ static void cacheflow_page_pool_return_page(struct cacheflow_page_pool *pool, ne
 static bool cacheflow_page_pool_recycle_in_cache(netmem_ref netmem,
 				       		struct cacheflow_page_pool *pool)
 {
-	if (pool->alloc.array->count == PP_ALLOC_CACHE_BULK) {
-		cacheflow_page_pool_push_mini_array(pool);
+#ifdef CONFIG_NET_CACHEFLOW_DEBUG
+	if (unlikely(pool->alloc.mini_array->count > CF_PP_MINI_ARRAY_SIZE || pool->alloc.mini_array->count < 0)) {
+		BUG();
+	}
+#endif
+	if (pool->alloc.mini_array->count == CF_PP_MINI_ARRAY_SIZE) {
+		cacheflow_page_pool_push_full_mini_array(pool);
 	}
 
 	/* Caller MUST have verified/know (page_ref_count(page) == 1) */
-	pool->alloc.array->array[pool->alloc.array->count++] = netmem;
+	pool->alloc.mini_array->array[pool->alloc.mini_array->count++] = netmem;
 
 	cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_ALLOC, PAGE_POOL_ARRAY);
 	return true;
@@ -803,17 +831,26 @@ static void cacheflow_page_pool_empty_ring(struct cacheflow_page_pool *pool)
 				pr_crit("%s() page_pool refcnt %d violation\n",
 					__func__, netmem_ref_count(mini_array->array[i]));
 			cacheflow_page_pool_return_page(pool, (__force netmem_ref)mini_array->array[i]);
+			mini_array->array[i] = 0;
 		}
+		mini_array->count = 0;
 		cacheflow_page_pool_put_empty_mini_array(pool, mini_array);
 	}
+
+	for (i = 0; i < pool->alloc.empty_mini_array_count; i++) {
+		mini_array = pool->alloc.empty_mini_array_cache[i];
+		kasan_mempool_unpoison_object(mini_array, kmem_cache_size(netmem_mini_array_cache));
+	}
+	kmem_cache_free_bulk(netmem_mini_array_cache, pool->alloc.empty_mini_array_count, (void **)pool->alloc.empty_mini_array_cache);
+	pool->alloc.empty_mini_array_count = 0;
 }
 
 static void __cacheflow_page_pool_destroy(struct cacheflow_page_pool *pool)
 {
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
-	if (pool->allocated_pages || pool->array_pages || pool->ring_pages) {
-		pr_err("page_pool: accounting error, allocated_pages=%u, array_pages=%u, ring_pages=%u\n",
-			pool->allocated_pages, pool->array_pages, pool->ring_pages);
+	if (pool->allocated_pages || pool->array_pages || pool->ring_pages || pool->alloc.full_mini_array_count || pool->alloc.empty_mini_array_count || pool->alloc.mini_array) {
+		pr_err("page_pool: accounting error, allocated_pages=%u, array_pages=%u, ring_pages=%u, full_mini_array_count=%u, empty_mini_array_count=%u, mini_array=%px\n",
+			pool->allocated_pages, pool->array_pages, pool->ring_pages, pool->alloc.full_mini_array_count, pool->alloc.empty_mini_array_count, pool->alloc.mini_array);
 		BUG();
 	}
 #endif
@@ -835,6 +872,7 @@ static void cacheflow_page_pool_empty_mini_array(struct cacheflow_page_pool *poo
 	cacheflow_page_pool_account_usages(pool, mini_array->array, mini_array->count, PAGE_POOL_ARRAY, PAGE_POOL_UNALLOC);
 	for (i = 0; i < mini_array->count; i++) {
 		cacheflow_page_pool_return_page(pool, (__force netmem_ref)mini_array->array[i]);
+		mini_array->array[i] = 0;
 	}
 	mini_array->count = 0;
 	cacheflow_page_pool_put_empty_mini_array(pool, mini_array);
@@ -850,9 +888,9 @@ static void cacheflow_page_pool_empty_alloc_cache_once(struct cacheflow_page_poo
 	 * call concurrently.
 	 */
 	do {
-		cacheflow_page_pool_empty_mini_array(pool, pool->alloc.array);
-		pool->alloc.array = NULL;
-	} while (cacheflow_page_pool_pop_mini_array(pool));
+		cacheflow_page_pool_empty_mini_array(pool, pool->alloc.mini_array);
+		pool->alloc.mini_array = NULL;
+	} while (cacheflow_page_pool_pop_full_mini_array(pool));
 
 }
 

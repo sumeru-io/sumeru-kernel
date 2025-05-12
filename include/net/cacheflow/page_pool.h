@@ -31,9 +31,9 @@
 /* Size array to fit within two cachelines minus the count field */
 #define CF_PP_MINI_ARRAY_METADATA_SIZE				8
 #define CF_PP_MINI_ARRAY_SIZE 					(((2 * L1_CACHE_BYTES) - CF_PP_MINI_ARRAY_METADATA_SIZE) / sizeof(netmem_ref))
-#define CF_PP_FULL_MINI_ARRAY_CACHE_COUNT			16
-#define CF_PP_MINI_ARRAY_REFILL					(CF_PP_FULL_MINI_ARRAY_CACHE_COUNT / 2)
-#define CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_COUNT			(CF_PP_FULL_MINI_ARRAY_CACHE_COUNT * 2)
+#define CF_PP_FULL_MINI_ARRAY_CACHE_SIZE			16
+#define CF_PP_MINI_ARRAY_REFILL_BATCH_SIZE			(CF_PP_FULL_MINI_ARRAY_CACHE_SIZE / 2)
+#define CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_SIZE			(CF_PP_FULL_MINI_ARRAY_CACHE_SIZE * 2)
 
 struct netmem_mini_array {
 	netmem_ref array[CF_PP_MINI_ARRAY_SIZE];
@@ -42,12 +42,12 @@ struct netmem_mini_array {
 } ____cacheline_aligned_in_smp;
 
 struct cacheflow_pp_alloc_cache {
-	struct netmem_mini_array* array;
+	struct netmem_mini_array* mini_array;
 
-	struct netmem_mini_array* full_mini_array_cache[CF_PP_FULL_MINI_ARRAY_CACHE_COUNT];
+	struct netmem_mini_array* full_mini_array_cache[CF_PP_FULL_MINI_ARRAY_CACHE_SIZE];
 	u32 full_mini_array_count;
 
-	struct netmem_mini_array* empty_mini_array_cache[CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_COUNT];
+	struct netmem_mini_array* empty_mini_array_cache[CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_SIZE];
 	u32 empty_mini_array_count;
 };
 

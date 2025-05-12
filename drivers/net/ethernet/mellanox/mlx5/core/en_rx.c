@@ -2824,7 +2824,6 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 	u32 frag_consumed_bytes;
 	dma_addr_t addr;
 	int page_index = 0;
-	struct page **frag_page = cqe->page;
 	u32 cqe_bcnt;
 	u16 ci;
 	struct sk_buff *skb;
@@ -2836,10 +2835,10 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 	head_wi  = wi;
 	cqe_bcnt = be32_to_cpu(cqe->cqe.byte_cnt);
 
-	va = page_address(*frag_page);
+	va = page_address(cqe->page[0]);
 	frag_consumed_bytes = min_t(u32, frag_info->frag_size, cqe_bcnt);
 
-	addr = page_pool_get_dma_addr(*frag_page);
+	addr = page_pool_get_dma_addr(cqe->page[0]);
 	dma_sync_single_range_for_cpu(rq->pdev, addr, 0, rq->buff.frame0_sz, rq->buff.map_dir);
 	net_prefetchw(va); /* xdp_frame data area */
 	net_prefetch(va + rx_headroom);
@@ -2865,7 +2864,6 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 		wi++;
 		page_index++;
 	}
-
 
 	skb = mlx5e_cacheflow_build_linear_skb(rq, mxbuf.xdp.data_hard_start, rq->buff.frame0_sz,
 				     mxbuf.xdp.data - mxbuf.xdp.data_hard_start,

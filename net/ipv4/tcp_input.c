@@ -4929,6 +4929,11 @@ static bool tcp_try_coalesce(struct sock *sk,
 	if (TCP_SKB_CB(from)->seq != TCP_SKB_CB(to)->end_seq)
 		return false;
 
+#ifdef CONFIG_NET_CACHEFLOW
+	if (from->cacheflow != to->cacheflow)
+		return false;
+#endif
+
 	if (!tcp_skb_can_collapse_rx(to, from))
 		return false;
 

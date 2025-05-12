@@ -135,6 +135,13 @@ static inline struct page_pool *netmem_get_pp(netmem_ref netmem)
 	return __netmem_clear_lsb(netmem)->pp;
 }
 
+#ifdef CONFIG_NET_CACHEFLOW
+static inline struct cacheflow_page_pool *netmem_get_cacheflow_pp(netmem_ref netmem)
+{
+	return __netmem_clear_lsb(netmem)->cacheflow_pp;
+}
+#endif
+
 static inline atomic_long_t *netmem_get_pp_ref_count_ref(netmem_ref netmem)
 {
 	return &__netmem_clear_lsb(netmem)->pp_ref_count;

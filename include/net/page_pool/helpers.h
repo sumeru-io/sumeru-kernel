@@ -274,7 +274,9 @@ static inline long page_pool_unref_netmem(netmem_ref netmem, long nr)
 	}
 
 	ret = atomic_long_sub_return(nr, pp_ref_count);
-	WARN_ON(ret < 0);
+	if(ret < 0) {
+		BUG();
+	}
 
 	/* We are the last user here too, reset pp_ref_count back to 1 to
 	 * ensure all pages have been partitioned into 1 piece initially,

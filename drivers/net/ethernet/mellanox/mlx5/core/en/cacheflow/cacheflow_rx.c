@@ -35,7 +35,7 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 	u16 ci;
 	int tcpu;
 	struct mlx5e_cacheflow_th *th;
-	struct mlx5e_cacheflow_cqe cacheflow_cqe;
+	struct mlx5e_cacheflow_cqe cacheflow_cqe = {};
 	int i;
 	int n;
 
