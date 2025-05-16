@@ -30,7 +30,7 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 {
 	struct mlx5e_cacheflow* cacheflow = container_of(rq, struct mlx5e_cacheflow, rq);
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
-	struct mlx5e_cacheflow_wqe_frag_info *wi;
+	struct page **wi;
 	u32 cqe_bcnt;
 	u16 ci;
 	int tcpu;
@@ -50,8 +50,8 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 
 	memcpy(&cacheflow_cqe.cqe, cqe, sizeof(struct mlx5_cqe64));
 	for (i = 0; i < rq->wqe.info.num_frags; i++) {
-		cacheflow_cqe.page[i] = wi->page;
-		wi->page = NULL;
+		cacheflow_cqe.page[i] = *wi;
+		*wi = NULL;
 		wi++;
 	}
 

@@ -2818,7 +2818,7 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 	struct mlx5e_rq_frag_info *frag_info = &rq->wqe.info.arr[0];
 	u16 rx_headroom = rq->buff.headroom;
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
-	struct mlx5e_cacheflow_wqe_frag_info *wi, *head_wi;
+	struct page **wi, **head_wi;
 	struct skb_shared_info *sinfo;
 	struct mlx5e_cacheflow_xdp_buff mxbuf;
 	u32 frag_consumed_bytes;

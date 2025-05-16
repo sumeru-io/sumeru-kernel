@@ -18,7 +18,7 @@ struct mlx5e_cacheflow_params {
 	struct mlx5e_rq_param rq_param;
 };
 
-static inline struct mlx5e_cacheflow_wqe_frag_info *get_frag(struct mlx5e_cacheflow_rq *rq, u16 ix)
+static inline struct page **get_frag(struct mlx5e_cacheflow_rq *rq, u16 ix)
 {
 	return &rq->wqe.frags[ix << rq->wqe.info.log_num_frags];
 }
@@ -55,17 +55,15 @@ static void mlx5e_cacheflow_build_params(struct mlx5e_cacheflow *c,
 	return mlx5e_cacheflow_build_rq_param(c->mdev, c->netdev, cparams);
 }
 
-static inline void mlx5e_cacheflow_put_rx_frag(struct mlx5e_cacheflow_rq *rq,
-				     struct mlx5e_cacheflow_wqe_frag_info *frag)
+static inline void mlx5e_cacheflow_put_rx_frag(struct mlx5e_cacheflow_rq *rq, struct page **frag)
 {
-	if (frag->page) {
-		cacheflow_page_pool_put_page(rq->page_pool, frag->page, -1, true);
-		frag->page = NULL;
+	if (*frag) {
+		cacheflow_page_pool_put_page(rq->page_pool, *frag, -1, true);
+		*frag = NULL;
 	}
 }
 
-static inline void mlx5e_cacheflow_free_rx_wqe(struct mlx5e_cacheflow_rq *rq,
-				     struct mlx5e_cacheflow_wqe_frag_info *wi)
+static inline void mlx5e_cacheflow_free_rx_wqe(struct mlx5e_cacheflow_rq *rq, struct page **wi)
 {
 	int i;
 
@@ -80,7 +78,7 @@ static void mlx5e_cacheflow_free_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix, 
 
 	for (i = 0; i < wqe_bulk; i++) {
 		int j = mlx5_wq_cyc_ctr2ix(wq, ix + i);
-		struct mlx5e_cacheflow_wqe_frag_info *wi;
+		struct page **wi;
 
 		wi = get_frag(rq, j);
 		mlx5e_cacheflow_free_rx_wqe(rq, wi);
@@ -89,19 +87,19 @@ static void mlx5e_cacheflow_free_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix, 
 
 static int mlx5e_cacheflow_alloc_rx_wqe(struct mlx5e_cacheflow_rq *rq, struct mlx5e_rx_wqe_cyc *wqe, u16 ix)
 {
-	struct mlx5e_cacheflow_wqe_frag_info *frag = get_frag(rq, ix);
+	struct page **frag = get_frag(rq, ix);
 	int i;
 
 	for (i = 0; i < rq->wqe.info.num_frags; i++, frag++) {
 		dma_addr_t addr;
 		u16 headroom;
 
-		frag->page = cacheflow_page_pool_alloc_pages(rq->page_pool, GFP_ATOMIC | __GFP_NOWARN);
-		if (unlikely(frag->page == NULL))
+		*frag = cacheflow_page_pool_alloc_pages(rq->page_pool, GFP_ATOMIC | __GFP_NOWARN);
+		if (unlikely(*frag == NULL))
 			goto free_frags;
 
 		headroom = i == 0 ? rq->buff.headroom : 0;
-		addr = page_pool_get_dma_addr(frag->page);
+		addr = page_pool_get_dma_addr(*frag);
 		wqe->data[i].addr = cpu_to_be64(addr + headroom);
 	}
 
@@ -291,21 +289,14 @@ static int mlx5e_cacheflow_init_wqe_alloc_info(struct mlx5e_cacheflow_rq *rq, in
 {
 	int wq_sz = mlx5_wq_cyc_get_size(&rq->wqe.wq);
 	int len = wq_sz << rq->wqe.info.log_num_frags;
-	struct mlx5e_cacheflow_wqe_frag_info *frags;
-	struct mlx5e_cacheflow_alloc_units *aus;
-	int aus_sz = sizeof(*aus->pages);
+	struct page **frags;
 
-	aus = kvzalloc_node(array_size(len, aus_sz), GFP_KERNEL, node);
-	if (!aus)
-		return -ENOMEM;
 
 	frags = kvzalloc_node(array_size(len, sizeof(*frags)), GFP_KERNEL, node);
 	if (!frags) {
-		kvfree(aus);
 		return -ENOMEM;
 	}
 
-	rq->wqe.alloc_units = aus;
 	rq->wqe.frags = frags;
 
 	return 0;
@@ -314,7 +305,6 @@ static int mlx5e_cacheflow_init_wqe_alloc_info(struct mlx5e_cacheflow_rq *rq, in
 static void mlx5e_cacheflow_free_wqe_alloc_info(struct mlx5e_cacheflow_rq *rq)
 {
 	kvfree(rq->wqe.frags);
-	kvfree(rq->wqe.alloc_units);
 }
 
 
@@ -507,7 +497,7 @@ void mlx5e_cacheflow_destroy_rq(struct mlx5e_cacheflow_rq *rq)
 
 static void mlx5e_cacheflow_dealloc_rx_wqe(struct mlx5e_cacheflow_rq *rq, u16 ix)
 {
-	struct mlx5e_cacheflow_wqe_frag_info *wi = get_frag(rq, ix);
+	struct page **wi = get_frag(rq, ix);
 
 	mlx5e_cacheflow_free_rx_wqe(rq, wi);
 }

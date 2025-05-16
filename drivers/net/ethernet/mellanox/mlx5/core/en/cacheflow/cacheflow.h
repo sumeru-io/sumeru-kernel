@@ -12,19 +12,10 @@ struct mlx5e_cacheflow_xdp_buff {
 	struct mlx5e_cacheflow_rq *rq;
 };
 
-struct mlx5e_cacheflow_wqe_frag_info {
-	struct page *page;
-};
-
-struct mlx5e_cacheflow_alloc_units {
-	DECLARE_FLEX_ARRAY(struct page *, pages);
-};
-
 struct mlx5e_cacheflow_rq {
 	struct {
 		struct mlx5_wq_cyc          		wq;
-		struct mlx5e_cacheflow_wqe_frag_info 	*frags;
-		struct mlx5e_cacheflow_alloc_units    	*alloc_units;
+		struct page**                           frags;
 		struct mlx5e_rq_frags_info  		info;
 	} wqe;
 	struct {
