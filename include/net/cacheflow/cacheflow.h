@@ -17,6 +17,8 @@ extern struct static_key_false cacheflow_steer_enable;
 extern int cacheflow_steer_core;
 extern int cacheflow_buffer_size;
 extern int cacheflow_thresh;
+extern int cacheflow_ipi_packet_thresh;
+extern int cacheflow_ipi_usec_thresh;
 
 static inline bool is_cacheflow_track_enabled(void)
 {
@@ -43,6 +45,14 @@ static inline int get_cacheflow_thresh(void) {
 
 static inline int get_cacheflow_steer_core(void) {
 	return READ_ONCE(cacheflow_steer_core);
+}
+
+static inline int get_cacheflow_ipi_packet_thresh(void) {
+	return READ_ONCE(cacheflow_ipi_packet_thresh);
+}
+
+static inline int get_cacheflow_ipi_usec_thresh(void) {
+	return READ_ONCE(cacheflow_ipi_usec_thresh);
 }
 
 #endif /* __CACHEFLOW_CACHEFLOW_H */

@@ -685,6 +685,7 @@ static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu, struc
 	th->rq = rq;
 	th->cpu = cpu;
 	th->ipi_scheduled = 0;
+	th->last_scheduled_time = 0;
 	INIT_CSD(&th->csd, cacheflow_raise_softirq, th);
 	INIT_KFIFO(th->cqe_fifo);
 

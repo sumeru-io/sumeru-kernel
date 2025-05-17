@@ -27,13 +27,11 @@ struct mlx5e_cacheflow_rq {
 	struct net_device     *netdev;
 	struct mlx5e_rq_stats *stats;
 	struct mlx5e_cq        cq;
-	struct mlx5e_cq_decomp cqd;
 	struct hwtstamp_config *tstamp;
 	struct mlx5_clock      *clock;
 	struct mlx5e_icosq    *icosq;
 	struct mlx5e_priv     *priv;
 
-	struct mlx5e_hw_gro_data *hw_gro_data;
 
 	unsigned long          state;
 	int                    ix;
@@ -44,9 +42,6 @@ struct mlx5e_cacheflow_rq {
 	/* XDP */
 	DECLARE_BITMAP(flags, 8);
 	struct cacheflow_page_pool      *page_pool;
-
-	/* AF_XDP zero-copy */
-	struct xsk_buff_pool  *xsk_pool;
 
 	/* control */
 	struct mlx5_wq_ctrl    wq_ctrl;
@@ -107,6 +102,7 @@ struct mlx5e_cacheflow_th {
 
 	call_single_data_t		csd ____cacheline_aligned_in_smp;
 	int				ipi_scheduled;
+	u64				last_scheduled_time;
 
 	DECLARE_KFIFO(cqe_fifo, struct mlx5e_cacheflow_cqe, CACHEFLOW_CHANNEL_SIZE) ____cacheline_aligned_in_smp;
 };

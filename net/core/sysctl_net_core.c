@@ -488,6 +488,20 @@ static struct ctl_table net_core_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec
 	},
+	{
+		.procname	= "cacheflow_ipi_packet_thresh",
+		.data		= &cacheflow_ipi_packet_thresh,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec
+	},
+	{
+		.procname	= "cacheflow_ipi_usec_thresh",
+		.data		= &cacheflow_ipi_usec_thresh,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec
+	},
 #endif
 #ifdef CONFIG_BPF_JIT
 	{

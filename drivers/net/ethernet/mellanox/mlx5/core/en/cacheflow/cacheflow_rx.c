@@ -59,14 +59,13 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 	th = &cacheflow->th_array[tcpu];
 
 	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe.page, tcpu);
-
-	cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
-
 	n = kfifo_in(&th->cqe_fifo, &cacheflow_cqe, 1);
 
-	if (n != 1) {
+	if (unlikely(n != 1)) {
 		pr_err("cacheflow: kfifo_in core %d returns %d, len=%d, size=%d\n", tcpu, n, kfifo_len(&th->cqe_fifo), kfifo_size(&th->cqe_fifo));
 	}
+
+	cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
 
 wq_cyc_pop:
 	mlx5_wq_cyc_pop(wq);
@@ -79,6 +78,7 @@ static int mlx5e_cacheflow_bh_poll_rx_cq(struct mlx5e_cacheflow *c, int budget)
 	struct mlx5_cqwq *cqwq = &cq->wq;
 	struct mlx5_cqe64 *cqe;
 	int cpu, work_done = 0;
+	u64 current_time;
 
 	if (unlikely(!test_bit(MLX5E_RQ_STATE_ENABLED, &rq->state)))
 		return 0;
@@ -97,10 +97,16 @@ static int mlx5e_cacheflow_bh_poll_rx_cq(struct mlx5e_cacheflow *c, int budget)
 	/* ensure cq space is freed before enabling more cqes */
 	wmb();
 
+	current_time = ktime_to_us(ktime_get());
+
 	for_each_cpu(cpu, &c->notify_cpu_set) {
-		if (!cmpxchg(&c->th_array[cpu].ipi_scheduled, 0, 1)) {
-			smp_call_function_single_async(cpu, &c->th_array[cpu].csd);
-			cpumask_clear_cpu(cpu, &c->notify_cpu_set);
+		if ((current_time - c->th_array[cpu].last_scheduled_time > get_cacheflow_ipi_usec_thresh()) || (kfifo_len(&c->th_array[cpu].cqe_fifo) > get_cacheflow_ipi_packet_thresh())) {
+			if (!cmpxchg(&c->th_array[cpu].ipi_scheduled, 0, 1)) {
+				smp_call_function_single_async(cpu, &c->th_array[cpu].csd);
+				trace_mlx5e_cacheflow_th_ipi_scheduled(cpu, current_time, c->th_array[cpu].last_scheduled_time, kfifo_len(&c->th_array[cpu].cqe_fifo));
+				c->th_array[cpu].last_scheduled_time = current_time;
+				cpumask_clear_cpu(cpu, &c->notify_cpu_set);
+			}
 		}
 	}
 
