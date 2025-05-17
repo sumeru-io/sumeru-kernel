@@ -28,6 +28,8 @@
  * would have to take a slower code path.
  */
 
+extern struct kmem_cache *netmem_mini_array_cache;
+
 /* Size array to fit within two cachelines minus the count field */
 #define CF_PP_MINI_ARRAY_METADATA_SIZE				8
 #define CF_PP_MINI_ARRAY_SIZE 					(((2 * L1_CACHE_BYTES) - CF_PP_MINI_ARRAY_METADATA_SIZE) / sizeof(netmem_ref))
@@ -92,6 +94,16 @@ struct cacheflow_page_pool_proc {
 	struct proc_dir_entry *watermark_file;
 };
 
+#define CACHEFLOW_TH_EMPTY_MINI_ARRAY_CACHE_SIZE 16
+
+struct cacheflow_page_pool_recycle_stub {
+	struct cacheflow_page_pool *pool;
+	struct netmem_mini_array *mini_array;
+
+	struct netmem_mini_array *mini_array_cache[CACHEFLOW_TH_EMPTY_MINI_ARRAY_CACHE_SIZE];
+	int mini_array_cache_count;
+};
+
 struct cacheflow_page_pool {
 	struct cacheflow_page_pool_params_fast p;
 
@@ -99,6 +111,7 @@ struct cacheflow_page_pool {
 	u32 pages_state_hold_cnt;
 
 	struct ptr_ring recycle_ring;
+	struct cacheflow_page_pool_recycle_stub __percpu *recycle_stub;
 
 	struct delayed_work release_dw;
 	void (*disconnect)(void *pool);

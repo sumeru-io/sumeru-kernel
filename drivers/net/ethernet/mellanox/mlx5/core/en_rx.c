@@ -65,8 +65,8 @@
 #include "devlink.h"
 #include "en/devlink.h"
 #include "trace/events/skb.h"
+#define CREATE_TRACE_POINTS
 #include "diag/cacheflow_tracepoint.h"
-
 
 static struct sk_buff *
 mlx5e_skb_from_cqe_mpwrq_linear(struct mlx5e_rq *rq, struct mlx5e_mpw_info *wi,
