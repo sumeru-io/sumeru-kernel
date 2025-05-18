@@ -135,18 +135,22 @@ TRACE_EVENT(mlx5e_cacheflow_bh_cqe,
 );
 
 TRACE_EVENT(mlx5e_cacheflow_th_skb,
-	TP_PROTO(int cpu, struct sk_buff *skb),
-	TP_ARGS(cpu, skb),
+	TP_PROTO(int cpu, struct sk_buff *skb, struct page **t_pages),
+	TP_ARGS(cpu, skb, t_pages),
 	TP_STRUCT__entry(
 		__field(int, cpu)
 		__field(int, len)
+		__array(struct page *, pages, 4)
 	),
 	TP_fast_assign(
 		__entry->cpu = cpu;
 		__entry->len = skb->len;
+		memcpy(__entry->pages, t_pages, sizeof(struct page *) * 4);
 	),
-	TP_printk("cpu=%d len=%d",
-		  __entry->cpu, __entry->len)
+	TP_printk("cpu=%d len=%d pages[0]=%px pages[1]=%px pages[2]=%px pages[3]=%px",
+		  __entry->cpu, __entry->len,
+		  __entry->pages[0], __entry->pages[1],
+		  __entry->pages[2], __entry->pages[3])
 );
 
 TRACE_EVENT(mlx5e_cacheflow_th_ipi_scheduled,

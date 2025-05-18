@@ -2923,10 +2923,11 @@ int mlx5e_open_channels(struct mlx5e_priv *priv,
 	int i;
 
 #ifdef CONFIG_NET_CACHEFLOW
-	pr_info("cacheflow: control bits: track: %s, mark: %s, steer: %s\n", 
+	pr_info("cacheflow: control bits: track: %s, mark: %s, steer: %s, ndesp: %d\n", 
 		is_cacheflow_track_enabled() ? "on" : "off",
 		is_cacheflow_mark_enabled() ? "on" : "off",
-		is_cacheflow_steer_enabled() ? "on" : "off");
+		is_cacheflow_steer_enabled() ? "on" : "off",
+		(1 << cacheflow_channel_descriptor));
 #endif
 
 	chs->num = chs->params.num_channels;

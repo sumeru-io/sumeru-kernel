@@ -2890,14 +2890,12 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 	return skb;
 }
 
-
-int mlx5e_cacheflow_th_napi_poll(struct napi_struct *napi, int budget)
+static noinline int mlx5e_cacheflow_th_poll_kfifo(struct mlx5e_cacheflow_th *c, int budget)
 {
-	struct mlx5e_cacheflow_th *c = container_of(napi, struct mlx5e_cacheflow_th, napi);
-	struct mlx5e_cacheflow_cqe cqe;
-	struct sk_buff *skb;
 	int work_done = 0;
 	int n;
+	struct sk_buff *skb;
+	struct mlx5e_cacheflow_cqe cqe;
 
 	while (work_done < budget && (n = kfifo_out(&c->cqe_fifo, &cqe, 1))) {
 		if (n != 1) {
@@ -2913,12 +2911,22 @@ int mlx5e_cacheflow_th_napi_poll(struct napi_struct *napi, int budget)
 
 		mlx5e_cacheflow_complete_rx_cqe(c->rq, &cqe.cqe, be32_to_cpu(cqe.cqe.byte_cnt), skb);
 
-		trace_mlx5e_cacheflow_th_skb(smp_processor_id(), skb);
+		trace_mlx5e_cacheflow_th_skb(smp_processor_id(), skb, cqe.page);
 
-		napi_gro_receive(napi, skb);
+		napi_gro_receive(&c->napi, skb);
 
 		work_done++;
 	}
+
+	return work_done;
+}
+
+int mlx5e_cacheflow_th_napi_poll(struct napi_struct *napi, int budget)
+{
+	struct mlx5e_cacheflow_th *c = container_of(napi, struct mlx5e_cacheflow_th, napi);
+	int work_done = 0;
+
+	work_done = mlx5e_cacheflow_th_poll_kfifo(c, budget);
 
 	if (work_done == budget)
 		goto out;

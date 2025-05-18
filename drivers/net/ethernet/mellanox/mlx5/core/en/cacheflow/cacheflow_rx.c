@@ -37,7 +37,6 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 	struct mlx5e_cacheflow_th *th;
 	struct mlx5e_cacheflow_cqe cacheflow_cqe = {};
 	int i;
-	int n;
 
 	ci       = mlx5_wq_cyc_ctr2ix(wq, be16_to_cpu(cqe->wqe_counter));
 	wi       = &rq->wqe.frags[ci << rq->wqe.info.log_num_frags];
@@ -45,6 +44,7 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 
 	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
 		rq->stats->wqe_err++;
+		pr_info("cacheflow: wqe error, op_code=%d, \n", get_cqe_opcode(cqe));
 		goto wq_cyc_pop;
 	}
 
@@ -59,19 +59,21 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 	th = &cacheflow->th_array[tcpu];
 
 	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe.page, tcpu);
-	n = kfifo_in(&th->cqe_fifo, &cacheflow_cqe, 1);
 
-	if (unlikely(n != 1)) {
-		pr_err("cacheflow: kfifo_in core %d returns %d, len=%d, size=%d\n", tcpu, n, kfifo_len(&th->cqe_fifo), kfifo_size(&th->cqe_fifo));
+	if (unlikely(kfifo_in(&th->cqe_fifo, &cacheflow_cqe, 1) != 1)) {
+		pr_err("cacheflow: kfifo_in core %d, len=%d, size=%d\n", tcpu, kfifo_len(&th->cqe_fifo), kfifo_size(&th->cqe_fifo));
+		for (i = 0; i < rq->wqe.info.num_frags; i++) {
+			cacheflow_page_pool_put_page(rq->page_pool, cacheflow_cqe.page[i], -1, true);
+		}
 	}
 
-	cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
+	__cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
 
 wq_cyc_pop:
 	mlx5_wq_cyc_pop(wq);
 }
 
-static int mlx5e_cacheflow_bh_poll_rx_cq(struct mlx5e_cacheflow *c, int budget)
+static noinline int mlx5e_cacheflow_bh_poll_rx_cq(struct mlx5e_cacheflow *c, int budget)
 {
 	struct mlx5e_cacheflow_rq *rq = &c->rq;
 	struct mlx5e_cq *cq = &c->rq.cq;
@@ -105,7 +107,7 @@ static int mlx5e_cacheflow_bh_poll_rx_cq(struct mlx5e_cacheflow *c, int budget)
 				smp_call_function_single_async(cpu, &c->th_array[cpu].csd);
 				trace_mlx5e_cacheflow_th_ipi_scheduled(cpu, current_time, c->th_array[cpu].last_scheduled_time, kfifo_len(&c->th_array[cpu].cqe_fifo));
 				c->th_array[cpu].last_scheduled_time = current_time;
-				cpumask_clear_cpu(cpu, &c->notify_cpu_set);
+				__cpumask_clear_cpu(cpu, &c->notify_cpu_set);
 			}
 		}
 	}
@@ -130,8 +132,7 @@ int mlx5e_cacheflow_bh_napi_poll(struct napi_struct *napi, int budget)
 
 	cacheflow_page_pool_recycle_ring(c->rq.page_pool);
 
-	if (likely(budget - work_done))
-		work_done = mlx5e_cacheflow_bh_poll_rx_cq(c, budget);
+	work_done = mlx5e_cacheflow_bh_poll_rx_cq(c, budget);
 
 	busy |= work_done == budget;
 	busy |= mlx5e_cacheflow_post_rx_wqes(rq);

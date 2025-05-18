@@ -1095,9 +1095,6 @@ EXPORT_SYMBOL(cacheflow_page_pool_destroy);
 void cacheflow_page_pool_recycle_ring(struct cacheflow_page_pool *pool) {
 	struct netmem_mini_array* mini_array;
 
-	if (!cacheflow_page_pool_napi_local(pool))
-		BUG();
-
 	while((mini_array = (struct netmem_mini_array*)__ptr_ring_consume(&pool->recycle_ring))) {
 		cacheflow_page_pool_put_mini_array(pool, mini_array);
 	}
