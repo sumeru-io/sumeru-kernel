@@ -1,8 +1,8 @@
 #ifndef __MLX5_EN_CACHEFLOW_H__
 #define __MLX5_EN_CACHEFLOW_H__
 
-#include <linux/kfifo.h>
 #include <linux/spinlock.h>
+#include <linux/item_ring.h>
 #include "en.h"
 
 #define CACHEFLOW_CHANNEL_SIZE 128
@@ -105,8 +105,8 @@ struct mlx5e_cacheflow_th {
 	int				ipi_scheduled;
 	u64				last_scheduled_time;
 
-	spinlock_t		cqe_fifo_lock  ____cacheline_aligned_in_smp;
-	DECLARE_KFIFO(cqe_fifo, struct mlx5e_cacheflow_cqe, CACHEFLOW_CHANNEL_SIZE);
+	spinlock_t			cqe_fifo_lock  ____cacheline_aligned_in_smp;
+	struct item_ring		*cqe_ring;
 };
 
 int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,

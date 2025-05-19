@@ -687,7 +687,7 @@ static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu, struc
 	th->last_scheduled_time = 0;
 	INIT_CSD(&th->csd, cacheflow_raise_softirq, th);
 	spin_lock_init(&th->cqe_fifo_lock);
-	INIT_KFIFO(th->cqe_fifo);
+	th->cqe_ring = item_ring_create(sizeof(struct mlx5e_cacheflow_cqe), 256, GFP_KERNEL);
 
 	return 0;
 }
@@ -755,6 +755,12 @@ err_free:
 	return err;
 }
 
+static void mlx5e_cacheflow_th_destroy(struct mlx5e_cacheflow_th *th)
+{
+	netif_napi_del(&th->napi);
+	item_ring_destroy(th->cqe_ring);
+}
+
 void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
 {
 	int cpu;
@@ -762,9 +768,10 @@ void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
 	netif_napi_del(&c->napi);
 
 	for_each_possible_cpu(cpu) {
-		netif_napi_del(&c->th_array[cpu].napi);
+		mlx5e_cacheflow_th_destroy(&c->th_array[cpu]);
 	}
 
+	kvfree(c->th_array);
 	kvfree(c);
 }
 

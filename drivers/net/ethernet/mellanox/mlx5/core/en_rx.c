@@ -2890,32 +2890,27 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 	return skb;
 }
 
-static noinline int mlx5e_cacheflow_th_poll_kfifo(struct mlx5e_cacheflow_th *c, int budget)
+static noinline int mlx5e_cacheflow_th_poll(struct mlx5e_cacheflow_th *c, int budget)
 {
 	int work_done = 0;
-	int n;
 	struct sk_buff *skb;
-	struct mlx5e_cacheflow_cqe cqe;
+	struct mlx5e_cacheflow_cqe* cqe;
 
-	while (work_done < budget && (n = kfifo_out(&c->cqe_fifo, &cqe, 1))) {
-		if (n != 1) {
-			pr_err("cacheflow: kfifo_out returns %d\n", n);
-			BUG();
-		}
-
-		skb = mlx5e_cacheflow_skb_from_cqe(c->rq, &cqe);
+	while (work_done < budget && (cqe = item_ring_peek(c->cqe_ring))) {
+		skb = mlx5e_cacheflow_skb_from_cqe(c->rq, cqe);
 		if (!skb) {
 			pr_err("cacheflow: fail to build skb on the tophalf handler\n");
 			continue;
 		}
 
-		mlx5e_cacheflow_complete_rx_cqe(c->rq, &cqe.cqe, be32_to_cpu(cqe.cqe.byte_cnt), skb);
+		mlx5e_cacheflow_complete_rx_cqe(c->rq, &cqe->cqe, be32_to_cpu(cqe->cqe.byte_cnt), skb);
 
-		trace_mlx5e_cacheflow_th_skb(smp_processor_id(), skb, cqe.page);
+		trace_mlx5e_cacheflow_th_skb(smp_processor_id(), skb, cqe->page);
 
 		napi_gro_receive(&c->napi, skb);
 
 		work_done++;
+		item_ring_consume(c->cqe_ring);
 	}
 
 	return work_done;
@@ -2926,7 +2921,7 @@ int mlx5e_cacheflow_th_napi_poll(struct napi_struct *napi, int budget)
 	struct mlx5e_cacheflow_th *c = container_of(napi, struct mlx5e_cacheflow_th, napi);
 	int work_done = 0;
 
-	work_done = mlx5e_cacheflow_th_poll_kfifo(c, budget);
+	work_done = mlx5e_cacheflow_th_poll(c, budget);
 
 	if (work_done == budget)
 		goto out;

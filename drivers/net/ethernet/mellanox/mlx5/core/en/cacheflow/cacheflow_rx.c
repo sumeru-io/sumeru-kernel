@@ -35,7 +35,7 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 	u16 ci;
 	int tcpu;
 	struct mlx5e_cacheflow_th *th;
-	struct mlx5e_cacheflow_cqe cacheflow_cqe = {};
+	struct mlx5e_cacheflow_cqe *cacheflow_cqe;
 	int i;
 
 	ci       = mlx5_wq_cyc_ctr2ix(wq, be16_to_cpu(cqe->wqe_counter));
@@ -47,25 +47,26 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 		pr_info("cacheflow: wqe error, op_code=%d, \n", get_cqe_opcode(cqe));
 		goto wq_cyc_pop;
 	}
+	tcpu = mlx5e_cacheflow_get_cpu(be32_to_cpu(cqe->rss_hash_result));
+	th = &cacheflow->th_array[tcpu];
 
-	memcpy(&cacheflow_cqe.cqe, cqe, sizeof(struct mlx5_cqe64));
+	cacheflow_cqe = item_ring_reserve(th->cqe_ring);
+
+	if (unlikely(!cacheflow_cqe)) {
+		pr_err("cacheflow: kfifo to core %d is full\n", tcpu);
+		goto wq_cyc_pop;
+	}
+
+	memcpy(&cacheflow_cqe->cqe, cqe, sizeof(struct mlx5_cqe64));
 	for (i = 0; i < rq->wqe.info.num_frags; i++) {
-		cacheflow_cqe.page[i] = *wi;
+		cacheflow_cqe->page[i] = *wi;
 		*wi = NULL;
 		wi++;
 	}
 
-	tcpu = mlx5e_cacheflow_get_cpu(be32_to_cpu(cqe->rss_hash_result));
-	th = &cacheflow->th_array[tcpu];
+	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe->page, tcpu);
 
-	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe.page, tcpu);
-
-	if (unlikely(kfifo_in(&th->cqe_fifo, &cacheflow_cqe, 1) != 1)) {
-		pr_err("cacheflow: kfifo_in core %d, len=%d, size=%d\n", tcpu, kfifo_len(&th->cqe_fifo), kfifo_size(&th->cqe_fifo));
-		for (i = 0; i < rq->wqe.info.num_frags; i++) {
-			cacheflow_page_pool_put_page(rq->page_pool, cacheflow_cqe.page[i], -1, true);
-		}
-	}
+	item_spsc_ring_submit(th->cqe_ring);
 
 	__cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
 
@@ -102,10 +103,10 @@ static noinline int mlx5e_cacheflow_bh_poll_rx_cq(struct mlx5e_cacheflow *c, int
 	current_time = ktime_to_us(ktime_get());
 
 	for_each_cpu(cpu, &c->notify_cpu_set) {
-		if ((current_time - c->th_array[cpu].last_scheduled_time > get_cacheflow_ipi_usec_thresh()) || (kfifo_len(&c->th_array[cpu].cqe_fifo) > get_cacheflow_ipi_packet_thresh())) {
+		if ((current_time - c->th_array[cpu].last_scheduled_time > get_cacheflow_ipi_usec_thresh()) || (item_ring_items_available(c->th_array[cpu].cqe_ring) > get_cacheflow_ipi_packet_thresh())) {
 			if (!cmpxchg(&c->th_array[cpu].ipi_scheduled, 0, 1)) {
 				smp_call_function_single_async(cpu, &c->th_array[cpu].csd);
-				trace_mlx5e_cacheflow_th_ipi_scheduled(cpu, current_time, c->th_array[cpu].last_scheduled_time, kfifo_len(&c->th_array[cpu].cqe_fifo));
+				trace_mlx5e_cacheflow_th_ipi_scheduled(cpu, current_time, c->th_array[cpu].last_scheduled_time, item_ring_items_available(c->th_array[cpu].cqe_ring));
 				c->th_array[cpu].last_scheduled_time = current_time;
 				__cpumask_clear_cpu(cpu, &c->notify_cpu_set);
 			}
