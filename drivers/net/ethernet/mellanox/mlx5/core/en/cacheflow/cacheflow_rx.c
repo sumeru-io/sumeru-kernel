@@ -66,7 +66,7 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 
 	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe->page, tcpu);
 
-	item_spsc_ring_submit(th->cqe_ring);
+	item_ring_submit(th->cqe_ring);
 
 	__cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
 
@@ -74,7 +74,7 @@ wq_cyc_pop:
 	mlx5_wq_cyc_pop(wq);
 }
 
-static noinline int mlx5e_cacheflow_bh_poll_rx_cq(struct mlx5e_cacheflow *c, int budget)
+static noinline int mlx5e_cacheflow_bh_poll(struct mlx5e_cacheflow *c, int budget)
 {
 	struct mlx5e_cacheflow_rq *rq = &c->rq;
 	struct mlx5e_cq *cq = &c->rq.cq;
@@ -133,7 +133,7 @@ int mlx5e_cacheflow_bh_napi_poll(struct napi_struct *napi, int budget)
 
 	cacheflow_page_pool_recycle_ring(c->rq.page_pool);
 
-	work_done = mlx5e_cacheflow_bh_poll_rx_cq(c, budget);
+	work_done = mlx5e_cacheflow_bh_poll(c, budget);
 
 	busy |= work_done == budget;
 	busy |= mlx5e_cacheflow_post_rx_wqes(rq);

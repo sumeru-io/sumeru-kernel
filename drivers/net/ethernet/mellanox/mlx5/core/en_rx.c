@@ -2892,11 +2892,12 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 
 static noinline int mlx5e_cacheflow_th_poll(struct mlx5e_cacheflow_th *c, int budget)
 {
-	int work_done = 0;
+	int work_done = 0, i;
 	struct sk_buff *skb;
 	struct mlx5e_cacheflow_cqe* cqe;
+	int n = item_ring_peek_n(c->cqe_ring, budget, (void **)&cqe);
 
-	while (work_done < budget && (cqe = item_ring_peek(c->cqe_ring))) {
+	for (i = 0; i < n; i++) {
 		skb = mlx5e_cacheflow_skb_from_cqe(c->rq, cqe);
 		if (!skb) {
 			pr_err("cacheflow: fail to build skb on the tophalf handler\n");
@@ -2910,8 +2911,9 @@ static noinline int mlx5e_cacheflow_th_poll(struct mlx5e_cacheflow_th *c, int bu
 		napi_gro_receive(&c->napi, skb);
 
 		work_done++;
-		item_ring_consume(c->cqe_ring);
+		cqe++;
 	}
+	item_ring_consume(c->cqe_ring);
 
 	return work_done;
 }
