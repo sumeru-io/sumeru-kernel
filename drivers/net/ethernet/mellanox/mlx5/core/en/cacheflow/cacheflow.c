@@ -692,6 +692,29 @@ static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu, struc
 	return 0;
 }
 
+static struct mlx5e_cacheflow_rq_tracker *mlx5e_cacheflow_rq_tracker_create(struct mlx5e_params *params)
+{
+	struct mlx5e_cacheflow_rq_tracker *tracker = kvzalloc(sizeof(*tracker), GFP_KERNEL);
+	if (!tracker)
+		return NULL;
+	
+	tracker->history = item_deque_create(1 << params->log_rq_mtu_frames,
+		sizeof(struct mlx5e_cacheflow_rq_tracker_entry), GFP_KERNEL);
+
+	if (!tracker->history) {
+		kvfree(tracker);
+		return NULL;
+	}
+
+	return tracker;
+}
+
+static void mlx5e_cacheflow_rq_tracker_destroy(struct mlx5e_cacheflow_rq_tracker *tracker)
+{
+	item_deque_destroy(tracker->history);
+	kvfree(tracker);
+}
+
 int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 			 u8 lag_port, struct mlx5e_cacheflow **cc) {
 
@@ -700,12 +723,14 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	struct mlx5e_cacheflow_params *cparams;
 	struct mlx5e_cacheflow *c;
 	struct mlx5e_cacheflow_th *th;
+	struct mlx5e_cacheflow_rq_tracker *rq_tracker;
 	int err, cpu;
 
 	c = kvzalloc_node(sizeof(*c), GFP_KERNEL, dev_to_node(mlx5_core_dma_dev(mdev)));
 	cparams = kvzalloc(sizeof(*cparams), GFP_KERNEL);
 	th = kvzalloc(sizeof(*th) * num_possible_cpus(), GFP_KERNEL);
-	if (!c || !cparams || !th) {
+	rq_tracker = mlx5e_cacheflow_rq_tracker_create(params);
+	if (!c || !cparams || !th || !rq_tracker) {
 		err = -ENOMEM;
 		goto err_free;
 	}
@@ -719,6 +744,7 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	c->num_tc = mlx5e_get_dcb_num_tc(params);
 	c->stats = &priv->cacheflow_stats.ch;
 	c->lag_port = lag_port;
+	c->rq_tracker = rq_tracker;
 
 	mlx5e_cacheflow_build_params(c, cparams, params);
 	mlx5e_cacheflow_print_params(cparams);
@@ -771,6 +797,8 @@ void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
 		mlx5e_cacheflow_th_destroy(&c->th_array[cpu]);
 	}
 
+	mlx5e_cacheflow_rq_tracker_destroy(c->rq_tracker);
+
 	kvfree(c->th_array);
 	kvfree(c);
 }
@@ -802,23 +830,6 @@ void mlx5e_cacheflow_deactivate_channel(struct mlx5e_cacheflow *c)
 	for_each_possible_cpu(cpu) {
 		napi_disable(&c->th_array[cpu].napi);
 	}
-}
-
-
-
-static inline bool is_last_ethertype_ip(struct sk_buff *skb, int *network_depth,
-					__be16 *proto)
-{
-	*proto = ((struct ethhdr *)skb->data)->h_proto;
-	*proto = __vlan_get_protocol(skb, *proto, network_depth);
-
-	if (*proto == htons(ETH_P_IP))
-		return pskb_may_pull(skb, *network_depth + sizeof(struct iphdr));
-
-	if (*proto == htons(ETH_P_IPV6))
-		return pskb_may_pull(skb, *network_depth + sizeof(struct ipv6hdr));
-
-	return false;
 }
 
 static inline void mlx5e_skb_set_hash(struct mlx5_cqe64 *cqe,

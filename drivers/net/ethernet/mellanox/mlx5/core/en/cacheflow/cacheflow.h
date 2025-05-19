@@ -3,6 +3,7 @@
 
 #include <linux/spinlock.h>
 #include <linux/item_ring.h>
+#include <linux/item_deque.h>
 #include "en.h"
 
 #define CACHEFLOW_CHANNEL_SIZE 128
@@ -58,24 +59,35 @@ struct mlx5e_cacheflow_rq {
 	cqe_ts_to_ns           ptp_cyc2time;
 };
 
+struct mlx5e_cacheflow_rq_tracker_entry {
+	ktime_t received;
+	ktime_t processed;
+};
+
+struct mlx5e_cacheflow_rq_tracker {
+	struct item_deque *history;
+};
+
 struct mlx5e_cacheflow {
-	struct mlx5e_cacheflow_rq	rq;
+	struct mlx5e_cacheflow_rq		rq;
 
-	struct napi_struct         	napi;
-	struct device             	*pdev;
-	struct net_device         	*netdev;
-	__be32                     	mkey_be;
-	u8                         	num_tc;
-	u8                         	lag_port;
+	struct napi_struct         		napi;
+	struct device             		*pdev;
+	struct net_device         		*netdev;
+	__be32                     		mkey_be;
+	u8                         		num_tc;
+	u8                         		lag_port;
 
-	struct mlx5e_ch_stats     	*stats;
-	struct mlx5e_cacheflow_th  	*th_array;
-	cpumask_t 			notify_cpu_set;
+	struct mlx5e_ch_stats     		*stats;
+	struct mlx5e_cacheflow_th  		*th_array;
+	cpumask_t 				notify_cpu_set;
 	/* control */
-	struct mlx5e_priv         	*priv;
-	struct mlx5_core_dev      	*mdev;
-	struct hwtstamp_config    	*tstamp;
-	int                        	cpu;
+	struct mlx5e_priv         		*priv;
+	struct mlx5_core_dev      		*mdev;
+	struct hwtstamp_config    		*tstamp;
+	int                        		cpu;
+
+	struct mlx5e_cacheflow_rq_tracker 	*rq_tracker;
 };
 
 enum mlx5e_cacheflow_cqe_owner {
@@ -128,5 +140,23 @@ void mlx5e_cacheflow_destroy_rq(struct mlx5e_cacheflow_rq *rq);
 int mlx5e_cacheflow_flush_rq(struct mlx5e_cacheflow_rq *rq, int curr_state);
 void mlx5e_cacheflow_activate_rq(struct mlx5e_cacheflow_rq *rq);
 void mlx5e_cacheflow_deactivate_rq(struct mlx5e_cacheflow_rq *rq);
+
+static inline int mlx5e_cacheflow_rq_tracker_update(struct mlx5e_cacheflow_rq_tracker *tracker, ktime_t processed, ktime_t received)
+{
+	struct mlx5e_cacheflow_rq_tracker_entry *entry;
+	while ((entry = item_deque_front(tracker->history))) {
+		if (ktime_after(received, entry->processed)) {
+			item_deque_pop_front(tracker->history);
+		} else {
+			break;
+		}
+	}
+	entry = item_deque_peek_back(tracker->history);
+	entry->processed = processed;
+	entry->received = received;
+	item_deque_push_back(tracker->history);
+
+	return item_deque_size(tracker->history);
+}
 
 #endif

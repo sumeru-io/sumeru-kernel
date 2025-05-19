@@ -249,7 +249,7 @@ static void tcp_measure_rcv_mss(struct sock *sk, const struct sk_buff *skb)
 
 			icsk->icsk_ack.cacheflow = CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW);
 			if (CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW)) {
-				pr_info("cacheflow: tcp_measure_rcv_mss, skb: %px, old_ratio: %d, new_ratio: %d\n", skb, old_ratio, tcp_sk(sk)->scaling_ratio);
+				pr_info("cacheflow: tcp_measure_rcv_mss, skb: %px, len: %d, truesize: %d, old_ratio: %d, new_ratio: %d\n", skb, skb->len, skb->truesize, old_ratio, tcp_sk(sk)->scaling_ratio);
 			}
 
 			if (old_ratio != tcp_sk(sk)->scaling_ratio) {
