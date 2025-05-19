@@ -687,7 +687,7 @@ static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu, struc
 	th->last_scheduled_time = 0;
 	INIT_CSD(&th->csd, cacheflow_raise_softirq, th);
 	spin_lock_init(&th->cqe_fifo_lock);
-	th->cqe_ring = item_ring_create(sizeof(struct mlx5e_cacheflow_cqe), 8192, GFP_KERNEL);
+	th->cqe_ring = item_ring_create(8192, sizeof(struct mlx5e_cacheflow_cqe), GFP_KERNEL);
 
 	return 0;
 }

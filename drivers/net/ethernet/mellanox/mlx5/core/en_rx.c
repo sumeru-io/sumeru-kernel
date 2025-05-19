@@ -2898,10 +2898,11 @@ static noinline int mlx5e_cacheflow_th_poll(struct mlx5e_cacheflow_th *c, int bu
 	int n = item_ring_peek_n(c->cqe_ring, budget, (void **)&cqe);
 
 	for (i = 0; i < n; i++) {
+		prefetch(cqe + 1);
 		skb = mlx5e_cacheflow_skb_from_cqe(c->rq, cqe);
 		if (!skb) {
 			pr_err("cacheflow: fail to build skb on the tophalf handler\n");
-			continue;
+			goto next_step;
 		}
 
 		mlx5e_cacheflow_complete_rx_cqe(c->rq, &cqe->cqe, be32_to_cpu(cqe->cqe.byte_cnt), skb);
@@ -2909,11 +2910,12 @@ static noinline int mlx5e_cacheflow_th_poll(struct mlx5e_cacheflow_th *c, int bu
 		trace_mlx5e_cacheflow_th_skb(smp_processor_id(), skb, cqe->page);
 
 		napi_gro_receive(&c->napi, skb);
-
+next_step:
 		work_done++;
 		cqe++;
 	}
-	item_ring_consume(c->cqe_ring);
+
+	item_ring_consume_n(c->cqe_ring, n);
 
 	return work_done;
 }

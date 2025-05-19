@@ -397,8 +397,9 @@ static inline u32 item_ring_peek_n(struct item_ring *ring, u32 n, void **items)
 		return 0;
 
 	n = min(n, available);
+	n = min(n, ring->capacity - (current_consumer_idx % ring->capacity));
 
-	*items = ring->buffer + ((current_consumer_idx) % ring->capacity);
+	*items = ring->buffer + (current_consumer_idx % ring->capacity) * ring->item_size;
 
 	return n;
 }

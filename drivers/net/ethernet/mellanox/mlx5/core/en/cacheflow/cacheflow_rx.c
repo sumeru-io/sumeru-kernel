@@ -87,6 +87,8 @@ static noinline int mlx5e_cacheflow_bh_poll(struct mlx5e_cacheflow *c, int budge
 		return 0;
 
 	while (work_done < budget && (cqe = mlx5_cqwq_get_cqe(cqwq))) {
+		// it's almostly correct since cqes are packed on pages.
+		prefetch(cqe + 1);
 		mlx5_cqwq_pop(cqwq);
 		mlx5e_cacheflow_handle_rx_cqe(rq, cqe);
 		work_done++;

@@ -240,12 +240,17 @@ static void tcp_measure_rcv_mss(struct sock *sk, const struct sk_buff *skb)
 		 * For the moment, only adjust scaling_ratio
 		 * when we update icsk_ack.rcv_mss.
 		 */
-		if (unlikely(len != icsk->icsk_ack.rcv_mss)) {
+		if (unlikely(len != icsk->icsk_ack.rcv_mss || (!icsk->icsk_ack.cacheflow && CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW)))) {
 			u64 val = (u64)skb->len << TCP_RMEM_TO_WIN_SCALE;
 			u8 old_ratio = tcp_sk(sk)->scaling_ratio;
 
 			do_div(val, skb->truesize);
 			tcp_sk(sk)->scaling_ratio = val ? val : 1;
+
+			icsk->icsk_ack.cacheflow = CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW);
+			if (CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW)) {
+				pr_info("cacheflow: tcp_measure_rcv_mss, skb: %px, old_ratio: %d, new_ratio: %d\n", skb, old_ratio, tcp_sk(sk)->scaling_ratio);
+			}
 
 			if (old_ratio != tcp_sk(sk)->scaling_ratio) {
 				struct tcp_sock *tp = tcp_sk(sk);
@@ -305,6 +310,7 @@ static void tcp_measure_rcv_mss(struct sock *sk, const struct sk_buff *skb)
 			icsk->icsk_ack.pending |= ICSK_ACK_PUSHED2;
 		icsk->icsk_ack.pending |= ICSK_ACK_PUSHED;
 	}
+
 }
 
 static void tcp_incr_quickack(struct sock *sk, unsigned int max_quickacks)
