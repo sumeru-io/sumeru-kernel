@@ -18,7 +18,9 @@ struct mlx5e_cacheflow_rq_tracker {
 	ssize_t monitor_n;
 };
 
-static inline int mlx5e_cacheflow_rq_tracker_update(struct mlx5e_cacheflow_rq_tracker *tracker, ktime_t processed, ktime_t received)
+static inline int
+mlx5e_cacheflow_rq_tracker_update(struct mlx5e_cacheflow_rq_tracker *tracker,
+				  ktime_t processed, ktime_t received)
 {
 	struct mlx5e_cacheflow_rq_tracker_entry *entry;
 
@@ -38,15 +40,18 @@ static inline int mlx5e_cacheflow_rq_tracker_update(struct mlx5e_cacheflow_rq_tr
 	return tracker->size;
 }
 
-static inline struct mlx5e_cacheflow_rq_tracker *mlx5e_cacheflow_rq_tracker_create(ssize_t size)
+static inline struct mlx5e_cacheflow_rq_tracker *
+mlx5e_cacheflow_rq_tracker_create(ssize_t size)
 {
-	struct mlx5e_cacheflow_rq_tracker *tracker = kvzalloc(sizeof(*tracker), GFP_KERNEL);
+	struct mlx5e_cacheflow_rq_tracker *tracker =
+		kvzalloc(sizeof(*tracker), GFP_KERNEL);
 
 	if (!tracker)
 		return NULL;
 
-	tracker->history = item_deque_create(size,
-		sizeof(struct mlx5e_cacheflow_rq_tracker_entry), GFP_KERNEL);
+	tracker->history = item_deque_create(
+		size, sizeof(struct mlx5e_cacheflow_rq_tracker_entry),
+		GFP_KERNEL);
 
 	if (!tracker->history) {
 		kvfree(tracker);
@@ -56,7 +61,8 @@ static inline struct mlx5e_cacheflow_rq_tracker *mlx5e_cacheflow_rq_tracker_crea
 	return tracker;
 }
 
-static inline void mlx5e_cacheflow_rq_tracker_destroy(struct mlx5e_cacheflow_rq_tracker *tracker)
+static inline void
+mlx5e_cacheflow_rq_tracker_destroy(struct mlx5e_cacheflow_rq_tracker *tracker)
 {
 	item_deque_destroy(tracker->history);
 	kvfree(tracker);

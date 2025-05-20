@@ -21,7 +21,8 @@ static inline void netmem_clear_pp_magic(netmem_ref netmem)
 	__netmem_clear_lsb(netmem)->pp_magic = 0;
 }
 
-static inline void netmem_set_pp(netmem_ref netmem, struct cacheflow_page_pool *pool)
+static inline void netmem_set_pp(netmem_ref netmem,
+				 struct cacheflow_page_pool *pool)
 {
 	__netmem_clear_lsb(netmem)->cacheflow_pp = pool;
 }
@@ -32,8 +33,8 @@ static inline void netmem_set_dma_addr(netmem_ref netmem,
 	__netmem_clear_lsb(netmem)->dma_addr = dma_addr;
 }
 
-static inline bool
-cacheflow_page_pool_set_dma_addr_netmem(netmem_ref netmem, dma_addr_t addr)
+static inline bool cacheflow_page_pool_set_dma_addr_netmem(netmem_ref netmem,
+							   dma_addr_t addr)
 {
 	if (PAGE_POOL_32BIT_ARCH_WITH_64BIT_DMA) {
 		netmem_set_dma_addr(netmem, addr >> PAGE_SHIFT);
@@ -49,8 +50,10 @@ cacheflow_page_pool_set_dma_addr_netmem(netmem_ref netmem, dma_addr_t addr)
 	return false;
 }
 
-static inline bool cacheflow_page_pool_set_dma_addr(struct page *page, dma_addr_t addr)
+static inline bool cacheflow_page_pool_set_dma_addr(struct page *page,
+						    dma_addr_t addr)
 {
-	return cacheflow_page_pool_set_dma_addr_netmem(page_to_netmem(page), addr);
+	return cacheflow_page_pool_set_dma_addr_netmem(page_to_netmem(page),
+						       addr);
 }
 #endif /* __CACHEFLOW_PAGE_POOL_PRIV_H */

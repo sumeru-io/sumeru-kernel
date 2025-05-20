@@ -24,9 +24,10 @@ static inline struct page **get_frag(struct mlx5e_cacheflow_rq *rq, u16 ix)
 	return &rq->wqe.frags[ix << rq->wqe.info.log_num_frags];
 }
 
-static void mlx5e_cacheflow_build_rq_param(struct mlx5_core_dev *mdev,
-					  struct net_device *netdev,
-					  struct mlx5e_cacheflow_params *cparams)
+static void
+mlx5e_cacheflow_build_rq_param(struct mlx5_core_dev *mdev,
+			       struct net_device *netdev,
+			       struct mlx5e_cacheflow_params *cparams)
 {
 	struct mlx5e_params *params = &cparams->params;
 	struct mlx5e_rq_param *rq_param = &cparams->rq_param;
@@ -35,15 +36,16 @@ static void mlx5e_cacheflow_build_rq_param(struct mlx5_core_dev *mdev,
 	params->log_rq_mtu_frames = cacheflow_channel_descriptor;
 
 	mlx5e_build_rq_param(mdev, params, NULL, rq_param);
-	rq_param->frags_info.wqe_bulk = max_t(u16, rq_param->frags_info.wqe_index_mask + 1, 8);
+	rq_param->frags_info.wqe_bulk =
+		max_t(u16, rq_param->frags_info.wqe_index_mask + 1, 8);
 	rq_param->frags_info.refill_unit = rq_param->frags_info.wqe_bulk;
 
 	rq_param->cacheflow_channel = 1;
 }
 
 static void mlx5e_cacheflow_build_params(struct mlx5e_cacheflow *c,
-					struct mlx5e_cacheflow_params *cparams,
-					struct mlx5e_params *orig)
+					 struct mlx5e_cacheflow_params *cparams,
+					 struct mlx5e_params *orig)
 {
 	struct mlx5e_params *params = &cparams->params;
 
@@ -56,7 +58,8 @@ static void mlx5e_cacheflow_build_params(struct mlx5e_cacheflow *c,
 	return mlx5e_cacheflow_build_rq_param(c->mdev, c->netdev, cparams);
 }
 
-static inline void mlx5e_cacheflow_put_rx_frag(struct mlx5e_cacheflow_rq *rq, struct page **frag)
+static inline void mlx5e_cacheflow_put_rx_frag(struct mlx5e_cacheflow_rq *rq,
+					       struct page **frag)
 {
 	if (*frag) {
 		cacheflow_page_pool_put_page(rq->page_pool, *frag, -1, true);
@@ -64,7 +67,8 @@ static inline void mlx5e_cacheflow_put_rx_frag(struct mlx5e_cacheflow_rq *rq, st
 	}
 }
 
-static inline void mlx5e_cacheflow_free_rx_wqe(struct mlx5e_cacheflow_rq *rq, struct page **wi)
+static inline void mlx5e_cacheflow_free_rx_wqe(struct mlx5e_cacheflow_rq *rq,
+					       struct page **wi)
 {
 	int i;
 
@@ -72,7 +76,8 @@ static inline void mlx5e_cacheflow_free_rx_wqe(struct mlx5e_cacheflow_rq *rq, st
 		mlx5e_cacheflow_put_rx_frag(rq, wi);
 }
 
-static void mlx5e_cacheflow_free_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix, int wqe_bulk)
+static void mlx5e_cacheflow_free_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix,
+					 int wqe_bulk)
 {
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
 	int i;
@@ -86,7 +91,8 @@ static void mlx5e_cacheflow_free_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix, 
 	}
 }
 
-static int mlx5e_cacheflow_alloc_rx_wqe(struct mlx5e_cacheflow_rq *rq, struct mlx5e_rx_wqe_cyc *wqe, u16 ix)
+static int mlx5e_cacheflow_alloc_rx_wqe(struct mlx5e_cacheflow_rq *rq,
+					struct mlx5e_rx_wqe_cyc *wqe, u16 ix)
 {
 	struct page **frag = get_frag(rq, ix);
 	int i;
@@ -95,7 +101,8 @@ static int mlx5e_cacheflow_alloc_rx_wqe(struct mlx5e_cacheflow_rq *rq, struct ml
 		dma_addr_t addr;
 		u16 headroom;
 
-		*frag = cacheflow_page_pool_alloc_pages(rq->page_pool, GFP_ATOMIC | __GFP_NOWARN);
+		*frag = cacheflow_page_pool_alloc_pages(
+			rq->page_pool, GFP_ATOMIC | __GFP_NOWARN);
 		if (unlikely(*frag == NULL))
 			goto free_frags;
 
@@ -113,7 +120,8 @@ free_frags:
 	return -ENOMEM;
 }
 
-static int mlx5e_cacheflow_alloc_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix, int wqe_bulk)
+static int mlx5e_cacheflow_alloc_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix,
+					 int wqe_bulk)
 {
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
 	int i;
@@ -131,8 +139,8 @@ static int mlx5e_cacheflow_alloc_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix, 
 	return i;
 }
 
-
-static int mlx5e_cacheflow_refill_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix, int wqe_bulk)
+static int mlx5e_cacheflow_refill_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix,
+					  int wqe_bulk)
 {
 	int remaining = wqe_bulk;
 	int total_alloc = 0;
@@ -147,7 +155,8 @@ static int mlx5e_cacheflow_refill_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix,
 		refill = min_t(u16, rq->wqe.info.refill_unit, remaining);
 
 		mlx5e_cacheflow_free_rx_wqes(rq, ix + total_alloc, refill);
-		refill_alloc = mlx5e_cacheflow_alloc_rx_wqes(rq, ix + total_alloc, refill);
+		refill_alloc = mlx5e_cacheflow_alloc_rx_wqes(
+			rq, ix + total_alloc, refill);
 		if (unlikely(refill_alloc != refill))
 			goto err_free;
 
@@ -197,9 +206,8 @@ bool mlx5e_cacheflow_post_rx_wqes(struct mlx5e_cacheflow_rq *rq)
 	return busy;
 }
 
-
-
-static int mlx5e_cacheflow_open_rx_cq(struct mlx5e_cacheflow *c, struct mlx5e_cacheflow_params *cparams)
+static int mlx5e_cacheflow_open_rx_cq(struct mlx5e_cacheflow *c,
+				      struct mlx5e_cacheflow_params *cparams)
 {
 	int err;
 	struct dim_cq_moder moder = {};
@@ -212,33 +220,37 @@ static int mlx5e_cacheflow_open_rx_cq(struct mlx5e_cacheflow *c, struct mlx5e_ca
 		.ix = 0,
 	};
 
-	err = mlx5e_open_cq(c->mdev, moder, &cparams->rq_param.cqp, &ccp, &c->rq.cq);
+	err = mlx5e_open_cq(c->mdev, moder, &cparams->rq_param.cqp, &ccp,
+			    &c->rq.cq);
 
 	return err;
 }
 
-static int mlx5e_cacheflow_init_rq(struct mlx5e_cacheflow *c, struct mlx5e_params *params, struct mlx5e_cacheflow_rq *rq)
+static int mlx5e_cacheflow_init_rq(struct mlx5e_cacheflow *c,
+				   struct mlx5e_params *params,
+				   struct mlx5e_cacheflow_rq *rq)
 {
 	struct mlx5_core_dev *mdev = c->mdev;
 	struct mlx5e_priv *priv = c->priv;
 
-	rq->wq_type      = params->rq_wq_type;
-	rq->pdev         = c->pdev;
-	rq->netdev       = priv->netdev;
-	rq->priv         = priv;
-	rq->clock        = &mdev->clock;
-	rq->tstamp       = &priv->tstamp;
-	rq->mdev         = mdev;
-	rq->hw_mtu       = MLX5E_SW2HW_MTU(params, params->sw_mtu);
-	rq->stats        = &c->priv->cacheflow_stats.rq;
-	rq->ix           = 0;
+	rq->wq_type = params->rq_wq_type;
+	rq->pdev = c->pdev;
+	rq->netdev = priv->netdev;
+	rq->priv = priv;
+	rq->clock = &mdev->clock;
+	rq->tstamp = &priv->tstamp;
+	rq->mdev = mdev;
+	rq->hw_mtu = MLX5E_SW2HW_MTU(params, params->sw_mtu);
+	rq->stats = &c->priv->cacheflow_stats.rq;
+	rq->ix = 0;
 	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
 
 	xdp_rxq_info_unused(&rq->xdp_rxq);
 	return 0;
 }
 
-int mlx5e_cacheflow_create_rq(struct mlx5e_cacheflow_rq *rq, struct mlx5e_rq_param *param, u16 q_counter)
+int mlx5e_cacheflow_create_rq(struct mlx5e_cacheflow_rq *rq,
+			      struct mlx5e_rq_param *param, u16 q_counter)
 {
 	struct mlx5_core_dev *mdev = rq->mdev;
 	u8 ts_format;
@@ -258,17 +270,17 @@ int mlx5e_cacheflow_create_rq(struct mlx5e_cacheflow_rq *rq, struct mlx5e_rq_par
 			    MLX5_TIMESTAMP_FORMAT_REAL_TIME :
 			    MLX5_TIMESTAMP_FORMAT_FREE_RUNNING;
 	rqc = MLX5_ADDR_OF(create_rq_in, in, ctx);
-	wq  = MLX5_ADDR_OF(rqc, rqc, wq);
+	wq = MLX5_ADDR_OF(rqc, rqc, wq);
 
 	memcpy(rqc, param->rqc, sizeof(param->rqc));
 
-	MLX5_SET(rqc,  rqc, cqn,		rq->cq.mcq.cqn);
-	MLX5_SET(rqc,  rqc, state,		MLX5_RQC_STATE_RST);
-	MLX5_SET(rqc,  rqc, ts_format,		ts_format);
-	MLX5_SET(rqc,  rqc, counter_set_id,     q_counter);
-	MLX5_SET(wq,   wq,  log_wq_pg_sz,	rq->wq_ctrl.buf.page_shift -
-						MLX5_ADAPTER_PAGE_SHIFT);
-	MLX5_SET64(wq, wq,  dbr_addr,		rq->wq_ctrl.db.dma);
+	MLX5_SET(rqc, rqc, cqn, rq->cq.mcq.cqn);
+	MLX5_SET(rqc, rqc, state, MLX5_RQC_STATE_RST);
+	MLX5_SET(rqc, rqc, ts_format, ts_format);
+	MLX5_SET(rqc, rqc, counter_set_id, q_counter);
+	MLX5_SET(wq, wq, log_wq_pg_sz,
+		 rq->wq_ctrl.buf.page_shift - MLX5_ADAPTER_PAGE_SHIFT);
+	MLX5_SET64(wq, wq, dbr_addr, rq->wq_ctrl.db.dma);
 
 	mlx5_fill_page_frag_array(&rq->wq_ctrl.buf,
 				  (__be64 *)MLX5_ADDR_OF(wq, wq, pas));
@@ -280,15 +292,15 @@ int mlx5e_cacheflow_create_rq(struct mlx5e_cacheflow_rq *rq, struct mlx5e_rq_par
 	return err;
 }
 
-
-static int mlx5e_cacheflow_init_wqe_alloc_info(struct mlx5e_cacheflow_rq *rq, int node)
+static int mlx5e_cacheflow_init_wqe_alloc_info(struct mlx5e_cacheflow_rq *rq,
+					       int node)
 {
 	int wq_sz = mlx5_wq_cyc_get_size(&rq->wqe.wq);
 	int len = wq_sz << rq->wqe.info.log_num_frags;
 	struct page **frags;
 
-
-	frags = kvzalloc_node(array_size(len, sizeof(*frags)), GFP_KERNEL, node);
+	frags = kvzalloc_node(array_size(len, sizeof(*frags)), GFP_KERNEL,
+			      node);
 	if (!frags)
 		return -ENOMEM;
 
@@ -302,11 +314,10 @@ static void mlx5e_cacheflow_free_wqe_alloc_info(struct mlx5e_cacheflow_rq *rq)
 	kvfree(rq->wqe.frags);
 }
 
-
 static int mlx5e_cacheflow_alloc_rq(struct mlx5e_params *params,
-			  struct mlx5e_xsk_param *xsk,
-			  struct mlx5e_rq_param *rqp,
-			  int node, struct mlx5e_cacheflow_rq *rq)
+				    struct mlx5e_xsk_param *xsk,
+				    struct mlx5e_rq_param *rqp, int node,
+				    struct mlx5e_cacheflow_rq *rq)
 {
 	struct mlx5_core_dev *mdev = rq->mdev;
 	void *rqc = rqp->rqc;
@@ -325,7 +336,7 @@ static int mlx5e_cacheflow_alloc_rq(struct mlx5e_params *params,
 	rq->mkey_be = cpu_to_be32(mdev->mlx5e_res.hw_objs.mkey);
 
 	err = mlx5_wq_cyc_create(mdev, &rqp->wq, rqc_wq, &rq->wqe.wq,
-					&rq->wq_ctrl);
+				 &rq->wq_ctrl);
 	if (err)
 		goto err_rq_xdp_prog;
 
@@ -346,15 +357,15 @@ static int mlx5e_cacheflow_alloc_rq(struct mlx5e_params *params,
 	/* Create a page_pool and register it with rxq */
 	struct cacheflow_page_pool_params pp_params = { 0 };
 
-	pp_params.order     = 0;
+	pp_params.order = 0;
 	pp_params.pool_size = get_cacheflow_pool_size();
 
-	pp_params.nid       = node;
-	pp_params.dev       = rq->pdev;
-	pp_params.napi      = rq->cq.napi;
-	pp_params.netdev    = rq->netdev;
-	pp_params.dma_dir   = rq->buff.map_dir;
-	pp_params.max_len   = PAGE_SIZE;
+	pp_params.nid = node;
+	pp_params.dev = rq->pdev;
+	pp_params.napi = rq->cq.napi;
+	pp_params.netdev = rq->netdev;
+	pp_params.dma_dir = rq->buff.map_dir;
+	pp_params.max_len = PAGE_SIZE;
 
 	/* page_pool can be used even when there is no rq->xdp_prog,
 	 * given page_pool does not handle DMA mapping there is no
@@ -368,8 +379,8 @@ static int mlx5e_cacheflow_alloc_rq(struct mlx5e_params *params,
 		goto err_free_by_rq_type;
 	}
 	if (xdp_rxq_info_is_reg(&rq->xdp_rxq))
-		err = xdp_rxq_info_reg_mem_model(&rq->xdp_rxq,
-							MEM_TYPE_PAGE_POOL, rq->page_pool);
+		err = xdp_rxq_info_reg_mem_model(
+			&rq->xdp_rxq, MEM_TYPE_PAGE_POOL, rq->page_pool);
 
 	if (err)
 		goto err_destroy_page_pool;
@@ -381,13 +392,14 @@ static int mlx5e_cacheflow_alloc_rq(struct mlx5e_params *params,
 
 		for (f = 0; f < rq->wqe.info.num_frags; f++) {
 			u32 frag_size = rq->wqe.info.arr[f].frag_size |
-				MLX5_HW_START_PADDING;
+					MLX5_HW_START_PADDING;
 
 			wqe->data[f].byte_count = cpu_to_be32(frag_size);
 			wqe->data[f].lkey = rq->mkey_be;
 		}
 		/* check if num_frags is not a pow of two */
-		if (rq->wqe.info.num_frags < (1 << rq->wqe.info.log_num_frags)) {
+		if (rq->wqe.info.num_frags <
+		    (1 << rq->wqe.info.log_num_frags)) {
 			wqe->data[f].byte_count = 0;
 			wqe->data[f].lkey = params->terminate_lkey_be;
 			wqe->data[f].addr = 0;
@@ -409,15 +421,14 @@ err_rq_xdp_prog:
 	return err;
 }
 
-static int mlx5_core_set_delay_drop(struct mlx5_core_dev *dev,
-		u32 timeout_usec)
+static int mlx5_core_set_delay_drop(struct mlx5_core_dev *dev, u32 timeout_usec)
 {
 	u32 in[MLX5_ST_SZ_DW(set_delay_drop_params_in)] = {};
 
 	MLX5_SET(set_delay_drop_params_in, in, opcode,
-			MLX5_CMD_OP_SET_DELAY_DROP_PARAMS);
+		 MLX5_CMD_OP_SET_DELAY_DROP_PARAMS);
 	MLX5_SET(set_delay_drop_params_in, in, delay_drop_timeout,
-			timeout_usec / 100);
+		 timeout_usec / 100);
 	return mlx5_cmd_exec_in(dev, set_delay_drop_params, in);
 }
 
@@ -446,7 +457,8 @@ out:
 	return err;
 }
 
-static int mlx5e_cacheflow_modify_rq_state(struct mlx5e_cacheflow_rq *rq, int curr_state, int next_state)
+static int mlx5e_cacheflow_modify_rq_state(struct mlx5e_cacheflow_rq *rq,
+					   int curr_state, int next_state)
 {
 	struct mlx5_core_dev *mdev = rq->mdev;
 
@@ -460,7 +472,8 @@ static int mlx5e_cacheflow_modify_rq_state(struct mlx5e_cacheflow_rq *rq, int cu
 	if (!in)
 		return -ENOMEM;
 
-	if (curr_state == MLX5_RQC_STATE_RST && next_state == MLX5_RQC_STATE_RDY)
+	if (curr_state == MLX5_RQC_STATE_RST &&
+	    next_state == MLX5_RQC_STATE_RDY)
 		mlx5_wq_cyc_reset(&rq->wqe.wq);
 
 	rqc = MLX5_ADDR_OF(modify_rq_in, in, ctx);
@@ -490,7 +503,8 @@ void mlx5e_cacheflow_destroy_rq(struct mlx5e_cacheflow_rq *rq)
 	mlx5_core_destroy_rq(rq->mdev, rq->rqn);
 }
 
-static void mlx5e_cacheflow_dealloc_rx_wqe(struct mlx5e_cacheflow_rq *rq, u16 ix)
+static void mlx5e_cacheflow_dealloc_rx_wqe(struct mlx5e_cacheflow_rq *rq,
+					   u16 ix)
 {
 	struct page **wi = get_frag(rq, ix);
 
@@ -519,13 +533,13 @@ static void mlx5e_cacheflow_free_rx_descs(struct mlx5e_cacheflow_rq *rq)
 	}
 }
 
-static int mlx5e_cacheflow_open_rq(struct mlx5e_params *params, struct mlx5e_rq_param *param,
-		  struct mlx5e_xsk_param *xsk, int node, u16 q_counter,
-		  struct mlx5e_cacheflow_rq *rq)
+static int mlx5e_cacheflow_open_rq(struct mlx5e_params *params,
+				   struct mlx5e_rq_param *param,
+				   struct mlx5e_xsk_param *xsk, int node,
+				   u16 q_counter, struct mlx5e_cacheflow_rq *rq)
 {
 	struct mlx5_core_dev *mdev = rq->mdev;
 	int err;
-
 
 	err = mlx5e_cacheflow_alloc_rq(params, xsk, param, node, rq);
 	if (err)
@@ -540,7 +554,8 @@ static int mlx5e_cacheflow_open_rq(struct mlx5e_params *params, struct mlx5e_rq_
 		mlx5_core_warn(mdev, "Failed to enable delay drop err=%d\n",
 			       err);
 
-	err = mlx5e_cacheflow_modify_rq_state(rq, MLX5_RQC_STATE_RST, MLX5_RQC_STATE_RDY);
+	err = mlx5e_cacheflow_modify_rq_state(rq, MLX5_RQC_STATE_RST,
+					      MLX5_RQC_STATE_RDY);
 	if (err)
 		goto err_destroy_rq;
 
@@ -581,8 +596,9 @@ void mlx5e_cacheflow_close_rq(struct mlx5e_cacheflow_rq *rq)
 	mlx5e_cacheflow_free_rq(rq);
 }
 
-static int mlx5e_cacheflow_open_rxq_rq(struct mlx5e_cacheflow *c, struct mlx5e_params *params,
-			     struct mlx5e_rq_param *rq_param)
+static int mlx5e_cacheflow_open_rxq_rq(struct mlx5e_cacheflow *c,
+				       struct mlx5e_params *params,
+				       struct mlx5e_rq_param *rq_param)
 {
 	int node = dev_to_node(mlx5_core_dma_dev(c->mdev));
 	int err, sd_ix;
@@ -598,10 +614,12 @@ static int mlx5e_cacheflow_open_rxq_rq(struct mlx5e_cacheflow *c, struct mlx5e_p
 	sd_ix = mlx5_sd_ch_ix_get_dev_ix(c->mdev, 0);
 	q_counter = c->priv->q_counter[sd_ix];
 
-	return mlx5e_cacheflow_open_rq(params, rq_param, NULL, node, q_counter, &c->rq);
+	return mlx5e_cacheflow_open_rq(params, rq_param, NULL, node, q_counter,
+				       &c->rq);
 }
 
-static int mlx5e_cacheflow_open_queues(struct mlx5e_cacheflow *c, struct mlx5e_cacheflow_params *cparams)
+static int mlx5e_cacheflow_open_queues(struct mlx5e_cacheflow *c,
+				       struct mlx5e_cacheflow_params *cparams)
 {
 	int err;
 
@@ -609,7 +627,8 @@ static int mlx5e_cacheflow_open_queues(struct mlx5e_cacheflow *c, struct mlx5e_c
 	if (err)
 		return err;
 
-	err = mlx5e_cacheflow_open_rxq_rq(c, &cparams->params, &cparams->rq_param);
+	err = mlx5e_cacheflow_open_rxq_rq(c, &cparams->params,
+					  &cparams->rq_param);
 	if (err)
 		goto close_rx_cq;
 
@@ -634,35 +653,43 @@ static void mlx5e_cacheflow_print_params(struct mlx5e_cacheflow_params *cparams)
 
 	pr_info("cacheflow channel params:\n");
 	pr_info("  mlx5e_params: log_sq_size=%u, rq_wq_type=%u, log_rq_mtu_frames=%u, num_channels=%u\n",
-		params->log_sq_size, params->rq_wq_type, params->log_rq_mtu_frames, params->num_channels);
-	pr_info("  mqprio: mode=%u, num_tc=%u\n",
-		params->mqprio.mode, params->mqprio.num_tc);
+		params->log_sq_size, params->rq_wq_type,
+		params->log_rq_mtu_frames, params->num_channels);
+	pr_info("  mqprio: mode=%u, num_tc=%u\n", params->mqprio.mode,
+		params->mqprio.num_tc);
 	pr_info("  cqe_compress_def=%d, vlan_strip_disable=%d, scatter_fcs=%d\n",
-		params->rx_cqe_compress_def, params->vlan_strip_disable, params->scatter_fcs_en);
+		params->rx_cqe_compress_def, params->vlan_strip_disable,
+		params->scatter_fcs_en);
 	pr_info("  dim: rx_en=%d, tx_en=%d, rx_use_cqe=%d, tx_use_cqe=%d\n",
-		params->rx_dim_enabled, params->tx_dim_enabled, params->rx_moder_use_cqe_mode, params->tx_moder_use_cqe_mode);
+		params->rx_dim_enabled, params->tx_dim_enabled,
+		params->rx_moder_use_cqe_mode, params->tx_moder_use_cqe_mode);
 	pr_info("  packet_merge: type=%d, timeout=%u, shampo(match_type=%u, align_gran=%u)\n",
 		params->packet_merge.type, params->packet_merge.timeout,
-		params->packet_merge.shampo.match_criteria_type, params->packet_merge.shampo.alignment_granularity);
+		params->packet_merge.shampo.match_criteria_type,
+		params->packet_merge.shampo.alignment_granularity);
 	pr_info("  tx_min_inline=%u, pflags=0x%x, sw_mtu=%u, hard_mtu=%d, ptp_rx=%d, lkey=0x%x\n",
-		params->tx_min_inline_mode, params->pflags, params->sw_mtu, params->hard_mtu,
-		params->ptp_rx, be32_to_cpu(params->terminate_lkey_be));
+		params->tx_min_inline_mode, params->pflags, params->sw_mtu,
+		params->hard_mtu, params->ptp_rx,
+		be32_to_cpu(params->terminate_lkey_be));
 
 	pr_info("  mlx5e_rq_param:\n");
 	pr_info("    cqp: eq_ix=%u, cq_period_mode=%u, cqc_size=%zu\n",
-		rq_param->cqp.eq_ix, rq_param->cqp.cq_period_mode, sizeof(rq_param->cqp.cqc));
+		rq_param->cqp.eq_ix, rq_param->cqp.cq_period_mode,
+		sizeof(rq_param->cqp.cqc));
 	pr_info("      cqp.wq: buf_numa_node=%d, db_numa_node=%d\n",
 		rq_param->cqp.wq.buf_numa_node, rq_param->cqp.wq.db_numa_node);
 	pr_info("    rqc_size: %zu\n", sizeof(rq_param->rqc));
 	pr_info("    wq: buf_numa_node=%d, db_numa_node=%d\n",
 		rq_param->wq.buf_numa_node, rq_param->wq.db_numa_node);
 	pr_info("    frags_info: num_frags=%u, log_num_frags=%u, wqe_bulk=%u, refill_unit=%u, wqe_index_mask=0x%x\n",
-		rq_param->frags_info.num_frags, rq_param->frags_info.log_num_frags,
+		rq_param->frags_info.num_frags,
+		rq_param->frags_info.log_num_frags,
 		rq_param->frags_info.wqe_bulk, rq_param->frags_info.refill_unit,
 		rq_param->frags_info.wqe_index_mask);
 	for (int i = 0; i < rq_param->frags_info.num_frags; i++) {
 		pr_info("      frags_info.arr[%d]: frag_size=%d, frag_stride=%d\n",
-			i, rq_param->frags_info.arr[i].frag_size, rq_param->frags_info.arr[i].frag_stride);
+			i, rq_param->frags_info.arr[i].frag_size,
+			rq_param->frags_info.arr[i].frag_stride);
 	}
 	pr_info("    xdp_frag_size=%u, cacheflow_channel=%u\n",
 		rq_param->xdp_frag_size, rq_param->cacheflow_channel);
@@ -690,7 +717,8 @@ static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu,
 
 	INIT_CSD(&th->csd, cacheflow_raise_softirq, th);
 	spin_lock_init(&th->cqe_fifo_lock);
-	th->cqe_ring = item_ring_create(8192, sizeof(struct mlx5e_cacheflow_cqe), GFP_KERNEL);
+	th->cqe_ring = item_ring_create(
+		8192, sizeof(struct mlx5e_cacheflow_cqe), GFP_KERNEL);
 
 	mlx5e_cacheflow_th_debugfs_init(th);
 
@@ -700,7 +728,6 @@ static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu,
 int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 			 u8 lag_port, struct mlx5e_cacheflow **cc)
 {
-
 	struct net_device *netdev = priv->netdev;
 	struct mlx5_core_dev *mdev = priv->mdev;
 	struct mlx5e_cacheflow_params *cparams;
@@ -709,7 +736,8 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	struct mlx5e_cacheflow_rq_tracker *rq_tracker = NULL;
 	int err, cpu;
 
-	c = kvzalloc_node(sizeof(*c), GFP_KERNEL, dev_to_node(mlx5_core_dma_dev(mdev)));
+	c = kvzalloc_node(sizeof(*c), GFP_KERNEL,
+			  dev_to_node(mlx5_core_dma_dev(mdev)));
 	cparams = kvzalloc(sizeof(*cparams), GFP_KERNEL);
 	th = kvcalloc(num_possible_cpus(), sizeof(*th), GFP_KERNEL);
 
@@ -719,7 +747,8 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	}
 
 	if (cacheflow_rq_tracker) {
-		rq_tracker = mlx5e_cacheflow_rq_tracker_create(1 << params->log_rq_mtu_frames);
+		rq_tracker = mlx5e_cacheflow_rq_tracker_create(
+			1 << params->log_rq_mtu_frames);
 		if (!rq_tracker) {
 			err = -ENOMEM;
 			goto err_free;
@@ -743,9 +772,12 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	mlx5e_cacheflow_print_params(cparams);
 
 	netif_cacheflow_napi_add_weight(netdev, &c->napi,
-					mlx5e_cacheflow_bh_napi_poll, 16, get_cacheflow_steer_core());
+					mlx5e_cacheflow_bh_napi_poll, 16,
+					get_cacheflow_steer_core());
 	pr_info("cacheflow: add NAPI %d (kthread) on core %d, res: %s\n",
-		c->napi.napi_id, get_cacheflow_steer_core(), test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" : "fail");
+		c->napi.napi_id, get_cacheflow_steer_core(),
+		test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" :
+								 "fail");
 
 	err = mlx5e_cacheflow_open_queues(c, cparams);
 	if (unlikely(err))
@@ -755,7 +787,8 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	cpumask_clear(&c->notify_cpu_set);
 	for_each_possible_cpu(cpu) {
 		mlx5e_cacheflow_th_init(&c->th_array[cpu], cpu, c, &c->rq);
-		netif_napi_add(netdev, &c->th_array[cpu].napi, mlx5e_cacheflow_th_napi_poll);
+		netif_napi_add(netdev, &c->th_array[cpu].napi,
+			       mlx5e_cacheflow_th_napi_poll);
 	}
 
 	priv->cacheflow_opened = true;
@@ -842,5 +875,3 @@ static inline void mlx5e_skb_set_hash(struct mlx5_cqe64 *cqe,
 					    PKT_HASH_TYPE_NONE;
 	skb_set_hash(skb, be32_to_cpu(cqe->rss_hash_result), ht);
 }
-
-
