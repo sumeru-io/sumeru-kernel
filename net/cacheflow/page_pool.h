@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+
 #ifndef __CACHEFLOW_PAGE_POOL_PRIV_H
 #define __CACHEFLOW_PAGE_POOL_PRIV_H
 
