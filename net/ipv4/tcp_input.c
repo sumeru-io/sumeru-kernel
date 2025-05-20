@@ -241,21 +241,27 @@ static void tcp_measure_rcv_mss(struct sock *sk, const struct sk_buff *skb)
 		 * when we update icsk_ack.rcv_mss.
 		 */
 		if (unlikely(len != icsk->icsk_ack.rcv_mss || (!icsk->icsk_ack.cacheflow && CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW)))) {
-			u64 val = (u64)skb->len << TCP_RMEM_TO_WIN_SCALE;
+
 			u8 old_ratio = tcp_sk(sk)->scaling_ratio;
 
-			do_div(val, skb->truesize);
-			tcp_sk(sk)->scaling_ratio = val ? val : 1;
+			if (CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW) || icsk->icsk_ack.cacheflow) {
+				tcp_sk(sk)->scaling_ratio = (1 << (TCP_RMEM_TO_WIN_SCALE - 1));
+				icsk->icsk_ack.cacheflow = CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW);
+			} else {
+				u64 val = (u64)skb->len << TCP_RMEM_TO_WIN_SCALE;
 
-			icsk->icsk_ack.cacheflow = CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW);
+				do_div(val, skb->truesize);
+				tcp_sk(sk)->scaling_ratio = val ? val : 1;
+			}
+
 			if (CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW)) {
 				pr_info("cacheflow: tcp_measure_rcv_mss, skb: %px, len: %d, truesize: %d, old_ratio: %d, new_ratio: %d\n", skb, skb->len, skb->truesize, old_ratio, tcp_sk(sk)->scaling_ratio);
 			}
 
 			if (old_ratio != tcp_sk(sk)->scaling_ratio) {
 				struct tcp_sock *tp = tcp_sk(sk);
+				u64 val = tcp_win_from_space(sk, sk->sk_rcvbuf);
 
-				val = tcp_win_from_space(sk, sk->sk_rcvbuf);
 				tcp_set_window_clamp(sk, val);
 
 				if (tp->window_clamp < tp->rcvq_space.space)
