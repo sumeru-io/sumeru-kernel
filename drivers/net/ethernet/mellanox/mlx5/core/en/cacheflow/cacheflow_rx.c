@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <net/cacheflow/cacheflow.h>
 #include <net/cacheflow/page_pool.h>
 #include <net/rps.h>
@@ -29,7 +30,7 @@ static int mlx5e_cacheflow_get_cpu(u32 hash)
 
 static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct mlx5_cqe64 *cqe)
 {
-	struct mlx5e_cacheflow* cacheflow = container_of(rq, struct mlx5e_cacheflow, rq);
+	struct mlx5e_cacheflow *cacheflow = container_of(rq, struct mlx5e_cacheflow, rq);
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
 	struct page **wi;
 	u32 cqe_bcnt;
@@ -51,7 +52,7 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 
 	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
 		rq->stats->wqe_err++;
-		pr_info("cacheflow: wqe error, op_code=%d, \n", get_cqe_opcode(cqe));
+		pr_info("cacheflow: wqe error, op_code=%d\n", get_cqe_opcode(cqe));
 		goto wq_cyc_pop;
 	}
 	tcpu = mlx5e_cacheflow_get_cpu(be32_to_cpu(cqe->rss_hash_result));

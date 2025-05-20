@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __MLX5_EN_CACHEFLOW_H__
 #define __MLX5_EN_CACHEFLOW_H__
 
@@ -16,9 +17,9 @@ struct mlx5e_cacheflow_xdp_buff {
 
 struct mlx5e_cacheflow_rq {
 	struct {
-		struct mlx5_wq_cyc          		wq;
-		struct page**                           frags;
-		struct mlx5e_rq_frags_info  		info;
+		struct mlx5_wq_cyc			wq;
+		struct page				**frags;
+		struct mlx5e_rq_frags_info		info;
 	} wqe;
 	struct {
 		u16            headroom;
@@ -62,24 +63,24 @@ struct mlx5e_cacheflow_rq {
 struct mlx5e_cacheflow {
 	struct mlx5e_cacheflow_rq		rq;
 
-	struct napi_struct         		napi;
-	struct device             		*pdev;
-	struct net_device         		*netdev;
-	__be32                     		mkey_be;
-	u8                         		num_tc;
-	u8                         		lag_port;
+	struct napi_struct			napi;
+	struct device				*pdev;
+	struct net_device			*netdev;
+	__be32					mkey_be;
+	u8					num_tc;
+	u8					lag_port;
 
-	struct mlx5e_ch_stats     		*stats;
-	struct mlx5e_cacheflow_th  		*th_array;
-	cpumask_t 				notify_cpu_set;
+	struct mlx5e_ch_stats			*stats;
+	struct mlx5e_cacheflow_th		*th_array;
+	cpumask_t				notify_cpu_set;
 	/* control */
-	struct mlx5e_priv         		*priv;
-	struct mlx5_core_dev      		*mdev;
-	struct hwtstamp_config    		*tstamp;
-	int                        		cpu;
+	struct mlx5e_priv			*priv;
+	struct mlx5_core_dev			*mdev;
+	struct hwtstamp_config			*tstamp;
+	int					cpu;
 
-	struct mlx5e_cacheflow_rq_tracker 	*rq_tracker;
-	struct dentry                   	*debugfs_dir;
+	struct mlx5e_cacheflow_rq_tracker	*rq_tracker;
+	struct dentry				*debugfs_dir;
 };
 
 enum mlx5e_cacheflow_cqe_owner {

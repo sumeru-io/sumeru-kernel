@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __MLX5_EN_CACHEFLOW_RQ_TRACKER_H__
 #define __MLX5_EN_CACHEFLOW_RQ_TRACKER_H__
 
@@ -20,12 +21,12 @@ struct mlx5e_cacheflow_rq_tracker {
 static inline int mlx5e_cacheflow_rq_tracker_update(struct mlx5e_cacheflow_rq_tracker *tracker, ktime_t processed, ktime_t received)
 {
 	struct mlx5e_cacheflow_rq_tracker_entry *entry;
+
 	while ((entry = item_deque_front(tracker->history))) {
-		if (ktime_after(received, entry->processed)) {
+		if (ktime_after(received, entry->processed))
 			item_deque_pop_front(tracker->history);
-		} else {
+		else
 			break;
-		}
 	}
 	entry = item_deque_peek_back(tracker->history);
 	entry->processed = processed;
@@ -40,9 +41,10 @@ static inline int mlx5e_cacheflow_rq_tracker_update(struct mlx5e_cacheflow_rq_tr
 static inline struct mlx5e_cacheflow_rq_tracker *mlx5e_cacheflow_rq_tracker_create(ssize_t size)
 {
 	struct mlx5e_cacheflow_rq_tracker *tracker = kvzalloc(sizeof(*tracker), GFP_KERNEL);
+
 	if (!tracker)
 		return NULL;
-	
+
 	tracker->history = item_deque_create(size,
 		sizeof(struct mlx5e_cacheflow_rq_tracker_entry), GFP_KERNEL);
 

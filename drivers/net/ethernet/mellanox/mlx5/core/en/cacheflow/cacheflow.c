@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <net/cacheflow/cacheflow.h>
 #include <net/cacheflow/page_pool.h>
 #include <net/rps.h>
@@ -40,8 +41,8 @@ static void mlx5e_cacheflow_build_rq_param(struct mlx5_core_dev *mdev,
 	rq_param->cacheflow_channel = 1;
 }
 
-static void mlx5e_cacheflow_build_params(struct mlx5e_cacheflow *c, 
-				     	struct mlx5e_cacheflow_params *cparams,
+static void mlx5e_cacheflow_build_params(struct mlx5e_cacheflow *c,
+					struct mlx5e_cacheflow_params *cparams,
 					struct mlx5e_params *orig)
 {
 	struct mlx5e_params *params = &cparams->params;
@@ -216,7 +217,8 @@ static int mlx5e_cacheflow_open_rx_cq(struct mlx5e_cacheflow *c, struct mlx5e_ca
 	return err;
 }
 
-static int mlx5e_cacheflow_init_rq(struct mlx5e_cacheflow *c, struct mlx5e_params *params, struct mlx5e_cacheflow_rq *rq) {
+static int mlx5e_cacheflow_init_rq(struct mlx5e_cacheflow *c, struct mlx5e_params *params, struct mlx5e_cacheflow_rq *rq)
+{
 	struct mlx5_core_dev *mdev = c->mdev;
 	struct mlx5e_priv *priv = c->priv;
 
@@ -287,9 +289,8 @@ static int mlx5e_cacheflow_init_wqe_alloc_info(struct mlx5e_cacheflow_rq *rq, in
 
 
 	frags = kvzalloc_node(array_size(len, sizeof(*frags)), GFP_KERNEL, node);
-	if (!frags) {
+	if (!frags)
 		return -ENOMEM;
-	}
 
 	rq->wqe.frags = frags;
 
@@ -356,10 +357,10 @@ static int mlx5e_cacheflow_alloc_rq(struct mlx5e_params *params,
 	pp_params.max_len   = PAGE_SIZE;
 
 	/* page_pool can be used even when there is no rq->xdp_prog,
-		* given page_pool does not handle DMA mapping there is no
-		* required state to clear. And page_pool gracefully handle
-		* elevated refcnt.
-		*/
+	 * given page_pool does not handle DMA mapping there is no
+	 * required state to clear. And page_pool gracefully handle
+	 * elevated refcnt.
+	 */
 	rq->page_pool = cacheflow_page_pool_create(&pp_params);
 	if (IS_ERR(rq->page_pool)) {
 		err = PTR_ERR(rq->page_pool);
@@ -510,8 +511,8 @@ static void mlx5e_cacheflow_free_rx_descs(struct mlx5e_cacheflow_rq *rq)
 		mlx5_wq_cyc_pop(wq);
 	}
 	/* Missing slots might also contain unreleased pages due to
-		* deferred release.
-		*/
+	 * deferred release.
+	 */
 	while (missing--) {
 		wqe_ix = mlx5_wq_cyc_ctr2ix(wq, head++);
 		mlx5e_cacheflow_dealloc_rx_wqe(rq, wqe_ix);
@@ -533,7 +534,7 @@ static int mlx5e_cacheflow_open_rq(struct mlx5e_params *params, struct mlx5e_rq_
 	err = mlx5e_cacheflow_create_rq(rq, param, q_counter);
 	if (err)
 		goto err_free_rq;
-	
+
 	err = mlx5e_set_delay_drop(rq->priv, params);
 	if (err)
 		mlx5_core_warn(mdev, "Failed to enable delay drop err=%d\n",
@@ -674,7 +675,7 @@ static void cacheflow_raise_softirq(void *data)
 	napi_schedule_irqoff(&th->napi);
 }
 
-static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu, 
+static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu,
 				   struct mlx5e_cacheflow *cacheflow,
 				   struct mlx5e_cacheflow_rq *rq)
 {
@@ -697,7 +698,8 @@ static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu,
 }
 
 int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
-			 u8 lag_port, struct mlx5e_cacheflow **cc) {
+			 u8 lag_port, struct mlx5e_cacheflow **cc)
+{
 
 	struct net_device *netdev = priv->netdev;
 	struct mlx5_core_dev *mdev = priv->mdev;
@@ -709,7 +711,7 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 
 	c = kvzalloc_node(sizeof(*c), GFP_KERNEL, dev_to_node(mlx5_core_dma_dev(mdev)));
 	cparams = kvzalloc(sizeof(*cparams), GFP_KERNEL);
-	th = kvzalloc(sizeof(*th) * num_possible_cpus(), GFP_KERNEL);
+	th = kvcalloc(num_possible_cpus(), sizeof(*th), GFP_KERNEL);
 
 	if (!c || !cparams || !th) {
 		err = -ENOMEM;
@@ -738,15 +740,15 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	mlx5e_cacheflow_build_params(c, cparams, params);
 	mlx5e_cacheflow_print_params(cparams);
 
-	int core = get_cacheflow_steer_core();
-	netif_cacheflow_napi_add_weight(netdev, &c->napi, mlx5e_cacheflow_bh_napi_poll, 16, core);
-	pr_info("cacheflow: add NAPI %d (kthread) on core %d, res: %s\n", 
-		c->napi.napi_id, core, test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" : "fail");
+	netif_cacheflow_napi_add_weight(netdev, &c->napi,
+					mlx5e_cacheflow_bh_napi_poll, 16, get_cacheflow_steer_core());
+	pr_info("cacheflow: add NAPI %d (kthread) on core %d, res: %s\n",
+		c->napi.napi_id, get_cacheflow_steer_core(), test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" : "fail");
 
 	err = mlx5e_cacheflow_open_queues(c, cparams);
 	if (unlikely(err))
 		goto err_napi_del;
-	
+
 	c->th_array = th;
 	cpumask_clear(&c->notify_cpu_set);
 	for_each_possible_cpu(cpu) {
@@ -781,6 +783,7 @@ static void mlx5e_cacheflow_th_destroy(struct mlx5e_cacheflow_th *th)
 void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
 {
 	int cpu;
+
 	mlx5e_cacheflow_close_queues(c);
 	netif_napi_del(&c->napi);
 
@@ -800,6 +803,7 @@ void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
 void mlx5e_cacheflow_activate_channel(struct mlx5e_cacheflow *c)
 {
 	int cpu;
+
 	napi_enable(&c->napi);
 
 	for_each_possible_cpu(cpu) {
@@ -818,6 +822,7 @@ void mlx5e_cacheflow_activate_channel(struct mlx5e_cacheflow *c)
 void mlx5e_cacheflow_deactivate_channel(struct mlx5e_cacheflow *c)
 {
 	int cpu;
+
 	mlx5e_cacheflow_deactivate_rq(&c->rq);
 	napi_disable(&c->napi);
 

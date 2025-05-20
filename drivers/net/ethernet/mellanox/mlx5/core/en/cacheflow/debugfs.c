@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <linux/debugfs.h>
 
 #include "en/cacheflow/cacheflow.h"
@@ -10,35 +11,36 @@ static ssize_t mlx5e_cacheflow_rq_tracker_read(struct file *filp, char __user *b
 	char kbuf[32];
 	size_t len;
 
-	if (!tracker) {
+	if (!tracker)
 		len = scnprintf(kbuf, sizeof(kbuf), "0\n");
-	} else {
+	else
 		len = scnprintf(kbuf, sizeof(kbuf), "%zd\n", tracker->size);
-	}
 
 	return simple_read_from_buffer(buf, count, pos, kbuf, len);
 }
 
 static const struct file_operations mlx5e_cacheflow_rq_tracker_fops = {
 	.owner = THIS_MODULE,
-	.open= simple_open,
+	.open = simple_open,
 	.read = mlx5e_cacheflow_rq_tracker_read,
 };
 
-void mlx5e_cacheflow_debugfs_init(struct mlx5e_cacheflow *c) {
+void mlx5e_cacheflow_debugfs_init(struct mlx5e_cacheflow *c)
+{
 	c->debugfs_dir = debugfs_create_dir("cacheflow", mlx5_debugfs_get_dev_root(c->mdev));
 
 	debugfs_create_file("nic_queue", 0600, c->debugfs_dir, c, &mlx5e_cacheflow_rq_tracker_fops);
 }
 
-void mlx5e_cacheflow_debugfs_destroy(struct mlx5e_cacheflow *c) {
+void mlx5e_cacheflow_debugfs_destroy(struct mlx5e_cacheflow *c)
+{
 	debugfs_remove_recursive(c->debugfs_dir);
 }
 
 static ssize_t mlx5e_cacheflow_cqe_fifo_len_read(struct file *filp, char __user *buf, size_t count, loff_t *pos)
 {
 	struct mlx5e_cacheflow_th *th = filp->private_data;
-	struct item_ring *ring = th->cqe_ring;	
+	struct item_ring *ring = th->cqe_ring;
 
 	char kbuf[32];
 	size_t len = scnprintf(kbuf, sizeof(kbuf), "%d\n", max(0, ring->producer.idx - ring->consumer.idx));
@@ -48,7 +50,7 @@ static ssize_t mlx5e_cacheflow_cqe_fifo_len_read(struct file *filp, char __user 
 
 static const struct file_operations mlx5e_cacheflow_cqe_fifo_len_fops = {
 	.owner = THIS_MODULE,
-	.open= simple_open,
+	.open = simple_open,
 	.read = mlx5e_cacheflow_cqe_fifo_len_read,
 };
 
@@ -63,7 +65,7 @@ static ssize_t mlx5e_cacheflow_cqe_fifo_inserted_read(struct file *filp, char __
 
 static const struct file_operations mlx5e_cacheflow_cqe_fifo_inserted_fops = {
 	.owner = THIS_MODULE,
-	.open= simple_open,
+	.open = simple_open,
 	.read = mlx5e_cacheflow_cqe_fifo_inserted_read,
 };
 
@@ -78,14 +80,15 @@ static ssize_t mlx5e_cacheflow_cqe_fifo_missed_read(struct file *filp, char __us
 
 static const struct file_operations mlx5e_cacheflow_cqe_fifo_missed_fops = {
 	.owner = THIS_MODULE,
-	.open= simple_open,
+	.open = simple_open,
 	.read = mlx5e_cacheflow_cqe_fifo_missed_read,
 };
 
-void mlx5e_cacheflow_th_debugfs_init(struct mlx5e_cacheflow_th *th) {
+void mlx5e_cacheflow_th_debugfs_init(struct mlx5e_cacheflow_th *th)
+{
 	char th_name[16];
-	sprintf(th_name, "th_%d", th->cpu);
 
+	sprintf(th_name, "th_%d", th->cpu);
 	th->debugfs_dir = debugfs_create_dir(th_name, th->cacheflow->debugfs_dir);
 
 	debugfs_create_file("fifo_len", 0600, th->debugfs_dir, th, &mlx5e_cacheflow_cqe_fifo_len_fops);
@@ -93,6 +96,7 @@ void mlx5e_cacheflow_th_debugfs_init(struct mlx5e_cacheflow_th *th) {
 	debugfs_create_file("fifo_missed", 0600, th->debugfs_dir, th, &mlx5e_cacheflow_cqe_fifo_missed_fops);
 }
 
-void mlx5e_cacheflow_th_debugfs_destroy(struct mlx5e_cacheflow_th *th) {
+void mlx5e_cacheflow_th_debugfs_destroy(struct mlx5e_cacheflow_th *th)
+{
 	debugfs_remove_recursive(th->debugfs_dir);
 }
