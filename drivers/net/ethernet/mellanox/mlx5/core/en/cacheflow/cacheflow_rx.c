@@ -4,6 +4,7 @@
 #include <trace/events/cacheflow.h>
 
 #include "en/cacheflow/cacheflow.h"
+#include "en/cacheflow/rq_tracker.h"
 #include "en/txrx.h"
 
 #include "trace/events/skb.h"
@@ -60,6 +61,7 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 
 	if (unlikely(!cacheflow_cqe)) {
 		pr_err("cacheflow: kfifo to core %d is full\n", tcpu);
+		th->missed++;
 		goto wq_cyc_pop;
 	}
 
@@ -73,6 +75,7 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe->page, tcpu);
 
 	item_ring_submit(th->cqe_ring);
+	th->inserted++;
 
 	__cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
 

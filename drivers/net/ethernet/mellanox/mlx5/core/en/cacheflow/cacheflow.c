@@ -2,14 +2,15 @@
 #include <net/cacheflow/page_pool.h>
 #include <net/rps.h>
 #include <trace/events/cacheflow.h>
+#include <linux/debugfs.h>
 
 #include "en/cacheflow/cacheflow.h"
+#include "en/cacheflow/rq_tracker.h"
 #include "en/params.h"
 #include "en/xdp.h"
 
 #include "trace/events/skb.h"
 #include "diag/cacheflow_tracepoint.h"
-
 #define MLX5E_TC_FLOW_ID_MASK 0x0000ffff
 
 struct mlx5e_cacheflow_params {
@@ -673,40 +674,26 @@ static void cacheflow_raise_softirq(void *data)
 	napi_schedule_irqoff(&th->napi);
 }
 
-static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu, struct mlx5e_cacheflow_rq *rq)
+static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu, 
+				   struct mlx5e_cacheflow *cacheflow,
+				   struct mlx5e_cacheflow_rq *rq)
 {
 	th->rq = rq;
 	th->cpu = cpu;
+	th->cacheflow = cacheflow;
 	th->ipi_scheduled = 0;
 	th->last_scheduled_time = 0;
+
+	th->inserted = 0;
+	th->missed = 0;
+
 	INIT_CSD(&th->csd, cacheflow_raise_softirq, th);
 	spin_lock_init(&th->cqe_fifo_lock);
 	th->cqe_ring = item_ring_create(8192, sizeof(struct mlx5e_cacheflow_cqe), GFP_KERNEL);
 
+	mlx5e_cacheflow_th_debugfs_init(th);
+
 	return 0;
-}
-
-static struct mlx5e_cacheflow_rq_tracker *mlx5e_cacheflow_rq_tracker_create(struct mlx5e_params *params)
-{
-	struct mlx5e_cacheflow_rq_tracker *tracker = kvzalloc(sizeof(*tracker), GFP_KERNEL);
-	if (!tracker)
-		return NULL;
-	
-	tracker->history = item_deque_create(1 << params->log_rq_mtu_frames,
-		sizeof(struct mlx5e_cacheflow_rq_tracker_entry), GFP_KERNEL);
-
-	if (!tracker->history) {
-		kvfree(tracker);
-		return NULL;
-	}
-
-	return tracker;
-}
-
-static void mlx5e_cacheflow_rq_tracker_destroy(struct mlx5e_cacheflow_rq_tracker *tracker)
-{
-	item_deque_destroy(tracker->history);
-	kvfree(tracker);
 }
 
 int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
@@ -730,7 +717,7 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	}
 
 	if (cacheflow_rq_tracker) {
-		rq_tracker = mlx5e_cacheflow_rq_tracker_create(params);
+		rq_tracker = mlx5e_cacheflow_rq_tracker_create(1 << params->log_rq_mtu_frames);
 		if (!rq_tracker) {
 			err = -ENOMEM;
 			goto err_free;
@@ -763,7 +750,7 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	c->th_array = th;
 	cpumask_clear(&c->notify_cpu_set);
 	for_each_possible_cpu(cpu) {
-		mlx5e_cacheflow_th_init(&c->th_array[cpu], cpu, &c->rq);
+		mlx5e_cacheflow_th_init(&c->th_array[cpu], cpu, c, &c->rq);
 		netif_napi_add(netdev, &c->th_array[cpu].napi, mlx5e_cacheflow_th_napi_poll);
 	}
 
@@ -788,6 +775,7 @@ static void mlx5e_cacheflow_th_destroy(struct mlx5e_cacheflow_th *th)
 {
 	netif_napi_del(&th->napi);
 	item_ring_destroy(th->cqe_ring);
+	mlx5e_cacheflow_th_debugfs_destroy(th);
 }
 
 void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
@@ -802,6 +790,8 @@ void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
 
 	if (c->rq_tracker)
 		mlx5e_cacheflow_rq_tracker_destroy(c->rq_tracker);
+
+	mlx5e_cacheflow_debugfs_destroy(c);
 
 	kvfree(c->th_array);
 	kvfree(c);
