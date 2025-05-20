@@ -737,6 +737,8 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	c->lag_port = lag_port;
 	c->rq_tracker = rq_tracker;
 
+	mlx5e_cacheflow_debugfs_init(c);
+
 	mlx5e_cacheflow_build_params(c, cparams, params);
 	mlx5e_cacheflow_print_params(cparams);
 
