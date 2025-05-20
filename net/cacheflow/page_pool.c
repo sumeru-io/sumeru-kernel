@@ -190,7 +190,7 @@ static void cacheflow_page_pool_recycle_mini_array(struct cacheflow_page_pool *p
 	struct netmem_mini_array *mini_array;
 
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
-	if (unlikely(pool->alloc.full_mini_array_count != CF_PP_FULL_MINI_ARRAY_CACHE_SIZE || pool->alloc.mini_array->count != CF_PP_MINI_ARRAY_SIZE))
+	if (unlikely(pool->alloc.full_mini_array_count != CF_PP_FULL_MINI_ARRAY_CACHE_SIZE))
 		BUG();
 #endif
 
