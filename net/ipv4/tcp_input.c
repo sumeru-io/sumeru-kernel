@@ -833,7 +833,7 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 	delta = tp->tcp_mstamp - tp->last_rcv_est_mstamp;
 	if (likely((tp->rcv_rtt_est.rtt_us) && delta > (tp->rcv_rtt_est.rtt_us << 3))) {
 		bytes = tp->bytes_received - tp->last_rcv_est_received;
-		if (bytes > delta * 256 && !tp->elephant_flow) {
+		if (bytes > delta * get_cacheflow_elephant_flow_thresh() && !tp->elephant_flow) {
 			if (sk->sk_family == AF_INET) {
 				struct inet_sock *inet = inet_sk(sk);
 				pr_info("cacheflow: Elephant flow detected: %pI4:%u -> %pI4:%u, bytes: %llu, delta: %llu\n",

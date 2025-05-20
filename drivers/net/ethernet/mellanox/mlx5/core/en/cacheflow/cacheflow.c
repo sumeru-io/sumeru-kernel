@@ -177,12 +177,6 @@ bool mlx5e_cacheflow_post_rx_wqes(struct mlx5e_cacheflow_rq *rq)
 	wqe_bulk = mlx5_wq_cyc_missing(wq);
 	head = mlx5_wq_cyc_get_head(wq);
 
-	/* Don't allow any newly allocated WQEs to share the same page with old
-	 * WQEs that aren't completed yet. Stop earlier.
-	 */
-	wqe_bulk -= (head + wqe_bulk) & rq->wqe.info.wqe_index_mask;
-
-
 	count = mlx5e_cacheflow_refill_rx_wqes(rq, head, wqe_bulk);
 
 	mlx5_wq_cyc_push_n(wq, count);

@@ -18,3 +18,4 @@ int cacheflow_buffer_size __read_mostly = 4096;
 int cacheflow_thresh __read_mostly = 2048;
 int cacheflow_ipi_packet_thresh __read_mostly = 16;
 int cacheflow_ipi_usec_thresh __read_mostly = 128;
+int cacheflow_elephant_flow_thresh __read_mostly = 256;
