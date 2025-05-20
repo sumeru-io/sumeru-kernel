@@ -723,16 +723,24 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	struct mlx5e_cacheflow_params *cparams;
 	struct mlx5e_cacheflow *c;
 	struct mlx5e_cacheflow_th *th;
-	struct mlx5e_cacheflow_rq_tracker *rq_tracker;
+	struct mlx5e_cacheflow_rq_tracker *rq_tracker = NULL;
 	int err, cpu;
 
 	c = kvzalloc_node(sizeof(*c), GFP_KERNEL, dev_to_node(mlx5_core_dma_dev(mdev)));
 	cparams = kvzalloc(sizeof(*cparams), GFP_KERNEL);
 	th = kvzalloc(sizeof(*th) * num_possible_cpus(), GFP_KERNEL);
-	rq_tracker = mlx5e_cacheflow_rq_tracker_create(params);
-	if (!c || !cparams || !th || !rq_tracker) {
+
+	if (!c || !cparams || !th) {
 		err = -ENOMEM;
 		goto err_free;
+	}
+
+	if (cacheflow_rq_tracker) {
+		rq_tracker = mlx5e_cacheflow_rq_tracker_create(params);
+		if (!rq_tracker) {
+			err = -ENOMEM;
+			goto err_free;
+		}
 	}
 
 	c->priv = priv;
@@ -778,6 +786,7 @@ err_free:
 	kvfree(th);
 	kvfree(cparams);
 	kvfree(c);
+	kvfree(rq_tracker);
 	return err;
 }
 
@@ -797,7 +806,8 @@ void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
 		mlx5e_cacheflow_th_destroy(&c->th_array[cpu]);
 	}
 
-	mlx5e_cacheflow_rq_tracker_destroy(c->rq_tracker);
+	if (c->rq_tracker)
+		mlx5e_cacheflow_rq_tracker_destroy(c->rq_tracker);
 
 	kvfree(c->th_array);
 	kvfree(c);

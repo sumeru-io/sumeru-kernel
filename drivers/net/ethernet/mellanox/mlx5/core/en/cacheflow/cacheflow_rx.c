@@ -43,8 +43,10 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq, struct 
 	wi       = &rq->wqe.frags[ci << rq->wqe.info.log_num_frags];
 	cqe_bcnt = be32_to_cpu(cqe->byte_cnt);
 
-	timestamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time, rq->clock, get_cqe_ts(cqe));
-	mlx5e_cacheflow_rq_tracker_update(cacheflow->rq_tracker, ktime_get(), timestamp);
+	if (cacheflow->rq_tracker) {
+		timestamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time, rq->clock, get_cqe_ts(cqe));
+		mlx5e_cacheflow_rq_tracker_update(cacheflow->rq_tracker, ktime_get(), timestamp);
+	}
 
 	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
 		rq->stats->wqe_err++;
