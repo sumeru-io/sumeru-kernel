@@ -93,32 +93,39 @@ TRACE_EVENT(skb_copy_datagram_iovec,
 );
 
 TRACE_EVENT(skb_ring_timestamp,
-	TP_PROTO(const struct sk_buff *skb, u32 queue_index, u64 receive_timestamp, u64 process_timestamp),
-	TP_ARGS(skb, queue_index, receive_timestamp, process_timestamp),
+	TP_PROTO(const struct sk_buff *skb, u64 cacheflow_id, u32 skb_len, u32 queue_index, u64 receive_timestamp, u64 process_timestamp),
+	TP_ARGS(skb, cacheflow_id, skb_len, queue_index, receive_timestamp, process_timestamp),
 	TP_STRUCT__entry(
 		__field(const void *, skb)
+		__field(u64, cacheflow_id)
+		__field(u32, skb_len)
 		__field(u32, queue_index)
 		__field(u64, receive_timestamp)
 		__field(u64, process_timestamp)
 	),
 	TP_fast_assign(
 		__entry->skb = skb;
+		__entry->cacheflow_id = cacheflow_id;
+		__entry->skb_len = skb_len;
 		__entry->queue_index = queue_index;
 		__entry->receive_timestamp = receive_timestamp;
 		__entry->process_timestamp = process_timestamp;
 	),
-	TP_printk("skbaddr=%p queue=%u recv=%llu proc=%llu",
+	TP_printk("skbaddr=%p cacheflow_id=%llu len=%u queue=%u recv=%llu proc=%llu",
 		  __entry->skb,
+		  __entry->cacheflow_id,
+		  __entry->skb_len,
 		  __entry->queue_index,
 		  __entry->receive_timestamp,
 		  __entry->process_timestamp)
 );
 
 TRACE_EVENT(skb_sock_timestamp,
-	TP_PROTO(const struct sk_buff *skb, u32 skb_len, u64 sock_id, u64 enqueue_timestamp, u64 consume_timestamp),
-	TP_ARGS(skb, skb_len, sock_id, enqueue_timestamp, consume_timestamp),
+	TP_PROTO(const struct sk_buff *skb, u64 cacheflow_id, u32 skb_len, u64 sock_id, u64 enqueue_timestamp, u64 consume_timestamp),
+	TP_ARGS(skb, cacheflow_id, skb_len, sock_id, enqueue_timestamp, consume_timestamp),
 	TP_STRUCT__entry(
 		__field(const void *, skb)
+		__field(u64, cacheflow_id)
 		__field(u32, skb_len)
 		__field(u64, sock_id)
 		__field(u64, enqueue_timestamp)
@@ -126,20 +133,36 @@ TRACE_EVENT(skb_sock_timestamp,
 	),
 	TP_fast_assign(
 		__entry->skb = skb;
+		__entry->cacheflow_id = cacheflow_id;
 		__entry->skb_len = skb_len;
 		__entry->sock_id = sock_id;
 		__entry->enqueue_timestamp = enqueue_timestamp;
 		__entry->consume_timestamp = consume_timestamp;
 	),
-	TP_printk("skbaddr=%p skb_len=%u sock_id=%llu enq=%llu cons=%llu",
+	TP_printk("skbaddr=%p cacheflow_id=%llu skb_len=%u sock_id=%llu enq=%llu cons=%llu",
 		  __entry->skb,
+		  __entry->cacheflow_id,
 		  __entry->skb_len,
 		  __entry->sock_id,
 		  __entry->enqueue_timestamp,
 		  __entry->consume_timestamp)
 );
 
-
+TRACE_EVENT(skb_cacheflow_memory_location,
+	TP_PROTO(netmem_ref netmem, int location),
+	TP_ARGS(netmem, location),
+	TP_STRUCT__entry(
+		__field(netmem_ref, netmem)
+		__field(int, location)
+	),
+	TP_fast_assign(
+		__entry->netmem = netmem;
+		__entry->location = location;
+	),
+	TP_printk("netmem=%p location=%d",
+		  __entry->netmem,
+		  __entry->location)
+);
 
 #endif /* _TRACE_SKB_H */
 

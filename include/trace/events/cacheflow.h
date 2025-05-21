@@ -144,6 +144,28 @@ TRACE_EVENT(cacheflow_page_pool_state_release,
 		  __entry->pool, (void *)__entry->netmem,
 		  __entry->netmem & NET_IOV, __entry->pfn, __entry->release)
 );
+
+TRACE_EVENT(cacheflow_frags_update,
+
+	TP_PROTO(int ix, int i, netmem_ref netmem),
+
+	TP_ARGS(ix, i, netmem),
+
+	TP_STRUCT__entry(
+		__field(int, ix)
+		__field(int, i)
+		__field(unsigned long,				netmem)
+	),
+
+	TP_fast_assign(
+		__entry->ix		= ix;
+		__entry->i		= i;
+		__entry->netmem		= (__force unsigned long)netmem;
+	),
+
+	TP_printk("ix=%d i=%d netmem=%p",
+		  __entry->ix, __entry->i, (void *)__entry->netmem)
+);
 #endif /* _TRACE_CACHEFLOW_H */
 
 /* This part must be outside protection */

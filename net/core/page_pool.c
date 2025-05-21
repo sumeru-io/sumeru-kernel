@@ -432,7 +432,8 @@ static struct kmem_cache *netmem_mini_array_cache;
 
 static inline void page_pool_put_mini_array(struct page_pool *pool, netmem_mini_array_t mini_array) {
 	int i;
-	if (!kasan_mempool_poison_object(mini_array))
+
+	if (!mini_array)
 		return;
 
 	if (pool->alloc.free_mini_array_cache_count == PP_ALLOC_CACHE_BULK_FREE_CACHE_SIZE) {
@@ -443,6 +444,8 @@ static inline void page_pool_put_mini_array(struct page_pool *pool, netmem_mini_
 		kmem_cache_free_bulk(netmem_mini_array_cache, PP_ALLOC_CACHE_BULK_SIZE, 
 					(void **) (pool->alloc.free_mini_array_cache + pool->alloc.free_mini_array_cache_count));
 	}
+
+	kasan_mempool_poison_object(mini_array);
 	pool->alloc.free_mini_array_cache[pool->alloc.free_mini_array_cache_count++] = mini_array;
 }
 
@@ -1053,6 +1056,15 @@ static noinline netmem_ref __page_pool_alloc_pages_slow(struct page_pool *pool,
 	}
 
 #ifdef CONFIG_PAGE_POOL_BULK
+	/* If alloc.count is 0, but alloc.cache still holds an empty mini_array
+	 * (e.g. all its pages were consumed by the check above),
+	 * release it before getting a new one.
+	 */
+	if (pool->alloc.cache) {
+		page_pool_put_mini_array(pool, pool->alloc.cache);
+		pool->alloc.cache = NULL;
+	}
+
 	int j;
 	for (i = 0; i < bulk / PP_ALLOC_CACHE_BULK; i++) {
 		pool->alloc.cache = page_pool_get_mini_array(pool);

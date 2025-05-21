@@ -16,6 +16,7 @@ struct mlx5e_cacheflow_rq_tracker {
 	ktime_t monitor_start;
 	ssize_t monitor_total;
 	ssize_t monitor_n;
+	u64 	cacheflow_id;
 };
 
 static inline int
@@ -37,7 +38,9 @@ mlx5e_cacheflow_rq_tracker_update(struct mlx5e_cacheflow_rq_tracker *tracker,
 
 	tracker->size = item_deque_size(tracker->history);
 
-	return tracker->size;
+	tracker->cacheflow_id++;
+
+	return tracker->cacheflow_id;
 }
 
 static inline struct mlx5e_cacheflow_rq_tracker *
@@ -52,6 +55,8 @@ mlx5e_cacheflow_rq_tracker_create(ssize_t size)
 	tracker->history = item_deque_create(
 		size, sizeof(struct mlx5e_cacheflow_rq_tracker_entry),
 		GFP_KERNEL);
+
+	tracker->cacheflow_id = 0;
 
 	if (!tracker->history) {
 		kvfree(tracker);

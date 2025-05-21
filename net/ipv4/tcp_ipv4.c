@@ -74,6 +74,7 @@
 #ifdef CONFIG_NET_CACHEFLOW
 #include <net/cacheflow/cacheflow.h>
 #include <trace/events/cacheflow.h>
+#include <trace/events/skb.h>
 #endif
 
 #include <linux/inet.h>
@@ -2054,6 +2055,7 @@ bool tcp_add_backlog(struct sock *sk, struct sk_buff *skb,
 	tail = sk->sk_backlog.tail;
 	if (!tail)
 		goto no_coalesce;
+
 	thtail = (struct tcphdr *)tail->data;
 
 	if (TCP_SKB_CB(tail)->end_seq != TCP_SKB_CB(skb)->seq ||
@@ -2208,6 +2210,8 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	bool refcounted;
 	int ret;
 	u32 isn;
+
+	cacheflow_track_page_move(skb, NETMEM_LOCATION_SOCKET);
 
 	drop_reason = SKB_DROP_REASON_NOT_SPECIFIED;
 	if (skb->pkt_type != PACKET_HOST)

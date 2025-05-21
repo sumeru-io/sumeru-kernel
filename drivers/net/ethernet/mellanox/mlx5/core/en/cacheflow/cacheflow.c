@@ -63,6 +63,7 @@ static inline void mlx5e_cacheflow_put_rx_frag(struct mlx5e_cacheflow_rq *rq,
 {
 	if (*frag) {
 		cacheflow_page_pool_put_page(rq->page_pool, *frag, -1, true);
+		trace_skb_cacheflow_memory_location(page_to_netmem(*frag), NETMEM_LOCATION_POOL);
 		*frag = NULL;
 	}
 }
@@ -101,8 +102,15 @@ static int mlx5e_cacheflow_alloc_rx_wqe(struct mlx5e_cacheflow_rq *rq,
 		dma_addr_t addr;
 		u16 headroom;
 
+		if (unlikely(*frag != NULL)) {
+			BUG();
+		}
+
 		*frag = cacheflow_page_pool_alloc_pages(
 			rq->page_pool, GFP_ATOMIC | __GFP_NOWARN);
+
+		trace_skb_cacheflow_memory_location(page_to_netmem(*frag), NETMEM_LOCATION_RING);
+
 		if (unlikely(*frag == NULL))
 			goto free_frags;
 
@@ -244,6 +252,8 @@ static int mlx5e_cacheflow_init_rq(struct mlx5e_cacheflow *c,
 	rq->stats = &c->priv->cacheflow_stats.rq;
 	rq->ix = 0;
 	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
+
+	rq->cacheflow_id = 0;
 
 	xdp_rxq_info_unused(&rq->xdp_rxq);
 	return 0;
@@ -818,6 +828,8 @@ static void mlx5e_cacheflow_th_destroy(struct mlx5e_cacheflow_th *th)
 void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
 {
 	int cpu;
+
+	pr_info("cacheflow: close the cacheflow channel\n");
 
 	mlx5e_cacheflow_close_queues(c);
 	netif_napi_del(&c->napi);

@@ -301,11 +301,12 @@ static inline u32 item_ring_space_available(struct item_ring *ring)
  * item_ring_reserve_n - Reserve multiple slots in the ring for the producer
  * @ring: The item ring
  * @n: Number of slots to reserve
- * @items: Array to store pointers to reserved slots
+ * @items: Pointer to store the address of the first reserved slot
  *
  * For the producer ONLY.
- * Attempts to reserve up to n slots for writing items. item_ring_submit_n()
+ * Attempts to reserve up to n contiguous slots for writing items. item_ring_submit_n()
  * must be called after writing. Only one bulk reservation can be active at a time.
+ * The reserved slots form a contiguous block in memory.
  *
  * Returns: Number of slots successfully reserved (0 to n)
  */
@@ -314,7 +315,6 @@ static inline u32 item_ring_reserve_n(struct item_ring *ring, u32 n, void **item
 	u32 current_producer_idx;
 	u32 current_consumer_idx;
 	u32 available;
-	u32 i;
 
 	if (unlikely(ring->producer.slot_reserved || !items || n == 0))
 		return 0;
@@ -327,13 +327,13 @@ static inline u32 item_ring_reserve_n(struct item_ring *ring, u32 n, void **item
 		return 0;
 
 	n = min(n, available);
+	n = min(n, ring->capacity - (current_producer_idx % ring->capacity));
+
 	ring->producer.slot_reserved = true;
 	ring->producer.reserved_slots = n;
 
-	for (i = 0; i < n; i++) {
-		items[i] = (char *)ring->buffer +
-			((current_producer_idx + i) % ring->capacity) * ring->item_size;
-	}
+	*items = (char *)ring->buffer +
+		(current_producer_idx % ring->capacity) * ring->item_size;
 
 	return n;
 }

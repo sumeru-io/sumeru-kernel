@@ -39,6 +39,8 @@ struct mlx5e_cacheflow_rq {
 	int ix;
 	unsigned int hw_mtu;
 
+	u64 cacheflow_id;
+
 	struct dim *dim; /* Dynamic Interrupt Moderation */
 
 	/* XDP */
@@ -97,6 +99,9 @@ struct mlx5e_cacheflow_wqe_frags_info {
 struct mlx5e_cacheflow_cqe {
 	struct mlx5_cqe64 cqe;
 	int owner;
+	u32 used_pages;
+	u32 free_pages;
+	u64 cacheflow_id;
 	struct page *page[MLX5E_MAX_RX_FRAGS];
 } ____cacheline_aligned;
 

@@ -35,6 +35,7 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
 	struct mlx5e_cacheflow *cacheflow =
 		container_of(rq, struct mlx5e_cacheflow, rq);
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
+	struct mlx5e_rq_stats *stats = rq->stats;
 	struct page **wi;
 	u32 cqe_bcnt;
 	u16 ci;
@@ -43,6 +44,7 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
 	struct mlx5e_cacheflow_cqe *cacheflow_cqe;
 	ktime_t timestamp;
 	int i;
+	u64 cacheflow_id = rq->cacheflow_id++;
 
 	ci = mlx5_wq_cyc_ctr2ix(wq, be16_to_cpu(cqe->wqe_counter));
 	wi = &rq->wqe.frags[ci << rq->wqe.info.log_num_frags];
@@ -75,17 +77,25 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
 	memcpy(&cacheflow_cqe->cqe, cqe, sizeof(struct mlx5_cqe64));
 	for (i = 0; i < rq->wqe.info.num_frags; i++) {
 		cacheflow_cqe->page[i] = *wi;
+		trace_skb_cacheflow_memory_location(page_to_netmem(*wi), NETMEM_LOCATION_NAPI);
 		*wi = NULL;
 		wi++;
 	}
 
-	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe->page,
-				     tcpu);
+	cacheflow_cqe->used_pages = rq->page_pool->allocated_pages;
+	cacheflow_cqe->free_pages = rq->page_pool->array_pages + rq->page_pool->ring_pages;
+	cacheflow_cqe->cacheflow_id = cacheflow_id;
 
 	item_ring_submit(th->cqe_ring);
 	th->inserted++;
 
 	__cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
+
+	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe->page,
+				     tcpu);
+
+	stats->packets++;
+	stats->bytes += cqe_bcnt;
 
 wq_cyc_pop:
 	mlx5_wq_cyc_pop(wq);

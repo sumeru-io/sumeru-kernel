@@ -111,6 +111,8 @@ struct cacheflow_page_pool {
 	u32 pages_state_hold_cnt;
 
 	struct ptr_ring recycle_ring;
+	atomic_t oob_recycle_cnt;
+
 	struct cacheflow_page_pool_recycle_stub __percpu *recycle_stub;
 
 	struct delayed_work release_dw;
