@@ -73,6 +73,7 @@
 #include <net/rstreason.h>
 #ifdef CONFIG_NET_CACHEFLOW
 #include <net/cacheflow/cacheflow.h>
+#include <trace/events/cacheflow.h>
 #endif
 
 #include <linux/inet.h>
@@ -88,7 +89,6 @@
 #include <linux/scatterlist.h>
 
 #include <trace/events/tcp.h>
-#include <trace/events/page_pool.h>
 
 #ifdef CONFIG_TCP_MD5SIG
 static int tcp_v4_md5_hash_hdr(char *md5_hash, const struct tcp_md5sig_key *key,
@@ -2153,10 +2153,10 @@ int tcp_filter(struct sock *sk, struct sk_buff *skb)
 	if (!ret && CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW) && is_cacheflow_track_enabled()) {
 		if (is_cacheflow_mark_enabled() && (skb->used_pages >= get_cacheflow_thresh())) {
 			INET_ECN_set_ce(skb);
-			trace_page_pool_pressure(skb->page_pool, sk, sock_gen_cookie(sk),
+			trace_cacheflow_page_pool_pressure(skb->page_pool, sk, sock_gen_cookie(sk),
 						 skb, skb->used_pages, skb->free_pages, 1);
 		} else {
-			trace_page_pool_pressure(skb->page_pool, sk, sock_gen_cookie(sk),
+			trace_cacheflow_page_pool_pressure(skb->page_pool, sk, sock_gen_cookie(sk),
 						 skb, skb->used_pages, skb->free_pages, 0);
 		}
 	}

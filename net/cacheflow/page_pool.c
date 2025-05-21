@@ -26,7 +26,7 @@
 #include <linux/netdevice.h>
 #include <linux/proc_fs.h>
 
-#include <trace/events/page_pool.h>
+#include <trace/events/cacheflow.h>
 
 #include "page_pool.h"
 
@@ -91,7 +91,7 @@ cacheflow_page_pool_account_usages(struct cacheflow_page_pool *pool,
 	else if (new_state == PAGE_POOL_RING)
 		pool->ring_pages += n;
 
-	if (tracepoint_enabled(page_pool_page_move)) {
+	if (tracepoint_enabled(cacheflow_page_pool_page_move)) {
 		int i;
 
 		for (i = 0; i < n; i++) {
