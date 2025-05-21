@@ -58,7 +58,7 @@ void mlx5e_cacheflow_debugfs_init(struct mlx5e_cacheflow *c)
 	c->debugfs_dir = debugfs_create_dir("cacheflow",
 					    mlx5_debugfs_get_dev_root(c->mdev));
 
-	debugfs_create_file("nic_queue", 0600, c->debugfs_dir, c,
+	debugfs_create_file("nic_queue", 0400, c->debugfs_dir, c,
 			    &mlx5e_cacheflow_rq_tracker_fops);
 	debugfs_create_file("page_pool_stats", 0400, c->debugfs_dir, c,
 			    &mlx5e_cacheflow_page_pool_stats_fops);
@@ -131,11 +131,11 @@ void mlx5e_cacheflow_th_debugfs_init(struct mlx5e_cacheflow_th *th)
 	th->debugfs_dir =
 		debugfs_create_dir(th_name, th->cacheflow->debugfs_dir);
 
-	debugfs_create_file("fifo_len", 0600, th->debugfs_dir, th,
+	debugfs_create_file("fifo_len", 0400, th->debugfs_dir, th,
 			    &mlx5e_cacheflow_cqe_fifo_len_fops);
-	debugfs_create_file("fifo_inserted", 0600, th->debugfs_dir, th,
+	debugfs_create_file("fifo_inserted", 0400, th->debugfs_dir, th,
 			    &mlx5e_cacheflow_cqe_fifo_inserted_fops);
-	debugfs_create_file("fifo_missed", 0600, th->debugfs_dir, th,
+	debugfs_create_file("fifo_missed", 0400, th->debugfs_dir, th,
 			    &mlx5e_cacheflow_cqe_fifo_missed_fops);
 }
 
