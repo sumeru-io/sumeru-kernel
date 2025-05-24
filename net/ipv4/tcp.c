@@ -1525,7 +1525,7 @@ static void tcp_eat_recv_skb(struct sock *sk, struct sk_buff *skb)
 {
 	__skb_unlink(skb, &sk->sk_receive_queue);
 
-	if (skb_shinfo(skb)->ms_timestamp.valid) {
+	if (skb_shinfo(skb)->ms_timestamp.enqueue_timestamp) {
 		u64 sock_id = skb->sk ? sock_gen_cookie(skb->sk) : 0;
 
 		skb_shinfo(skb)->ms_timestamp.consume_timestamp = ktime_get_real_ns();

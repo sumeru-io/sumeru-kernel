@@ -584,8 +584,7 @@ struct xsk_tx_metadata_compl {
 	__u64 *tx_timestamp;
 };
 
-struct skb_millstone_timestamp {
-	int valid;
+struct skb_milestone_timestamp {
 	u64 receive_timestamp;
 	u64 process_timestamp;
 	u64 enqueue_timestamp;
@@ -596,7 +595,7 @@ struct skb_millstone_timestamp {
  * the end of the header data, ie. at skb->end.
  */
 struct skb_shared_info {
-	struct skb_millstone_timestamp ms_timestamp;
+	struct skb_milestone_timestamp ms_timestamp;
 	__u8		flags;
 	__u8		meta_len;
 	__u8		nr_frags;

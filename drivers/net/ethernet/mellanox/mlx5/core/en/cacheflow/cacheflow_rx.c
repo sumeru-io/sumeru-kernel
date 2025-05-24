@@ -3,6 +3,7 @@
 #include <net/cacheflow/page_pool.h>
 #include <net/rps.h>
 #include <trace/events/cacheflow.h>
+#include <trace/events/skb.h>
 
 #include "en/cacheflow/cacheflow.h"
 #include "en/cacheflow/rq_tracker.h"
@@ -44,18 +45,11 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
 	struct mlx5e_cacheflow_cqe *cacheflow_cqe;
 	ktime_t timestamp;
 	int i;
-	u64 cacheflow_id = rq->cacheflow_id++;
+	u64 cacheflow_id = 0;
 
 	ci = mlx5_wq_cyc_ctr2ix(wq, be16_to_cpu(cqe->wqe_counter));
 	wi = &rq->wqe.frags[ci << rq->wqe.info.log_num_frags];
 	cqe_bcnt = be32_to_cpu(cqe->byte_cnt);
-
-	if (cacheflow->rq_tracker) {
-		timestamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time, rq->clock,
-					       get_cqe_ts(cqe));
-		mlx5e_cacheflow_rq_tracker_update(cacheflow->rq_tracker,
-						  ktime_get(), timestamp);
-	}
 
 	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
 		rq->stats->wqe_err++;
@@ -72,6 +66,16 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
 		pr_err("cacheflow: kfifo to core %d is full\n", tcpu);
 		th->missed++;
 		goto wq_cyc_pop;
+	}
+
+	if (cacheflow->rq_tracker) {
+		cacheflow_cqe->receive_timestamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time, rq->clock,
+					       get_cqe_ts(cqe));
+		cacheflow_cqe->process_timestamp = ktime_get_real_ns();
+		
+		cacheflow_id = mlx5e_cacheflow_rq_tracker_update(cacheflow->rq_tracker,						  
+						cacheflow_cqe->process_timestamp,
+						cacheflow_cqe->receive_timestamp);
 	}
 
 	memcpy(&cacheflow_cqe->cqe, cqe, sizeof(struct mlx5_cqe64));

@@ -93,28 +93,44 @@ TRACE_EVENT(skb_copy_datagram_iovec,
 );
 
 TRACE_EVENT(skb_ring_timestamp,
-	TP_PROTO(const struct sk_buff *skb, u64 cacheflow_id, u32 skb_len, u32 queue_index, u64 receive_timestamp, u64 process_timestamp),
-	TP_ARGS(skb, cacheflow_id, skb_len, queue_index, receive_timestamp, process_timestamp),
+	TP_PROTO(u64 cacheflow_id, u32 queue_index, u64 receive_timestamp, u64 process_timestamp),
+	TP_ARGS(cacheflow_id, queue_index, receive_timestamp, process_timestamp),
 	TP_STRUCT__entry(
-		__field(const void *, skb)
 		__field(u64, cacheflow_id)
-		__field(u32, skb_len)
 		__field(u32, queue_index)
 		__field(u64, receive_timestamp)
 		__field(u64, process_timestamp)
 	),
 	TP_fast_assign(
-		__entry->skb = skb;
 		__entry->cacheflow_id = cacheflow_id;
-		__entry->skb_len = skb_len;
 		__entry->queue_index = queue_index;
 		__entry->receive_timestamp = receive_timestamp;
 		__entry->process_timestamp = process_timestamp;
 	),
-	TP_printk("skbaddr=%p cacheflow_id=%llu len=%u queue=%u recv=%llu proc=%llu",
-		  __entry->skb,
+	TP_printk("cacheflow_id=%llu queue=%u recv=%llu proc=%llu",
 		  __entry->cacheflow_id,
-		  __entry->skb_len,
+		  __entry->queue_index,
+		  __entry->receive_timestamp,
+		  __entry->process_timestamp)
+);
+
+TRACE_EVENT(skb_cacheflow_queue_timestamp,
+	TP_PROTO(u64 cacheflow_id, u32 queue_index, u64 receive_timestamp, u64 process_timestamp),
+	TP_ARGS(cacheflow_id, queue_index, receive_timestamp, process_timestamp),
+	TP_STRUCT__entry(
+		__field(u64, cacheflow_id)
+		__field(u32, queue_index)
+		__field(u64, receive_timestamp)
+		__field(u64, process_timestamp)
+	),
+	TP_fast_assign(
+		__entry->cacheflow_id = cacheflow_id;
+		__entry->queue_index = queue_index;
+		__entry->receive_timestamp = receive_timestamp;
+		__entry->process_timestamp = process_timestamp;
+	),
+	TP_printk("cacheflow_id=%llu queue=%u recv=%llu proc=%llu",
+		  __entry->cacheflow_id,
 		  __entry->queue_index,
 		  __entry->receive_timestamp,
 		  __entry->process_timestamp)
@@ -152,11 +168,11 @@ TRACE_EVENT(skb_cacheflow_memory_location,
 	TP_PROTO(netmem_ref netmem, int location),
 	TP_ARGS(netmem, location),
 	TP_STRUCT__entry(
-		__field(netmem_ref, netmem)
+		__field(void *, netmem)
 		__field(int, location)
 	),
 	TP_fast_assign(
-		__entry->netmem = netmem;
+		__entry->netmem = (void *)netmem;
 		__entry->location = location;
 	),
 	TP_printk("netmem=%p location=%d",

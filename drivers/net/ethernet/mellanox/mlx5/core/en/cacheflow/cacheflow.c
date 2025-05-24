@@ -253,8 +253,6 @@ static int mlx5e_cacheflow_init_rq(struct mlx5e_cacheflow *c,
 	rq->ix = 0;
 	rq->ptp_cyc2time = mlx5_rq_ts_translator(mdev);
 
-	rq->cacheflow_id = 0;
-
 	xdp_rxq_info_unused(&rq->xdp_rxq);
 	return 0;
 }
@@ -758,7 +756,7 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 
 	if (cacheflow_rq_tracker) {
 		rq_tracker = mlx5e_cacheflow_rq_tracker_create(
-			1 << params->log_rq_mtu_frames);
+			1 << (params->log_rq_mtu_frames + 1));
 		if (!rq_tracker) {
 			err = -ENOMEM;
 			goto err_free;

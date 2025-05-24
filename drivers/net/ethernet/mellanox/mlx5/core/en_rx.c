@@ -2674,11 +2674,12 @@ static inline void mlx5e_cacheflow_enable_ecn(struct mlx5e_cacheflow_rq *rq, str
 	rq->stats->ecn_mark += !!rc;
 }
 
-static inline void mlx5e_cacheflow_build_rx_skb(struct mlx5_cqe64 *cqe,
+static inline void mlx5e_cacheflow_build_rx_skb(struct mlx5e_cacheflow_cqe *cacheflow_cqe,
 				      u32 cqe_bcnt,
 				      struct mlx5e_cacheflow_rq *rq,
 				      struct sk_buff *skb)
 {
+	struct mlx5_cqe64 *cqe = &cacheflow_cqe->cqe;
 	u8 lro_num_seg = be32_to_cpu(cqe->srqn) >> 24;
 	struct mlx5e_rq_stats *stats = rq->stats;
 	struct net_device *netdev = rq->netdev;
@@ -2686,21 +2687,7 @@ static inline void mlx5e_cacheflow_build_rx_skb(struct mlx5_cqe64 *cqe,
 	skb->mac_len = ETH_HLEN;
 
 	if (unlikely(mlx5e_rx_hw_stamp(rq->tstamp))) {
-		skb_hwtstamps(skb)->hwtstamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time,
-								  rq->clock, get_cqe_ts(cqe));
-		if (tracepoint_enabled(skb_ring_timestamp)) {
-			int network_depth = 0;
-			__be16 proto;
-			if (likely(is_last_ethertype_ip(skb, &network_depth, &proto))) {
-				if (likely(get_ip_proto(skb, network_depth, proto) == IPPROTO_TCP)) {
-					skb_shinfo(skb)->ms_timestamp.valid = 1;
-					skb_shinfo(skb)->ms_timestamp.receive_timestamp = skb_hwtstamps(skb)->hwtstamp;
-					skb_shinfo(skb)->ms_timestamp.process_timestamp = ktime_get_real_ns();
-	
-					trace_skb_ring_timestamp(skb, skb->cacheflow_id, skb->len, rq->ix, skb_shinfo(skb)->ms_timestamp.receive_timestamp, skb_shinfo(skb)->ms_timestamp.process_timestamp);
-				}
-			}
-		}
+		skb_hwtstamps(skb)->hwtstamp = cacheflow_cqe->receive_timestamp;
 	}
 	skb_record_rx_queue(skb, rq->ix);
 
@@ -2729,7 +2716,7 @@ static inline void mlx5e_cacheflow_build_rx_skb(struct mlx5_cqe64 *cqe,
 }
 
 static inline void mlx5e_cacheflow_complete_rx_cqe(struct mlx5e_cacheflow_rq *rq,
-					 struct mlx5_cqe64 *cqe,
+					 struct mlx5e_cacheflow_cqe *cqe,
 					 u32 cqe_bcnt,
 					 struct sk_buff *skb)
 {
@@ -2893,15 +2880,16 @@ static noinline int mlx5e_cacheflow_th_poll(struct mlx5e_cacheflow_th *c, int bu
 			goto next_step;
 		}
 
-		mlx5e_cacheflow_complete_rx_cqe(c->rq, &cqe->cqe, be32_to_cpu(cqe->cqe.byte_cnt), skb);
+		mlx5e_cacheflow_complete_rx_cqe(c->rq, cqe, be32_to_cpu(cqe->cqe.byte_cnt), skb);
 
 		skb->used_pages = cqe->used_pages;
 		skb->free_pages = cqe->free_pages;
 
+		trace_skb_cacheflow_queue_timestamp(cqe->cacheflow_id, c->cpu,
+			cqe->process_timestamp, ktime_get_real_ns());
+
 		trace_mlx5e_cacheflow_th_skb(smp_processor_id(), skb, cqe->page);
-
 		cacheflow_track_page_move(skb, NETMEM_LOCATION_STACK);
-
 
 		napi_gro_receive(&c->napi, skb);
 next_step:
