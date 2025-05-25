@@ -2588,13 +2588,79 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget)
 }
 
 #ifdef CONFIG_NET_CACHEFLOW
+static void
+cacheflow_tail_padding_csum_slow(struct sk_buff *skb, int offset, int len)
+{
+	skb->csum = csum_block_add(skb->csum,
+				   skb_checksum(skb, offset, len, 0),
+				   offset);
+}
+
+static void
+cacheflow_tail_padding_csum(struct sk_buff *skb, int offset)
+{
+	u8 tail_padding[MAX_PADDING];
+	int len = skb->len - offset;
+	void *tail;
+
+	if (unlikely(len > MAX_PADDING)) {
+		cacheflow_tail_padding_csum_slow(skb, offset, len);
+		return;
+	}
+
+	tail = skb_header_pointer(skb, offset, len, tail_padding);
+	if (unlikely(!tail)) {
+		cacheflow_tail_padding_csum_slow(skb, offset, len);
+		return;
+	}
+
+	skb->csum = csum_block_add(skb->csum, csum_partial(tail, len, 0), offset);
+}
+
+static void
+mlx5e_cacheflow_skb_csum_fixup(struct sk_buff *skb, int network_depth, __be16 proto)
+{
+	struct ipv6hdr *ip6;
+	struct iphdr   *ip4;
+	int pkt_len;
+
+	/* Fixup vlan headers, if any */
+	if (network_depth > ETH_HLEN)
+		/* CQE csum is calculated from the IP header and does
+		 * not cover VLAN headers (if present). This will add
+		 * the checksum manually.
+		 */
+		skb->csum = csum_partial(skb->data + ETH_HLEN,
+					 network_depth - ETH_HLEN,
+					 skb->csum);
+
+	/* Fixup tail padding, if any */
+	switch (proto) {
+	case htons(ETH_P_IP):
+		ip4 = (struct iphdr *)(skb->data + network_depth);
+		pkt_len = network_depth + ntohs(ip4->tot_len);
+		break;
+	case htons(ETH_P_IPV6):
+		ip6 = (struct ipv6hdr *)(skb->data + network_depth);
+		pkt_len = network_depth + sizeof(*ip6) + ntohs(ip6->payload_len);
+		break;
+	default:
+		return;
+	}
+
+	if (likely(pkt_len >= skb->len))
+		return;
+
+	cacheflow_tail_padding_csum(skb, pkt_len);
+}
+
+
 static inline void mlx5e_cacheflow_handle_csum(struct net_device *netdev,
 						struct mlx5_cqe64 *cqe,
 						struct mlx5e_cacheflow_rq *rq,
 						struct sk_buff *skb,
 						bool   lro)
 {
-	struct mlx5e_rq_stats *stats = rq->stats;
 	int network_depth = 0;
 	__be16 proto;
 
@@ -2603,7 +2669,6 @@ static inline void mlx5e_cacheflow_handle_csum(struct net_device *netdev,
 
 	if (lro) {
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
-		stats->csum_unnecessary++;
 		return;
 	}
 
@@ -2627,7 +2692,6 @@ static inline void mlx5e_cacheflow_handle_csum(struct net_device *netdev,
 		if (unlikely(get_ip_proto(skb, network_depth, proto) == IPPROTO_SCTP))
 			goto csum_unnecessary;
 
-		stats->csum_complete++;
 		skb->ip_summed = CHECKSUM_COMPLETE;
 		skb->csum = csum_unfold((__force __sum16)cqe->check_sum);
 
@@ -2635,7 +2699,7 @@ static inline void mlx5e_cacheflow_handle_csum(struct net_device *netdev,
 			return; /* CQE csum covers all received bytes */
 
 		/* csum might need some fixups ...*/
-		mlx5e_skb_csum_fixup(skb, network_depth, proto, stats);
+		mlx5e_cacheflow_skb_csum_fixup(skb, network_depth, proto);
 		return;
 	}
 
@@ -2646,15 +2710,12 @@ csum_unnecessary:
 		if (cqe_is_tunneled(cqe)) {
 			skb->csum_level = 1;
 			skb->encapsulation = 1;
-			stats->csum_unnecessary_inner++;
 			return;
 		}
-		stats->csum_unnecessary++;
 		return;
 	}
 csum_none:
 	skb->ip_summed = CHECKSUM_NONE;
-	stats->csum_none++;
 }
 
 static inline void mlx5e_cacheflow_enable_ecn(struct mlx5e_cacheflow_rq *rq, struct sk_buff *skb)
