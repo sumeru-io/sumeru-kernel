@@ -341,8 +341,13 @@ struct tcp_sock {
 		u32	seq;
 		u64	time;
 	} rcvq_space;
-	u64	last_rcv_est_received;
-	u64	last_rcv_est_mstamp;
+	struct {
+		u32	rcv_seq;
+		u32	copied_seq;
+		u32	recv_rate;
+		u32	copied_rate;
+		u64	mstamp;
+	} rcv_rate_est;
 	__cacheline_group_end(tcp_sock_write_rx);
 	/* End of Hot Path */
 

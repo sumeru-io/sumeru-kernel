@@ -84,6 +84,7 @@
 
 #ifdef CONFIG_NET_CACHEFLOW
 #include <net/cacheflow/cacheflow.h>
+#include <trace/events/cacheflow.h>
 #endif
 
 int sysctl_tcp_max_orphans __read_mostly = NR_FILE;
@@ -709,6 +710,9 @@ static inline void tcp_rcv_rtt_measure(struct tcp_sock *tp)
 	if (!delta_us)
 		delta_us = 1;
 	tcp_rcv_rtt_update(tp, delta_us, 1);
+	if (tp->elephant_flow)
+		trace_cacheflow_rcv_rtt_update((struct sock *)tp, __sock_gen_cookie((struct sock *)tp), tp->rcv_wnd,
+		tp->rcv_rtt_est.rtt_us >> 3, delta_us, 0);
 
 new_measure:
 	tp->rcv_rtt_est.seq = tp->rcv_nxt + tp->rcv_wnd;
@@ -747,8 +751,14 @@ static inline void tcp_rcv_rtt_measure_ts(struct sock *sk,
 
 		if (delta >= 0)
 			tcp_rcv_rtt_update(tp, delta, 0);
+
+		if (tp->elephant_flow)
+			trace_cacheflow_rcv_rtt_update((struct sock *)tp, __sock_gen_cookie((struct sock *)tp), tp->rcv_wnd,
+			tp->rcv_rtt_est.rtt_us >> 3, delta, 1);
 	}
 }
+
+static void tcp_rcv_rate_estimate(struct sock *sk);
 
 /*
  * This function should be called every time data is copied to user space.
@@ -763,12 +773,17 @@ void tcp_rcv_space_adjust(struct sock *sk)
 	trace_tcp_rcv_space_adjust(sk);
 
 	tcp_mstamp_refresh(tp);
+
+	tcp_rcv_rate_estimate(sk);
+
 	time = tcp_stamp_us_delta(tp->tcp_mstamp, tp->rcvq_space.time);
 	if (time < (tp->rcv_rtt_est.rtt_us >> 3) || tp->rcv_rtt_est.rtt_us == 0)
 		return;
 
+
 	/* Number of bytes copied to user in last RTT */
 	copied = tp->copied_seq - tp->rcvq_space.seq;
+
 	if (copied <= tp->rcvq_space.space)
 		goto new_measure;
 
@@ -826,39 +841,64 @@ static void tcp_save_lrcv_flowlabel(struct sock *sk, const struct sk_buff *skb)
 static void tcp_rcv_rate_estimate(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	u64 delta, bytes;
+	long delta, received_bytes, copied_bytes;
 
-	if (unlikely(tp->last_rcv_est_received == 0)) {
-		if (likely(tp->bytes_received != 0)) {
-			tp->last_rcv_est_mstamp = tp->tcp_mstamp;
-		}
-		tp->last_rcv_est_received = tp->bytes_received;
+	if (unlikely(tp->rcv_rate_est.mstamp == 0)) {
+		tp->rcv_rate_est.mstamp = tp->tcp_mstamp;
+		tp->rcv_rate_est.rcv_seq = tp->rcv_nxt;
+		tp->rcv_rate_est.copied_seq = tp->copied_seq;
 		return;
 	}
 
-	delta = tp->tcp_mstamp - tp->last_rcv_est_mstamp;
-	if (likely((tp->rcv_rtt_est.rtt_us) && delta > (tp->rcv_rtt_est.rtt_us << 3))) {
-		bytes = tp->bytes_received - tp->last_rcv_est_received;
-		if (bytes > delta * get_cacheflow_elephant_flow_thresh() && !tp->elephant_flow) {
+	delta = tp->tcp_mstamp - tp->rcv_rate_est.mstamp;
+	if (likely((tp->rcv_rtt_est.rtt_us) && delta > (tp->rcv_rtt_est.rtt_us >> 3))) {
+		received_bytes = tp->rcv_nxt - tp->rcv_rate_est.rcv_seq;
+		copied_bytes = tp->copied_seq - tp->rcv_rate_est.copied_seq;
+		if (received_bytes > delta * get_cacheflow_elephant_flow_thresh() && !tp->elephant_flow) {
 			if (sk->sk_family == AF_INET) {
 				struct inet_sock *inet = inet_sk(sk);
-				pr_info("cacheflow: Elephant flow detected: %pI4:%u -> %pI4:%u, bytes: %llu, delta: %llu\n",
+				pr_info("cacheflow: Elephant flow detected: %pI4:%u -> %pI4:%u, bytes: %ld, delta: %ld\n",
 					 &inet->inet_saddr, ntohs(inet->inet_sport),
-					 &inet->inet_daddr, ntohs(inet->inet_dport), bytes, delta);
+					 &inet->inet_daddr, ntohs(inet->inet_dport), received_bytes, delta);
 			} else if (sk->sk_family == AF_INET6) {
 				struct inet_sock *inet = inet_sk(sk);
-				pr_info("cacheflow: Elephant flow detected: [%pI6c]:%u -> [%pI6c]:%u, bytes: %llu, delta: %llu\n",
+				pr_info("cacheflow: Elephant flow detected: [%pI6c]:%u -> [%pI6c]:%u, bytes: %ld, delta: %ld\n",
 					 &sk->sk_v6_rcv_saddr, ntohs(inet->inet_sport),
-					 &sk->sk_v6_daddr, ntohs(inet->inet_dport), bytes, delta);
+					 &sk->sk_v6_daddr, ntohs(inet->inet_dport), received_bytes, delta);
 			}
 			tp->elephant_flow = 1;
 		}
-		tp->last_rcv_est_mstamp = tp->tcp_mstamp;
-		tp->last_rcv_est_received = tp->bytes_received;
+
+		tp->rcv_rate_est.mstamp = tp->tcp_mstamp;
+		tp->rcv_rate_est.rcv_seq = tp->rcv_nxt;
+		tp->rcv_rate_est.copied_seq = tp->copied_seq;
+
+		if (tp->elephant_flow) {
+			trace_cacheflow_sk_recv_rate_est(sk, __sock_gen_cookie(sk),
+							 tp->rcv_rtt_est.rtt_us >> 3, delta,
+							 tp->rcv_rate_est.recv_rate >> 3, received_bytes,
+							 tp->rcv_rate_est.copied_rate >> 3, copied_bytes,
+							 tp->rcv_nxt - tp->copied_seq, sk->sk_backlog.len);
+		}
+
+		if (tp->rcv_rate_est.recv_rate == 0) {
+			tp->rcv_rate_est.recv_rate = received_bytes;
+		} else {
+			received_bytes -= (tp->rcv_rate_est.recv_rate >> 3);
+			tp->rcv_rate_est.recv_rate = (u32)((long)tp->rcv_rate_est.recv_rate + received_bytes);
+		}
+
+		if (tp->rcv_rate_est.copied_rate == 0) {
+			tp->rcv_rate_est.copied_rate = copied_bytes;
+		} else {
+			copied_bytes -= (tp->rcv_rate_est.copied_rate >> 3);
+			tp->rcv_rate_est.copied_rate = (u32)((long)tp->rcv_rate_est.copied_rate + copied_bytes);
+		}
 	}
 	
 	return;
 }
+
 
 /* There is something which you must keep in mind when you analyze the
  * behavior of the tp->ato delayed ack timeout interval.  When a
@@ -881,6 +921,8 @@ static void tcp_event_data_recv(struct sock *sk, struct sk_buff *skb)
 	tcp_measure_rcv_mss(sk, skb);
 
 	tcp_rcv_rtt_measure(tp);
+
+	tcp_rcv_rate_estimate(sk);
 
 	now = tcp_jiffies32;
 
@@ -5358,8 +5400,6 @@ queue_and_out:
 		eaten = tcp_queue_rcv(sk, skb, &fragstolen);
 		if (skb->len)
 			tcp_event_data_recv(sk, skb);
-		
-		tcp_rcv_rate_estimate(sk);
 
 		if (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN)
 			tcp_fin(sk);
@@ -6279,6 +6319,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 				tcp_store_ts_recent(tp);
 
 			tcp_rcv_rtt_measure_ts(sk, skb);
+			tcp_rcv_space_adjust(sk);
 
 			NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPHPHITS);
 
@@ -6288,8 +6329,6 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 			eaten = tcp_queue_rcv(sk, skb, &fragstolen);
 
 			tcp_event_data_recv(sk, skb);
-
-			tcp_rcv_rate_estimate(sk);
 
 			if (TCP_SKB_CB(skb)->ack_seq != tp->snd_una) {
 				/* Well, only one small jumplet in fast path... */
@@ -6333,6 +6372,7 @@ step5:
 		goto discard;
 	}
 	tcp_rcv_rtt_measure_ts(sk, skb);
+	tcp_rcv_space_adjust(sk);
 
 	/* Process urgent data. */
 	tcp_urg(sk, skb, th);

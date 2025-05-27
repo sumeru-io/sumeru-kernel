@@ -10,45 +10,52 @@
 
 TRACE_EVENT(cacheflow_napi_poll,
 
-	TP_PROTO(struct net_device *dev, int core, int work_done),
-	TP_ARGS(dev, core, work_done),
+	    TP_PROTO(struct net_device *dev, int core, int work_done),
+	    TP_ARGS(dev, core, work_done),
 
-	TP_STRUCT__entry(
-		__array(char, dev_name, IFNAMSIZ)
-		__field(int, core)
-		__field(int, work_done)
-	),
+	    TP_STRUCT__entry(
+		    __array(char, dev_name, IFNAMSIZ)
+		    __field(int, core)
+		    __field(int, work_done)
+	    ),
 
-	TP_fast_assign(
-		strscpy(__entry->dev_name, dev ? dev->name : "unknown", IFNAMSIZ);
-		__entry->core = core;
-		__entry->work_done = work_done;
-	),
+	    TP_fast_assign(
+		    strscpy(__entry->dev_name,
+			    dev ? dev->name : "unknown", IFNAMSIZ);
+		    __entry->core = core;
+		    __entry->work_done = work_done;
+	    ),
 
-	TP_printk("dev=%s core=%d work_done=%d", __entry->dev_name, __entry->core, __entry->work_done)
+	    TP_printk("dev=%s core=%d work_done=%d",
+		      __entry->dev_name,
+		      __entry->core,
+		      __entry->work_done
+	    )
 );
 
-TRACE_EVENT(cacheflow_page_pool_page_move,
+TRACE_EVENT(
+	cacheflow_page_pool_page_move,
 
 	TP_PROTO(const struct cacheflow_page_pool *pool, netmem_ref netmem,
-		 u8 old_state, u8 new_state, u32 alloc_pages,
-		 u32 array_pages, u32 ring_pages),
+		 u8 old_state, u8 new_state, u32 alloc_pages, u32 array_pages,
+		 u32 ring_pages),
 
-	TP_ARGS(pool, netmem, old_state, new_state, alloc_pages, array_pages, ring_pages),
+	TP_ARGS(pool, netmem, old_state, new_state, alloc_pages, array_pages,
+		ring_pages),
 
 	TP_STRUCT__entry(
-		__field(const struct cacheflow_page_pool *,	pool)
-		__field(unsigned long,				netmem)
-		__field(u8,					old_state)
-		__field(u8,					new_state)
-		__field(u32,					alloc_pages)
-		__field(u32,					array_pages)
-		__field(u32,					ring_pages)
+		__field(const struct cacheflow_page_pool *, pool)
+		__field(unsigned long, netmem)
+		__field(u8, old_state)
+		__field(u8, new_state)
+		__field(u32, alloc_pages)
+		__field(u32, array_pages)
+		__field(u32, ring_pages)
 	),
 
 	TP_fast_assign(
-		__entry->pool	= pool;
-		__entry->netmem	= (__force unsigned long)netmem;
+		__entry->pool = pool;
+		__entry->netmem = (__force unsigned long)netmem;
 		__entry->old_state = old_state;
 		__entry->new_state = new_state;
 		__entry->alloc_pages = alloc_pages;
@@ -56,116 +63,178 @@ TRACE_EVENT(cacheflow_page_pool_page_move,
 		__entry->ring_pages = ring_pages;
 	),
 
-	TP_printk("page_pool=%p netmem=%p old_state=%u new_state=%u alloc_pages=%u array_pages=%u ring_pages=%u",
-		  __entry->pool, (void *)__entry->netmem,
-		  __entry->old_state, __entry->new_state, __entry->alloc_pages, __entry->array_pages, __entry->ring_pages)
+	TP_printk(
+		"page_pool=%p netmem=%p old_state=%u new_state=%u alloc_pages=%u array_pages=%u ring_pages=%u",
+		__entry->pool, (void *)__entry->netmem, __entry->old_state,
+		__entry->new_state, __entry->alloc_pages, __entry->array_pages,
+		__entry->ring_pages
+	)
 )
 
-TRACE_EVENT(cacheflow_page_pool_pressure,
+TRACE_EVENT(
+	cacheflow_page_pool_pressure,
 
-	TP_PROTO(const struct cacheflow_page_pool *pool, const struct sock *sk, u64 sock_id,
-		 const struct sk_buff *skb, u32 used, u32 free, u32 mark),
+	TP_PROTO(const struct cacheflow_page_pool *pool, const struct sock *sk,
+		 u64 sock_id, const struct sk_buff *skb, u32 used, u32 free,
+		 u32 mark),
 
 	TP_ARGS(pool, sk, sock_id, skb, used, free, mark),
 
 	TP_STRUCT__entry(
-		__field(const struct cacheflow_page_pool *,	pool)
-		__field(const struct sock *,			sk)
-		__field(u64,					sock_id)
-		__field(const struct sk_buff *,			skb)
-		__field(u32,					used)
-		__field(u32,					free)
-		__field(u32,					mark)
+		__field(const struct cacheflow_page_pool *, pool)
+		__field(const struct sock *, sk)
+		__field(u64, sock_id)
+		__field(const struct sk_buff *, skb)
+		__field(u32, used)
+		__field(u32, free)
+		__field(u32, mark)
 	),
 
 	TP_fast_assign(
-		__entry->pool		= pool;
-		__entry->sk		= sk;
-		__entry->sock_id 	= sock_id;
-		__entry->skb		= skb;
-		__entry->used		= used;
-		__entry->free		= free;
-		__entry->mark		= mark;
+		__entry->pool = pool;
+		__entry->sk = sk;
+		__entry->sock_id = sock_id;
+		__entry->skb = skb;
+		__entry->used = used;
+		__entry->free = free;
+		__entry->mark = mark;
 	),
 
-	TP_printk("page_pool=%p sk=%p sock_id=%llu skb=%p used=%u free=%u mark=%u",
-		  __entry->pool, __entry->sk, __entry->sock_id, __entry->skb,
-		  __entry->used, __entry->free, __entry->mark)
+	TP_printk(
+		"page_pool=%p sk=%p sock_id=%llu skb=%p used=%u free=%u mark=%u",
+		__entry->pool, __entry->sk, __entry->sock_id, __entry->skb,
+		__entry->used, __entry->free, __entry->mark
+	)
 )
 
 TRACE_EVENT(cacheflow_page_pool_state_hold,
 
-	TP_PROTO(const struct cacheflow_page_pool *pool,
-		 netmem_ref netmem, u32 hold),
+	    TP_PROTO(const struct cacheflow_page_pool *pool, netmem_ref netmem,
+		     u32 hold),
 
-	TP_ARGS(pool, netmem, hold),
+	    TP_ARGS(pool, netmem, hold),
 
-	TP_STRUCT__entry(
-		__field(const struct cacheflow_page_pool *,	pool)
-		__field(unsigned long,				netmem)
-		__field(u32,					hold)
-		__field(unsigned long,				pfn)
-	),
+	    TP_STRUCT__entry(
+		    __field(const struct cacheflow_page_pool *, pool)
+		    __field(unsigned long, netmem)
+		    __field(u32, hold)
+		    __field(unsigned long, pfn)
+	    ),
 
-	TP_fast_assign(
-		__entry->pool	= pool;
-		__entry->netmem	= (__force unsigned long)netmem;
-		__entry->hold	= hold;
-		__entry->pfn	= netmem_pfn_trace(netmem);
-	),
+	    TP_fast_assign(
+		    __entry->pool = pool;
+		    __entry->netmem = (__force unsigned long)netmem;
+		    __entry->hold = hold;
+		    __entry->pfn = netmem_pfn_trace(netmem);
+	    ),
 
-	TP_printk("page_pool=%p netmem=%p is_net_iov=%lu, pfn=0x%lx hold=%u",
-		  __entry->pool, (void *)__entry->netmem,
-		  __entry->netmem & NET_IOV, __entry->pfn, __entry->hold)
+	    TP_printk("page_pool=%p netmem=%p is_net_iov=%lu, pfn=0x%lx hold=%u",
+		      __entry->pool, (void *)__entry->netmem,
+		      __entry->netmem & NET_IOV, __entry->pfn, __entry->hold
+	    )
 );
 
-TRACE_EVENT(cacheflow_page_pool_state_release,
+TRACE_EVENT(
+	cacheflow_page_pool_state_release,
 
-	TP_PROTO(const struct cacheflow_page_pool *pool,
-		 netmem_ref netmem, u32 release),
+	TP_PROTO(const struct cacheflow_page_pool *pool, netmem_ref netmem,
+		 u32 release),
 
 	TP_ARGS(pool, netmem, release),
 
 	TP_STRUCT__entry(
-		__field(const struct cacheflow_page_pool *,	pool)
-		__field(unsigned long,				netmem)
-		__field(u32,					release)
-		__field(unsigned long,				pfn)
+		__field(const struct cacheflow_page_pool *, pool)
+		__field(unsigned long, netmem)
+		__field(u32, release)
+		__field(unsigned long, pfn)
 	),
 
 	TP_fast_assign(
-		__entry->pool		= pool;
-		__entry->netmem		= (__force unsigned long)netmem;
-		__entry->release	= release;
-		__entry->pfn		= netmem_pfn_trace(netmem);
+		__entry->pool = pool;
+		__entry->netmem = (__force unsigned long)netmem;
+		__entry->release = release;
+		__entry->pfn = netmem_pfn_trace(netmem);
 	),
 
 	TP_printk("page_pool=%p netmem=%p is_net_iov=%lu pfn=0x%lx release=%u",
 		  __entry->pool, (void *)__entry->netmem,
-		  __entry->netmem & NET_IOV, __entry->pfn, __entry->release)
+		  __entry->netmem & NET_IOV, __entry->pfn, __entry->release
+	)
 );
 
-TRACE_EVENT(cacheflow_frags_update,
+TRACE_EVENT(
+	cacheflow_sk_recv_rate_est,
 
-	TP_PROTO(int ix, int i, netmem_ref netmem),
+	TP_PROTO(const struct sock *sk, u64 sock_cookie, u64 rcv_rtt, u64 latest_rcv_rtt,
+		 u64 recv_bytes, u64 latest_recv_bytes, u64 copied_bytes, u64 latest_copied_bytes, u64 receive_queue, u64 backlog_queue),
 
-	TP_ARGS(ix, i, netmem),
+	TP_ARGS(sk, sock_cookie, rcv_rtt, latest_rcv_rtt, recv_bytes, latest_recv_bytes, copied_bytes, latest_copied_bytes, receive_queue, backlog_queue),
 
 	TP_STRUCT__entry(
-		__field(int, ix)
-		__field(int, i)
-		__field(unsigned long,				netmem)
+		__field(const struct sock *, sk)
+		__field(u64, sock_cookie)
+		__field(u64, rcv_rtt)
+		__field(u64, latest_rcv_rtt)
+		__field(u64, recv_bytes)
+		__field(u64, latest_recv_bytes)
+		__field(u64, copied_bytes)
+		__field(u64, latest_copied_bytes)
+		__field(u64, receive_queue)
+		__field(u64, backlog_queue)
 	),
 
 	TP_fast_assign(
-		__entry->ix		= ix;
-		__entry->i		= i;
-		__entry->netmem		= (__force unsigned long)netmem;
+		__entry->sk = sk;
+		__entry->sock_cookie = sock_cookie;
+		__entry->rcv_rtt = rcv_rtt;
+		__entry->latest_rcv_rtt = latest_rcv_rtt;
+		__entry->recv_bytes = recv_bytes;
+		__entry->latest_recv_bytes = latest_recv_bytes;
+		__entry->copied_bytes = copied_bytes;
+		__entry->latest_copied_bytes = latest_copied_bytes;
+		__entry->receive_queue = receive_queue;
+		__entry->backlog_queue = backlog_queue;
 	),
 
-	TP_printk("ix=%d i=%d netmem=%p",
-		  __entry->ix, __entry->i, (void *)__entry->netmem)
+	TP_printk(
+		"sk=%p sock_cookie=%llu rcv_rtt=%llu latest_rcv_rtt=%llu recv_bytes=%llu latest_recv_bytes=%llu copied_bytes=%llu latest_copied_bytes=%llu receive_queue=%llu backlog_queue=%llu",
+		__entry->sk, __entry->sock_cookie, __entry->rcv_rtt, __entry->latest_rcv_rtt,
+		__entry->recv_bytes, __entry->latest_recv_bytes, __entry->copied_bytes, __entry->latest_copied_bytes, __entry->receive_queue, __entry->backlog_queue
+	)
 );
+
+TRACE_EVENT(
+	cacheflow_rcv_rtt_update,
+
+	TP_PROTO(const struct sock *sk, u64 sock_cookie, u64 window_size, u64 rcv_rtt, u64 interval, bool ts_based),
+
+	TP_ARGS(sk, sock_cookie, window_size, rcv_rtt, interval, ts_based),
+
+	TP_STRUCT__entry(
+		__field(const struct sock *, sk)
+		__field(u64, sock_cookie)
+		__field(u64, window_size)
+		__field(u64, rcv_rtt)
+		__field(u64, interval)
+		__field(bool, ts_based)
+	),
+
+	TP_fast_assign(
+		__entry->sk = sk;
+		__entry->sock_cookie = sock_cookie;
+		__entry->window_size = window_size;
+		__entry->rcv_rtt = rcv_rtt;
+		__entry->interval = interval;
+		__entry->ts_based = ts_based;
+	),
+
+	TP_printk(
+		"sk=%p sock_cookie=%llu window_size=%llu rcv_rtt=%llu interval=%llu ts_based=%d",
+		__entry->sk, __entry->sock_cookie, __entry->window_size, __entry->rcv_rtt, __entry->interval,
+		__entry->ts_based
+	)
+);
+
 #endif /* _TRACE_CACHEFLOW_H */
 
 /* This part must be outside protection */
