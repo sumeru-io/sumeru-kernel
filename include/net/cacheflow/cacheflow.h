@@ -11,7 +11,6 @@
 #include <trace/events/skb.h>
 
 extern u8 cacheflow_mark_enable;
-extern u8 cacheflow_track_enable;
 
 extern struct static_key_false cacheflow_steer_enable;
 
@@ -30,11 +29,6 @@ enum {
 	NETMEM_LOCATION_SOCKET = 4,
 	NETMEM_LOCATION_RECYCLE = 5,
 };
-
-static inline bool is_cacheflow_track_enabled(void)
-{
-	return READ_ONCE(cacheflow_track_enable) > 0;
-}
 
 static inline bool is_cacheflow_mark_enabled(void)
 {

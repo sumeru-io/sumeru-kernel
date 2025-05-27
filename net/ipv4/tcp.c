@@ -1535,7 +1535,7 @@ static void tcp_eat_recv_skb(struct sock *sk, struct sk_buff *skb)
 		skb_shinfo(skb)->ms_timestamp.consume_timestamp);
 
 	}
-	if (likely(skb->destructor == sock_rfree) && !CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW_STEER)) {
+	if (likely(skb->destructor == sock_rfree)) {
 		sock_rfree(skb);
 		skb->destructor = NULL;
 		skb->sk = NULL;

@@ -8,7 +8,6 @@
 #include <linux/jump_label.h>
 
 u8 cacheflow_mark_enable __read_mostly;
-u8 cacheflow_track_enable __read_mostly;
 
 struct static_key_false cacheflow_steer_enable __read_mostly;
 EXPORT_SYMBOL(cacheflow_steer_enable);

@@ -43,7 +43,6 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
 	int tcpu;
 	struct mlx5e_cacheflow_th *th;
 	struct mlx5e_cacheflow_cqe *cacheflow_cqe;
-	ktime_t timestamp;
 	int i;
 	u64 cacheflow_id = 0;
 

@@ -292,7 +292,6 @@ static int mlx5e_page_alloc_fragmented(struct mlx5e_rq *rq,
 
 	page_pool_fragment_page(page, MLX5E_PAGECNT_BIAS_MAX);
 
-alloc:
 	*frag_page = (struct mlx5e_frag_page) {
 		.page	= page,
 		.frags	= 0,
@@ -2884,8 +2883,6 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 	skb_mark_for_recycle(skb);
 
 	CACHEFLOW_SET_FLAG(skb, SKB_CACHEFLOW, true);
-	if (is_cacheflow_steer_enabled())
-		CACHEFLOW_SET_FLAG(skb, SKB_CACHEFLOW_STEER, true);
 
 	skb->cacheflow_id = cqe->cacheflow_id;
 
