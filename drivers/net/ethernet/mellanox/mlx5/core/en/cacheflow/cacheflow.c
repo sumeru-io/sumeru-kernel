@@ -39,8 +39,6 @@ mlx5e_cacheflow_build_rq_param(struct mlx5_core_dev *mdev,
 	rq_param->frags_info.wqe_bulk =
 		max_t(u16, rq_param->frags_info.wqe_index_mask + 1, 8);
 	rq_param->frags_info.refill_unit = rq_param->frags_info.wqe_bulk;
-
-	rq_param->cacheflow_channel = 1;
 }
 
 static void mlx5e_cacheflow_build_params(struct mlx5e_cacheflow *c,
@@ -358,9 +356,6 @@ static int mlx5e_cacheflow_alloc_rq(struct mlx5e_params *params,
 	err = mlx5e_cacheflow_init_wqe_alloc_info(rq, node);
 	if (err)
 		goto err_rq_wq_destroy;
-
-	__set_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags);
-	__set_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags);
 
 	/* Create a page_pool and register it with rxq */
 	struct cacheflow_page_pool_params pp_params = { 0 };
@@ -699,8 +694,6 @@ static void mlx5e_cacheflow_print_params(struct mlx5e_cacheflow_params *cparams)
 			i, rq_param->frags_info.arr[i].frag_size,
 			rq_param->frags_info.arr[i].frag_stride);
 	}
-	pr_info("    xdp_frag_size=%u, cacheflow_channel=%u\n",
-		rq_param->xdp_frag_size, rq_param->cacheflow_channel);
 }
 
 static void cacheflow_raise_softirq(void *data)

@@ -951,19 +951,6 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		err = mlx5_rq_shampo_alloc(mdev, params, rqp, rq, &pool_size, node);
 		if (err)
 			goto err_free_mpwqe_info;
-		
-		if (rqp->cacheflow_channel)
-			pr_info("mlx5e: MPRQ[%d]: MTU RQ: %u, MPRQ RQ: %u, pages_per_wqe %u, min_wqe_bulk: %u, wq_sz %d, "
-				"num_strides: %u, stride_size: %u, frame0_sz: %u\n",
-				rq->ix,
-				1 << params->log_rq_mtu_frames,
-				mlx5e_mpwqe_get_log_rq_size(mdev, params, xsk),
-				rq->mpwqe.pages_per_wqe,
-				rq->mpwqe.min_wqe_bulk,
-				wq_sz,
-				rq->mpwqe.num_strides,
-				1 << rq->mpwqe.log_stride_sz,
-				rq->buff.frame0_sz);
 
 		break;
 	default: /* MLX5_WQ_TYPE_CYCLIC */
@@ -982,26 +969,6 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		err = mlx5e_init_wqe_alloc_info(rq, node);
 		if (err)
 			goto err_rq_wq_destroy;
-
-		if (rqp->cacheflow_channel) {
-			__set_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags);
-			__set_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags);
-			pr_info("mlx5e: RQ[%d]: MTU RQ: %u, wq_sz %d, wqe_bulk %u, refill_unit %u, num_frags %u, frag_size [%d/%d %d/%d %d/%d %d/%d]\n",
-				rq->ix,
-				1 << params->log_rq_mtu_frames,
-				wq_sz,
-				rq->wqe.info.wqe_bulk,
-				rq->wqe.info.refill_unit,
-				rq->wqe.info.num_frags,
-				rq->wqe.info.arr[0].frag_size,
-				rq->wqe.info.arr[0].frag_stride,
-				rq->wqe.info.arr[1].frag_size,
-				rq->wqe.info.arr[1].frag_stride,
-				rq->wqe.info.arr[2].frag_size,
-				rq->wqe.info.arr[2].frag_stride,
-				rq->wqe.info.arr[3].frag_size,
-				rq->wqe.info.arr[3].frag_stride);
-		}
 	}
 
 	if (xsk) {

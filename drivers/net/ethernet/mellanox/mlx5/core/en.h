@@ -615,8 +615,6 @@ void mlx5e_rq_set_trap_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params
 enum mlx5e_rq_flag {
 	MLX5E_RQ_FLAG_XDP_XMIT,
 	MLX5E_RQ_FLAG_XDP_REDIRECT,
-	MLX5E_RQ_FLAG_CACHEFLOW,
-	MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL,
 };
 
 struct mlx5e_rq_frag_info {

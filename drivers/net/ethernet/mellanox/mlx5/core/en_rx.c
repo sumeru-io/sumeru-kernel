@@ -290,9 +290,6 @@ static int mlx5e_page_alloc_fragmented(struct mlx5e_rq *rq,
 	if (unlikely(!page))
 		return -ENOMEM;
 
-	if (test_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags))
-		goto alloc;
-
 	page_pool_fragment_page(page, MLX5E_PAGECNT_BIAS_MAX);
 
 alloc:
@@ -304,7 +301,7 @@ alloc:
 	return 0;
 }
 
-static void __mlx5e_page_release_fragmented(struct mlx5e_rq *rq,
+static void mlx5e_page_release_fragmented(struct mlx5e_rq *rq,
 					  struct mlx5e_frag_page *frag_page)
 {
 	u16 drain_count = MLX5E_PAGECNT_BIAS_MAX - frag_page->frags;
@@ -312,16 +309,6 @@ static void __mlx5e_page_release_fragmented(struct mlx5e_rq *rq,
 
 	if (page_pool_unref_page(page, drain_count) == 0)
 		page_pool_put_unrefed_page(rq->page_pool, page, -1, true);
-}
-
-static void mlx5e_page_release_fragmented(struct mlx5e_rq *rq,
-					  struct mlx5e_frag_page *frag_page)
-{
-	if (!test_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags)) {
-		__mlx5e_page_release_fragmented(rq, frag_page);
-	} else if (frag_page->frags == 0) {
-		page_pool_put_unrefed_page(rq->page_pool, frag_page->page, -1, true);
-	}
 }
 
 static inline int mlx5e_get_rx_frag(struct mlx5e_rq *rq,
@@ -364,12 +351,6 @@ static inline struct mlx5e_wqe_frag_info *get_frag(struct mlx5e_rq *rq, u16 ix)
 
 static inline void mlx5e_frag_ref_inc(struct mlx5e_rq *rq, struct mlx5e_frag_page *page)
 {
-	if (test_bit(MLX5E_RQ_FLAG_SINGLE_OWNER_PAGE_POOL, rq->flags)) {
-		if (page->frags != 0) {
-			pr_err("mlx5e: frag_ref_inc: page->frags (%d) != 0\n", page->frags);
-			BUG();
-		}
-	}
 	page->frags++;
 }
 
@@ -1818,14 +1799,6 @@ mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5e_wqe_frag_info *wi
 		return NULL;
 
 	skb_mark_for_recycle(skb);
-
-#if IS_ENABLED(CONFIG_NET_CACHEFLOW)
-	if (test_bit(MLX5E_RQ_FLAG_CACHEFLOW, rq->flags)) {
-		CACHEFLOW_SET_FLAG(skb, SKB_CACHEFLOW, true);
-		if (is_cacheflow_steer_enabled())
-			CACHEFLOW_SET_FLAG(skb, SKB_CACHEFLOW_STEER, true);
-	}
-#endif
 
 	mlx5e_frag_ref_inc(rq, head_wi->frag_page);
 
