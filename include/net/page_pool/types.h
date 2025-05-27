@@ -31,16 +31,8 @@
  */
 #define PP_FLAG_ALLOW_UNREADABLE_NETMEM BIT(3)
 
-/* Create a page pool with fixed number of pages and therefore deterministic
- * memory footprint. Used for CoABM buffer management.
- */
-#define PP_FLAG_USAGE_TRACK BIT(4)
-
-#define PP_FLAG_SINGLE_OWNER BIT(5)
-
 #define PP_FLAG_ALL		(PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV | \
-				 PP_FLAG_SYSTEM_POOL | PP_FLAG_ALLOW_UNREADABLE_NETMEM | \
-				 PP_FLAG_USAGE_TRACK | PP_FLAG_SINGLE_OWNER)
+				 PP_FLAG_SYSTEM_POOL | PP_FLAG_ALLOW_UNREADABLE_NETMEM)
 
 /*
  * Fast allocation side cache array/stack
@@ -59,30 +51,10 @@
 #define PP_ALLOC_CACHE_SIZE	256
 #define PP_ALLOC_CACHE_REFILL	64
 
-#ifdef CONFIG_PAGE_POOL_BULK
-
-#define PP_ALLOC_CACHE_BULK			16
-#define PP_ALLOC_CACHE_BULK_SIZE		(PP_ALLOC_CACHE_SIZE / PP_ALLOC_CACHE_BULK)
-#define PP_ALLOC_CACHE_BULK_REFILL		(PP_ALLOC_CACHE_REFILL / PP_ALLOC_CACHE_BULK)
-#define PP_ALLOC_CACHE_BULK_FREE_CACHE_SIZE 	(PP_ALLOC_CACHE_BULK_SIZE * 2)
-
-typedef netmem_ref* netmem_mini_array_t;
-
-struct pp_alloc_cache {
-	u32 bulk_count;
-	u32 count;
-	netmem_mini_array_t bulk[PP_ALLOC_CACHE_BULK_SIZE];
-	netmem_mini_array_t cache;
-	u32 free_mini_array_cache_count;
-	netmem_mini_array_t free_mini_array_cache[PP_ALLOC_CACHE_BULK_FREE_CACHE_SIZE];
-};
-
-#else
 struct pp_alloc_cache {
 	u32 count;
 	netmem_ref cache[PP_ALLOC_CACHE_SIZE];
 };
-#endif
 
 /**
  * struct page_pool_params - page pool parameters
@@ -267,11 +239,7 @@ struct page_pool {
 	 *
 	 * TODO: Implement bulk return pages into this structure.
 	 */
-#ifdef CONFIG_PAGE_POOL_STACK
-	struct ptr_stack stack;
-#else
 	struct ptr_ring ring;
-#endif
 
 	void *mp_priv;
 

@@ -1015,17 +1015,6 @@ static int mlx5e_alloc_rq(struct mlx5e_params *params,
 		pp_params.order     = 0;
 		pp_params.flags     = PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV;
 		pp_params.pool_size = pool_size;
-
-#ifdef CONFIG_NET_CACHEFLOW
-		if (rqp->cacheflow_channel) {
-			pp_params.pool_size = get_cacheflow_pool_size();
-			pp_params.flags |= PP_FLAG_SINGLE_OWNER;
-			if (is_cacheflow_track_enabled()) {
-				pp_params.flags |= PP_FLAG_USAGE_TRACK;
-			}
-		}
-#endif
-
 		pp_params.nid       = node;
 		pp_params.dev       = rq->pdev;
 		pp_params.napi      = rq->cq.napi;
