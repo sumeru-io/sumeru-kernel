@@ -361,8 +361,7 @@ static int mlx5e_cacheflow_alloc_rq(struct mlx5e_params *params,
 	struct cacheflow_page_pool_params pp_params = { 0 };
 
 	pp_params.order = 0;
-	pp_params.pool_size = get_cacheflow_pool_size();
-
+	pp_params.pool_size = 4096;
 	pp_params.nid = node;
 	pp_params.dev = rq->pdev;
 	pp_params.napi = rq->cq.napi;

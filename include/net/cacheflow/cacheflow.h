@@ -15,7 +15,6 @@ extern u8 cacheflow_mark_enable;
 extern struct static_key_false cacheflow_steer_enable;
 
 extern int cacheflow_steer_core;
-extern int cacheflow_buffer_size;
 extern int cacheflow_aqm;
 extern int cacheflow_thresh;
 extern int cacheflow_elephant_flow_thresh;
@@ -41,10 +40,6 @@ static inline bool is_cacheflow_mark_enabled(void)
 static inline bool is_cacheflow_steer_enabled(void)
 {
 	return static_branch_likely(&cacheflow_steer_enable);
-}
-
-static inline int get_cacheflow_pool_size(void) {
-	return READ_ONCE(cacheflow_buffer_size);
 }
 
 static inline int get_cacheflow_steer_core(void) {

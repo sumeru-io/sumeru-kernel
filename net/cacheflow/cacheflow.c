@@ -21,7 +21,6 @@ struct static_key_false cacheflow_steer_enable __read_mostly;
 EXPORT_SYMBOL(cacheflow_steer_enable);
 
 int cacheflow_steer_core __read_mostly;
-int cacheflow_buffer_size __read_mostly = 4096;
 int cacheflow_thresh __read_mostly = 2048;
 int cacheflow_aqm __read_mostly;
 int cacheflow_ipi_packet_thresh __read_mostly = 16;
