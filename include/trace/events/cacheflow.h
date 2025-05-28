@@ -263,7 +263,7 @@ TRACE_EVENT(
 );
 
 TRACE_EVENT(
-	cacheflow_abm_mark,
+	cacheflow_mark,
 
 	TP_PROTO(u64 sock_cookie, u32 allocated_pages, u32 thresh, u32 qlen, u32 rtt, u32 drain_rate, int mark),
 
