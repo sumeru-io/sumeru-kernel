@@ -874,11 +874,11 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 		tp->rcv_rate_est.copied_seq = tp->copied_seq;
 
 		if (tp->elephant_flow) {
-			trace_cacheflow_sk_recv_rate_est(sk, __sock_gen_cookie(sk),
-							 tp->rcv_rtt_est.rtt_us >> 3, delta,
-							 tp->rcv_rate_est.recv_rate >> 3, received_bytes,
-							 tp->rcv_rate_est.copied_rate >> 3, copied_bytes,
-							 tp->rcv_nxt - tp->copied_seq, sk->sk_backlog.len);
+			trace_cacheflow_rate_est(sk, __sock_gen_cookie(sk),
+						tp->rcv_rtt_est.rtt_us >> 3, delta,
+						tp->rcv_rate_est.recv_rate >> 3, received_bytes,
+						tp->rcv_rate_est.copied_rate >> 3, copied_bytes,
+						tp->rcv_nxt - tp->copied_seq, sk->sk_backlog.len);
 		}
 
 		if (tp->rcv_rate_est.recv_rate == 0) {

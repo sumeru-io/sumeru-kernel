@@ -163,7 +163,7 @@ TRACE_EVENT(
 );
 
 TRACE_EVENT(
-	cacheflow_sk_recv_rate_est,
+	cacheflow_rate_est,
 
 	TP_PROTO(const struct sock *sk, u64 sock_cookie, u64 rcv_rtt, u64 latest_rcv_rtt,
 		 u64 recv_bytes, u64 latest_recv_bytes, u64 copied_bytes, u64 latest_copied_bytes, u64 receive_queue, u64 backlog_queue),
@@ -232,6 +232,66 @@ TRACE_EVENT(
 		"sk=%p sock_cookie=%llu window_size=%llu rcv_rtt=%llu interval=%llu ts_based=%d",
 		__entry->sk, __entry->sock_cookie, __entry->window_size, __entry->rcv_rtt, __entry->interval,
 		__entry->ts_based
+	)
+);
+
+TRACE_EVENT(
+	cacheflow_direct_mark,
+
+	TP_PROTO(u64 sock_cookie, u32 allocated_pages, u32 thresh, int mark),
+
+	TP_ARGS(sock_cookie, allocated_pages, thresh, mark),
+
+	TP_STRUCT__entry(
+		__field(u64, sock_cookie)
+		__field(u32, allocated_pages)
+		__field(u32, thresh)
+		__field(int, mark)
+	),
+
+	TP_fast_assign(
+		__entry->sock_cookie = sock_cookie;
+		__entry->allocated_pages = allocated_pages;
+		__entry->thresh = thresh;
+		__entry->mark = mark;
+	),
+
+	TP_printk(
+		"sock_cookie=%llu allocated_pages=%u thresh=%u mark=%d",
+		__entry->sock_cookie, __entry->allocated_pages, __entry->thresh, __entry->mark
+	)
+);
+
+TRACE_EVENT(
+	cacheflow_abm_mark,
+
+	TP_PROTO(u64 sock_cookie, u32 allocated_pages, u32 thresh, u32 qlen, u32 rtt, u32 drain_rate, int mark),
+
+	TP_ARGS(sock_cookie, allocated_pages, thresh, qlen, rtt, drain_rate, mark),
+
+	TP_STRUCT__entry(
+		__field(u64, sock_cookie)
+		__field(u32, allocated_pages)
+		__field(u32, thresh)
+		__field(u32, qlen)
+		__field(u32, rtt)
+		__field(u32, drain_rate)
+		__field(int, mark)
+	),
+
+	TP_fast_assign(
+		__entry->sock_cookie = sock_cookie;
+		__entry->allocated_pages = allocated_pages;
+		__entry->thresh = thresh;
+		__entry->qlen = qlen;
+		__entry->rtt = rtt;
+		__entry->drain_rate = drain_rate;
+		__entry->mark = mark;
+	),
+
+	TP_printk(
+		"sock_cookie=%llu allocated_pages=%u thresh=%u qlen=%u rtt=%u drain_rate=%u mark=%d",
+		__entry->sock_cookie, __entry->allocated_pages, __entry->thresh, __entry->qlen, __entry->rtt, __entry->drain_rate, __entry->mark
 	)
 );
 

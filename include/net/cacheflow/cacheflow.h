@@ -16,6 +16,7 @@ extern struct static_key_false cacheflow_steer_enable;
 
 extern int cacheflow_steer_core;
 extern int cacheflow_buffer_size;
+extern int cacheflow_aqm;
 extern int cacheflow_thresh;
 extern int cacheflow_elephant_flow_thresh;
 extern int cacheflow_ipi_packet_thresh;
@@ -30,6 +31,8 @@ enum {
 	NETMEM_LOCATION_RECYCLE = 5,
 };
 
+int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk);
+
 static inline bool is_cacheflow_mark_enabled(void)
 {
 	return READ_ONCE(cacheflow_mark_enable) > 0;
@@ -42,10 +45,6 @@ static inline bool is_cacheflow_steer_enabled(void)
 
 static inline int get_cacheflow_pool_size(void) {
 	return READ_ONCE(cacheflow_buffer_size);
-}
-
-static inline int get_cacheflow_thresh(void) {
-	return READ_ONCE(cacheflow_thresh);
 }
 
 static inline int get_cacheflow_steer_core(void) {
