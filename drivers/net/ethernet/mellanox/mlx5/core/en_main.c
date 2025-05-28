@@ -2879,9 +2879,9 @@ int mlx5e_open_channels(struct mlx5e_priv *priv,
 	int i;
 
 #ifdef CONFIG_NET_CACHEFLOW
-	pr_info("cacheflow: control bits: mark: %s, steer: %s, ndesp: %d\n", 
-		is_cacheflow_mark_enabled() ? "on" : "off",
+	pr_info("cacheflow: control bits: steer: %s, aqm: %s, ndesp: %d\n", 
 		is_cacheflow_steer_enabled() ? "on" : "off",
+		cacheflow_aqm_to_str(cacheflow_aqm),
 		(1 << cacheflow_channel_descriptor));
 #endif
 

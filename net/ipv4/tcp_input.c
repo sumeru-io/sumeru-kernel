@@ -894,6 +894,13 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 			copied_bytes -= (tp->rcv_rate_est.copied_rate >> 3);
 			tp->rcv_rate_est.copied_rate = (u32)((long)tp->rcv_rate_est.copied_rate + copied_bytes);
 		}
+
+		if (tp->rcv_rate_est.delta == 0) {
+			tp->rcv_rate_est.delta = delta;
+		} else {
+			delta -= (tp->rcv_rate_est.delta >> 3);
+			tp->rcv_rate_est.delta = (u32)((long)tp->rcv_rate_est.delta + delta);
+		}
 	}
 	
 	return;

@@ -2153,15 +2153,8 @@ int tcp_filter(struct sock *sk, struct sk_buff *skb)
 	int ret = sk_filter_trim_cap(sk, skb, th->doff * 4);
 
 #ifdef CONFIG_NET_CACHEFLOW
-	if (!ret && CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW)) {
-		if (is_cacheflow_mark_enabled() && (cacheflow_should_mark(skb->page_pool, sk))) {
-			INET_ECN_set_ce(skb);
-			trace_cacheflow_page_pool_pressure(skb->page_pool, sk, sock_gen_cookie(sk),
-						 skb, skb->used_pages, skb->free_pages, 1);
-		} else {
-			trace_cacheflow_page_pool_pressure(skb->page_pool, sk, sock_gen_cookie(sk),
-						 skb, skb->used_pages, skb->free_pages, 0);
-		}
+	if (!ret && CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW) && cacheflow_should_mark(skb->page_pool, sk)) {
+		INET_ECN_set_ce(skb);
 	}
 #endif
 	return ret;

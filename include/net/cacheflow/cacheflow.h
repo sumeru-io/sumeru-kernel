@@ -10,8 +10,6 @@
 #include <net/page_pool/helpers.h>
 #include <trace/events/skb.h>
 
-extern u8 cacheflow_mark_enable;
-
 extern struct static_key_false cacheflow_steer_enable;
 
 extern int cacheflow_steer_core;
@@ -31,11 +29,6 @@ enum {
 };
 
 int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk);
-
-static inline bool is_cacheflow_mark_enabled(void)
-{
-	return READ_ONCE(cacheflow_mark_enable) > 0;
-}
 
 static inline bool is_cacheflow_steer_enabled(void)
 {
@@ -67,6 +60,20 @@ static inline void cacheflow_track_page_move(struct sk_buff *skb, int location)
 		for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
 			trace_skb_cacheflow_memory_location(page_to_netmem(netmem_to_page(skb_shinfo(skb)->frags[i].netmem)), location);
 		}
+	}
+}
+
+static inline const char *cacheflow_aqm_to_str(int aqm)
+{
+	switch (aqm) {
+	case 0:
+		return "off";
+	case 1:
+		return "direct";
+	case 2:
+		return "abm";
+	default:
+		return "unknown";
 	}
 }
 
