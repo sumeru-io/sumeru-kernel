@@ -203,9 +203,9 @@ TRACE_EVENT(
 	cacheflow_mark,
 
 	TP_PROTO(u64 sock_cookie, u32 allocated_pages, u32 thresh, u32 recv_qlen,
-		 u32 backlog_qlen, u32 rtt, u32 drain_rate, int mark),
+		 u32 backlog_qlen, u32 rtt, u32 drain_rate, u32 recv_rate, int mark),
 
-	TP_ARGS(sock_cookie, allocated_pages, thresh, recv_qlen, backlog_qlen, rtt, drain_rate, mark),
+	TP_ARGS(sock_cookie, allocated_pages, thresh, recv_qlen, backlog_qlen, rtt, drain_rate, recv_rate, mark),
 
 	TP_STRUCT__entry(
 		__field(u64, sock_cookie)
@@ -215,6 +215,7 @@ TRACE_EVENT(
 		__field(u32, backlog_qlen)
 		__field(u32, rtt)
 		__field(u32, drain_rate)
+		__field(u32, recv_rate)
 		__field(int, mark)
 	),
 
@@ -226,12 +227,15 @@ TRACE_EVENT(
 		__entry->backlog_qlen = backlog_qlen;
 		__entry->rtt = rtt;
 		__entry->drain_rate = drain_rate;
+		__entry->recv_rate = recv_rate;
 		__entry->mark = mark;
 	),
 
 	TP_printk(
-		"sock_cookie=%llu allocated_pages=%u thresh=%u recv_qlen=%u backlog_qlen=%u rtt=%u drain_rate=%u mark=%d",
-		__entry->sock_cookie, __entry->allocated_pages, __entry->thresh, __entry->recv_qlen, __entry->backlog_qlen, __entry->rtt, __entry->drain_rate, __entry->mark
+		"sock_cookie=%llu allocated_pages=%u thresh=%u recv_qlen=%u backlog_qlen=%u rtt=%u drain_rate=%u recv_rate=%u mark=%d",
+		__entry->sock_cookie, __entry->allocated_pages, __entry->thresh,
+		__entry->recv_qlen, __entry->backlog_qlen, __entry->rtt,
+		__entry->drain_rate, __entry->recv_rate, __entry->mark
 	)
 );
 

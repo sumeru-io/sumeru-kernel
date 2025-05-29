@@ -819,8 +819,6 @@ void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
 {
 	int cpu;
 
-	pr_info("cacheflow: close the cacheflow channel\n");
-
 	mlx5e_cacheflow_close_queues(c);
 	netif_napi_del(&c->napi);
 

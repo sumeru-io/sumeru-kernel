@@ -34,6 +34,7 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 	u32 sock_qlen = sock_recv_len + sock_backlog_len;
 	u32 rtt = tp->rcv_rate_est.delta >> 3;
 	u32 drain_rate = tp->rcv_rate_est.copied_rate >> 3;
+	u32 recv_rate = tp->rcv_rate_est.recv_rate >> 3;
 	u32 thresh = READ_ONCE(cacheflow_thresh);
 	u32 allocated_pages = READ_ONCE(pool->allocated_pages);
 	u32 remaining_pages =
@@ -63,8 +64,8 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 	}
 
 	trace_cacheflow_mark(__sock_gen_cookie(sk), allocated_pages, thresh,
-			     sock_recv_len, sock_backlog_len, rtt, drain_rate,
-			     mark);
+			     sock_recv_len, sock_backlog_len,
+			     rtt, drain_rate, recv_rate, mark);
 
 	return mark;
 }

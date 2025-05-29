@@ -1274,14 +1274,11 @@ void cacheflow_page_pool_destroy(struct cacheflow_page_pool *pool)
 	if (!cacheflow_page_pool_put(pool))
 		return;
 
-	pr_info("cacheflow: release the page pool\n");
 	if (!cacheflow_page_pool_release(pool))
 		return;
 
 	pool->defer_start = jiffies;
 	pool->defer_warn = jiffies + DEFER_WARN_INTERVAL;
-
-	pr_warn("cacheflow: fail to release the page pool\n");
 
 	INIT_DELAYED_WORK(&pool->release_dw, cacheflow_page_pool_release_retry);
 	schedule_delayed_work(&pool->release_dw, DEFER_TIME);

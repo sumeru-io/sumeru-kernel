@@ -838,12 +838,11 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	long delta, received_bytes, copied_bytes;
-	struct dst_entry *dst;
 	int alpha = READ_ONCE(cacheflow_alpha);
+	int cacheflow_supported = sk->sk_route_caps & NETIF_F_CACHEFLOW;
 
-	dst = rcu_dereference_protected(sk->sk_rx_dst,
-					lockdep_sock_is_held(sk));
-	int cacheflow_supported = dst ? dst->dev->features & NETIF_F_CACHEFLOW : 0;
+	if (unlikely(!cacheflow_supported))
+		return;
 
 	if (unlikely(tp->rcv_rate_est.mstamp == 0)) {
 		tp->rcv_rate_est.mstamp = tp->tcp_mstamp;
@@ -857,7 +856,7 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 		received_bytes = tp->rcv_nxt - tp->rcv_rate_est.rcv_seq;
 		copied_bytes = tp->copied_seq - tp->rcv_rate_est.copied_seq;
 
-		if (cacheflow_supported && (received_bytes > delta * get_cacheflow_elephant_flow_thresh()) && !tp->elephant_flow) {
+		if (!tp->elephant_flow && (received_bytes > delta * get_cacheflow_elephant_flow_thresh())) {
 			if (sk->sk_family == AF_INET) {
 				struct inet_sock *inet = inet_sk(sk);
 				pr_info("cacheflow: Elephant flow detected: %pI4:%u -> %pI4:%u, bytes: %ld, delta: %ld\n",
