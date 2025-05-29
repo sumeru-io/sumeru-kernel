@@ -572,10 +572,6 @@ struct sk_buff *napi_build_skb(void *data, unsigned int frag_size)
 	if (likely(skb) && frag_size) {
 		skb->head_frag = 1;
 		page = virt_to_page(data);
-		if (CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW)) {
-			pr_info("cacheflow: build skb, data=%px", data);
-			dump_page(page, "cacheflow");
-		}
 		skb_propagate_pfmemalloc(page, skb);
 	}
 
