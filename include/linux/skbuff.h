@@ -4989,10 +4989,10 @@ enum skb_cacheflow_flag {
 			(skb)->cacheflow &= ~(BIT(pflag));	\
 	} while (0)
 
-#define CACHEFLOW_GET_PFLAG(skb, pflag) (!!((skb)->cacheflow & (BIT(pflag))))
+#define CACHEFLOW_GET_FLAG(skb, pflag) (!!((skb)->cacheflow & (BIT(pflag))))
 #else
 #define CACHEFLOW_SET_FLAG(skb, pflag, enable)
-#define CACHEFLOW_GET_PFLAG(skb, pflag) 0
+#define CACHEFLOW_GET_FLAG(skb, pflag) 0
 #endif
 
 #define CACHEFLOW_RPS_CACHEFLOW_RX_QUEUE 0x8000
@@ -5020,7 +5020,7 @@ static inline void skb_record_rx_queue(struct sk_buff *skb, u16 rx_queue)
 static inline u16 skb_get_rx_queue(const struct sk_buff *skb)
 {
 #ifdef CONFIG_NET_CACHEFLOW
-	if (CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW)) {
+	if (CACHEFLOW_GET_FLAG(skb, SKB_CACHEFLOW)) {
 		return CACHEFLOW_RPS_CACHEFLOW_RX_QUEUE;
 	} else {
 		return skb->queue_mapping - 1;

@@ -109,7 +109,7 @@ int skb_gro_receive(struct sk_buff *p, struct sk_buff *skb)
 		return -ETOOMANYREFS;
 
 #ifdef CONFIG_NET_CACHEFLOW
-	if (CACHEFLOW_GET_PFLAG(p, SKB_CACHEFLOW) != CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW))
+	if (CACHEFLOW_GET_FLAG(p, SKB_CACHEFLOW) != CACHEFLOW_GET_FLAG(skb, SKB_CACHEFLOW))
 		return -ETOOMANYREFS;
 #endif
 

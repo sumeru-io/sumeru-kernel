@@ -226,8 +226,7 @@ struct tcp_sock {
 		repair      : 1,
 		tcp_usec_ts : 1, /* TSval values in usec */
 		is_sack_reneg:1,    /* in recovery from loss with SACK reneg? */
-		is_cwnd_limited:1, /* forward progress limited by snd_cwnd? */
-		elephant_flow: 1; /* elephant flow */
+		is_cwnd_limited:1; /* forward progress limited by snd_cwnd? */
 	__cacheline_group_end(tcp_sock_read_txrx);
 
 	/* RX read-mostly hotpath cache lines */
@@ -341,6 +340,9 @@ struct tcp_sock {
 		u32	seq;
 		u64	time;
 	} rcvq_space;
+	__cacheline_group_end(tcp_sock_write_rx);
+
+	__cacheline_group_begin(cacheflow) __aligned(8);
 	struct {
 		u32	rcv_seq;
 		u32	copied_seq;
@@ -349,7 +351,9 @@ struct tcp_sock {
 		u32	delta;
 		u64	mstamp;
 	} rcv_rate_est;
-	__cacheline_group_end(tcp_sock_write_rx);
+	u8	cacheflow;
+	__cacheline_group_end(cacheflow);
+
 	/* End of Hot Path */
 
 /*

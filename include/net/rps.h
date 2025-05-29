@@ -168,7 +168,7 @@ static inline void sock_rps_record_flow(const struct sock *sk)
 			/* This READ_ONCE() is paired with the WRITE_ONCE()
 			 * from sock_rps_save_rxhash() and sock_rps_reset_rxhash().
 			 */
-			if (sk->sk_protocol == IPPROTO_TCP && tcp_sk(sk)->elephant_flow && is_cacheflow_steer_enabled()) {
+			if (sk->sk_protocol == IPPROTO_TCP && CACHEFLOW_SK_GET_FLAG(tcp_sk(sk), SK_CACHEFLOW_ELEPHANT_FLOW) && is_cacheflow_steer_enabled()) {
 				cpu = sock_rps_record_flow_hash_cacheflow(READ_ONCE(sk->sk_rxhash), 1);
 			} else {
 				cpu = sock_rps_record_flow_hash(READ_ONCE(sk->sk_rxhash));

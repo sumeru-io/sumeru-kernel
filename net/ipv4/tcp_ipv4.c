@@ -2153,7 +2153,7 @@ int tcp_filter(struct sock *sk, struct sk_buff *skb)
 	int ret = sk_filter_trim_cap(sk, skb, th->doff * 4);
 
 #ifdef CONFIG_NET_CACHEFLOW
-	if (!ret && CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW) && cacheflow_should_mark(skb->page_pool, sk)) {
+	if (!ret && CACHEFLOW_GET_FLAG(skb, SKB_CACHEFLOW) && cacheflow_should_mark(skb->page_pool, sk)) {
 		INET_ECN_set_ce(skb);
 	}
 #endif

@@ -229,6 +229,7 @@ static void tcp_measure_rcv_mss(struct sock *sk, const struct sk_buff *skb)
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	const unsigned int lss = icsk->icsk_ack.last_seg_size;
 	unsigned int len;
+	struct tcp_sock *tp = tcp_sk(sk);
 
 	icsk->icsk_ack.last_seg_size = 0;
 
@@ -236,24 +237,17 @@ static void tcp_measure_rcv_mss(struct sock *sk, const struct sk_buff *skb)
 	 * sends good full-sized frames.
 	 */
 	len = skb_shinfo(skb)->gso_size ? : skb->len;
-	if (len >= icsk->icsk_ack.rcv_mss) {
+	if ((len >= icsk->icsk_ack.rcv_mss) && !CACHEFLOW_SK_GET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW)) {
 		/* Note: divides are still a bit expensive.
 		 * For the moment, only adjust scaling_ratio
 		 * when we update icsk_ack.rcv_mss.
 		 */
-		if (unlikely(len != icsk->icsk_ack.rcv_mss || (!icsk->icsk_ack.cacheflow && CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW)))) {
+		if (unlikely(len != icsk->icsk_ack.rcv_mss)) {
 
 			u8 old_ratio = tcp_sk(sk)->scaling_ratio;
-
-			if (CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW) || icsk->icsk_ack.cacheflow) {
-				tcp_sk(sk)->scaling_ratio = (1 << (TCP_RMEM_TO_WIN_SCALE - 1));
-				icsk->icsk_ack.cacheflow = CACHEFLOW_GET_PFLAG(skb, SKB_CACHEFLOW);
-			} else {
-				u64 val = (u64)skb->len << TCP_RMEM_TO_WIN_SCALE;
-
-				do_div(val, skb->truesize);
-				tcp_sk(sk)->scaling_ratio = val ? val : 1;
-			}
+			u64 val = (u64)skb->len << TCP_RMEM_TO_WIN_SCALE;
+			do_div(val, skb->truesize);
+			tcp_sk(sk)->scaling_ratio = val ? val : 1;
 
 			if (old_ratio != tcp_sk(sk)->scaling_ratio) {
 				struct tcp_sock *tp = tcp_sk(sk);
@@ -706,7 +700,7 @@ static inline void tcp_rcv_rtt_measure(struct tcp_sock *tp)
 	if (!delta_us)
 		delta_us = 1;
 	tcp_rcv_rtt_update(tp, delta_us, 1);
-	if (tp->elephant_flow)
+	if (CACHEFLOW_SK_GET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW))
 		trace_cacheflow_rcv_rtt_update((struct sock *)tp, __sock_gen_cookie((struct sock *)tp), tp->rcv_wnd,
 		tp->rcv_rtt_est.rtt_us >> 3, delta_us, 0);
 
@@ -748,7 +742,7 @@ static inline void tcp_rcv_rtt_measure_ts(struct sock *sk,
 		if (delta >= 0)
 			tcp_rcv_rtt_update(tp, delta, 0);
 
-		if (tp->elephant_flow)
+		if (CACHEFLOW_SK_GET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW))
 			trace_cacheflow_rcv_rtt_update((struct sock *)tp, __sock_gen_cookie((struct sock *)tp), tp->rcv_wnd,
 			tp->rcv_rtt_est.rtt_us >> 3, delta, 1);
 	}
@@ -856,7 +850,7 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 		received_bytes = tp->rcv_nxt - tp->rcv_rate_est.rcv_seq;
 		copied_bytes = tp->copied_seq - tp->rcv_rate_est.copied_seq;
 
-		if (!tp->elephant_flow && (received_bytes > delta * get_cacheflow_elephant_flow_thresh())) {
+		if (!CACHEFLOW_SK_GET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW) && (received_bytes > delta * get_cacheflow_elephant_flow_thresh())) {
 			if (sk->sk_family == AF_INET) {
 				struct inet_sock *inet = inet_sk(sk);
 				pr_info("cacheflow: Elephant flow detected: %pI4:%u -> %pI4:%u, bytes: %ld, delta: %ld\n",
@@ -868,14 +862,15 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 					 &sk->sk_v6_rcv_saddr, ntohs(inet->inet_sport),
 					 &sk->sk_v6_daddr, ntohs(inet->inet_dport), received_bytes, delta);
 			}
-			tp->elephant_flow = 1;
+			CACHEFLOW_SK_SET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW, 1);
+			tp->scaling_ratio = (1 << (TCP_RMEM_TO_WIN_SCALE - 1));
 		}
 
 		tp->rcv_rate_est.mstamp = tp->tcp_mstamp;
 		tp->rcv_rate_est.rcv_seq = tp->rcv_nxt;
 		tp->rcv_rate_est.copied_seq = tp->copied_seq;
 
-		if (tp->elephant_flow) {
+		if (CACHEFLOW_SK_GET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW)) {
 			trace_cacheflow_rate_est(sk, __sock_gen_cookie(sk),
 						tp->rcv_rtt_est.rtt_us >> alpha, delta,
 						tp->rcv_rate_est.recv_rate >> alpha, received_bytes,
