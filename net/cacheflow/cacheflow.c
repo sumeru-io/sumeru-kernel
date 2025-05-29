@@ -32,9 +32,9 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 	u32 sock_recv_len = tp->rcv_nxt - tp->copied_seq;
 	u32 sock_backlog_len = sk->sk_backlog.len;
 	u32 sock_qlen = sock_recv_len + sock_backlog_len;
-	u32 rtt = tp->rcv_rate_est.delta >> 3;
-	u32 drain_rate = tp->rcv_rate_est.copied_rate >> 3;
-	u32 recv_rate = tp->rcv_rate_est.recv_rate >> 3;
+	u32 rtt = tp->rcv_rate_est.delta >> cacheflow_alpha;
+	u32 drain_rate = tp->rcv_rate_est.copied_rate >> cacheflow_alpha;
+	u32 recv_rate = tp->rcv_rate_est.recv_rate >> cacheflow_alpha;
 	u32 thresh = READ_ONCE(cacheflow_thresh);
 	u32 allocated_pages = READ_ONCE(pool->allocated_pages);
 	u32 remaining_pages =
