@@ -49,18 +49,26 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 		mark = (allocated_pages >= thresh);
 		break;
 	case 2:
-		if (sock_qlen > 131072) {
+		if (sock_qlen > 65536) {
 			// Based on the paper "ABM: Active Buffer Management in Datacenters [SIGCOMM '22]"
 			mark = ((u64)sock_qlen * rtt * 3) >
 			       ((u64)remaining_pages * drain_rate * cacheflow_beta);
 		}
 		break;
 	case 3:
-		if (sock_qlen > 131072) {
-			mark = ((u64)sock_qlen * rtt * 3) * (2 * (u64)U32_MAX) >
+		if (sock_qlen > 65536) {
+			mark = ((u64)sock_qlen * rtt * 3) * (u64)U32_MAX >
 			       (((u64)remaining_pages *
 				 drain_rate * cacheflow_beta) *
-				(((u64)get_random_u32() + U32_MAX)));
+				(u64)get_random_u32());
+		}
+		break;
+	case 4:
+		if (sock_qlen > 65536) {
+			mark = ((u64)sock_qlen * rtt * 3) * (u64)U32_MAX >
+			       (((u64)remaining_pages *
+				 drain_rate * cacheflow_beta) *
+				(u64)get_random_u32());
 		}
 		break;
 	default:
