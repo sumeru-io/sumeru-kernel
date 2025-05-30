@@ -39,22 +39,27 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 	u32 allocated_pages = READ_ONCE(pool->allocated_pages);
 	u32 remaining_pages =
 		thresh > allocated_pages ? thresh - allocated_pages : 0;
-	int mark;
+	int mark = 0;
 
 	switch (READ_ONCE(cacheflow_aqm)) {
 	case 0:
-		mark = 0;
 		break;
 	case 1:
 		mark = (allocated_pages >= thresh);
 		break;
 	case 2:
-		if (sock_qlen < 131072) {
-			mark = 0;
-		} else {
+		if (sock_qlen > 131072) {
 			// Based on the paper "ABM: Active Buffer Management in Datacenters [SIGCOMM '22]"
-			mark = ((u64)sock_qlen * rtt * 12500) >
-			       ((u64)remaining_pages * PAGE_SIZE * drain_rate);
+			mark = ((u64)sock_qlen * rtt * 3) >
+			       ((u64)remaining_pages * drain_rate);
+		}
+		break;
+	case 3:
+		if (sock_qlen > 131072) {
+			mark = ((u64)sock_qlen * rtt * 3) * (2 * (u64)U32_MAX) >
+			       (((u64)remaining_pages *
+				 drain_rate) *
+				(((u64)get_random_u32() + U32_MAX)));
 		}
 		break;
 	default:
@@ -64,8 +69,8 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 	}
 
 	trace_cacheflow_mark(__sock_gen_cookie(sk), allocated_pages, thresh,
-			     sock_recv_len, sock_backlog_len,
-			     rtt, drain_rate, recv_rate, mark);
+			     sock_recv_len, sock_backlog_len, rtt, drain_rate,
+			     recv_rate, mark);
 
 	return mark;
 }
