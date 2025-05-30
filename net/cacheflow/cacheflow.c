@@ -22,6 +22,7 @@ int cacheflow_steer_core __read_mostly;
 int cacheflow_thresh __read_mostly = 2048;
 int cacheflow_aqm __read_mostly;
 int cacheflow_alpha __read_mostly = 2;
+int cacheflow_beta __read_mostly = 1;
 int cacheflow_ipi_packet_thresh __read_mostly = 16;
 int cacheflow_ipi_usec_thresh __read_mostly = 128;
 int cacheflow_elephant_flow_thresh __read_mostly = 256;
@@ -51,14 +52,14 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 		if (sock_qlen > 131072) {
 			// Based on the paper "ABM: Active Buffer Management in Datacenters [SIGCOMM '22]"
 			mark = ((u64)sock_qlen * rtt * 3) >
-			       ((u64)remaining_pages * drain_rate);
+			       ((u64)remaining_pages * drain_rate * cacheflow_beta);
 		}
 		break;
 	case 3:
 		if (sock_qlen > 131072) {
 			mark = ((u64)sock_qlen * rtt * 3) * (2 * (u64)U32_MAX) >
 			       (((u64)remaining_pages *
-				 drain_rate) *
+				 drain_rate * cacheflow_beta) *
 				(((u64)get_random_u32() + U32_MAX)));
 		}
 		break;

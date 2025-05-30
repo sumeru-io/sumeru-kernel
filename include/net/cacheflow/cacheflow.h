@@ -15,6 +15,7 @@ extern struct static_key_false cacheflow_steer_enable;
 extern int cacheflow_steer_core;
 extern int cacheflow_aqm;
 extern int cacheflow_alpha;
+extern int cacheflow_beta;
 extern int cacheflow_thresh;
 extern int cacheflow_elephant_flow_thresh;
 extern int cacheflow_ipi_packet_thresh;
