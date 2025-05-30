@@ -956,9 +956,6 @@ int mlx5e_build_rq_param(struct mlx5_core_dev *mdev,
 	MLX5_SET(rqc, rqc, vsd,            params->vlan_strip_disable);
 	MLX5_SET(rqc, rqc, scatter_fcs,    params->scatter_fcs_en);
 
-	if (MLX5E_GET_PFLAG(params, MLX5E_PFLAG_DROPLESS_RQ))
-		MLX5_SET(rqc, rqc, delay_drop_en, 1);
-
 	param->wq.buf_numa_node = dev_to_node(mlx5_core_dma_dev(mdev));
 	mlx5e_build_rx_cq_param(mdev, params, xsk, &param->cqp);
 

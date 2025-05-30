@@ -35,6 +35,9 @@ mlx5e_cacheflow_build_rq_param(struct mlx5_core_dev *mdev,
 	params->rq_wq_type = MLX5_WQ_TYPE_CYCLIC;
 	params->log_rq_mtu_frames = cacheflow_channel_descriptor;
 
+	if (MLX5E_GET_PFLAG(params, MLX5E_PFLAG_DROPLESS_RQ))
+		MLX5_SET(rqc, rq_param->rqc, delay_drop_en, 1);
+
 	mlx5e_build_rq_param(mdev, params, NULL, rq_param);
 	rq_param->frags_info.wqe_bulk =
 		max_t(u16, rq_param->frags_info.wqe_index_mask + 1, 8);
