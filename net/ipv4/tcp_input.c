@@ -341,7 +341,6 @@ static bool tcp_in_quickack_mode(struct sock *sk)
 	const struct dst_entry *dst = __sk_dst_get(sk);
 
 	return (dst && dst_metric(dst, RTAX_QUICKACK)) ||
-		CACHEFLOW_SK_GET_FLAG(tcp_sk(sk), SK_CACHEFLOW_ELEPHANT_FLOW) ||
 		(icsk->icsk_ack.quick && !inet_csk_in_pingpong_mode(sk));
 }
 
