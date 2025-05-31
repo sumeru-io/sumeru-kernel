@@ -77,7 +77,10 @@ static inline int rps_record_sock_flow_cacheflow(struct rps_sock_flow_table *tab
 	u32 val = hash & ~net_hotdata.rps_cpu_mask;
 
 	/* We only give a hint, preemption can change CPU under us */
-	val |= raw_smp_processor_id();
+	if (READ_ONCE(cacheflow_stack_cores_num) == 0)
+		val |= raw_smp_processor_id();
+	else
+		val |= cacheflow_stack_cores[raw_smp_processor_id() % cacheflow_stack_cores_num];
 
 	if (cacheflow)
 		val |= net_hotdata.cacheflow_mask;

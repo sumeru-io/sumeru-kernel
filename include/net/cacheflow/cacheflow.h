@@ -13,11 +13,16 @@
 extern struct static_key_false cacheflow_steer_enable;
 
 extern int cacheflow_steer_core;
+extern int cacheflow_stack_cores[NR_CPUS];
+extern int cacheflow_stack_cores_num;
+
 extern int cacheflow_aqm;
 extern int cacheflow_alpha;
 extern int cacheflow_beta;
 extern int cacheflow_thresh;
+
 extern int cacheflow_elephant_flow_thresh;
+
 extern int cacheflow_ipi_packet_thresh;
 extern int cacheflow_ipi_usec_thresh;
 
@@ -93,6 +98,25 @@ static inline const char *cacheflow_aqm_to_str(int aqm)
 	default:
 		return "unknown";
 	}
+}
+
+static inline int show_cacheflow_stack_cores(char *buf, int size)
+{
+	int i, len = 0;
+
+	if (size < 1024)
+		return 0;
+
+	len += snprintf(buf + len, sizeof(buf) - len,
+		 "cacheflow: stack cores num: %d, [ ", cacheflow_stack_cores_num);
+
+	for (i = 0; i < cacheflow_stack_cores_num; i++)
+		len += snprintf(buf + len, sizeof(buf) - len,
+			i == 0 ? "%d" : ", %d", cacheflow_stack_cores[i]);
+
+	len += snprintf(buf + len, sizeof(buf) - len, " ]\n");
+
+	return len;
 }
 
 #endif /* __CACHEFLOW_CACHEFLOW_H */

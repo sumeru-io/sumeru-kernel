@@ -851,16 +851,33 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 		copied_bytes = tp->copied_seq - tp->rcv_rate_est.copied_seq;
 
 		if (!CACHEFLOW_SK_GET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW) && (received_bytes > delta * get_cacheflow_elephant_flow_thresh())) {
+			u64 rate = 8 * do_div(received_bytes, delta);
 			if (sk->sk_family == AF_INET) {
 				struct inet_sock *inet = inet_sk(sk);
-				pr_info("cacheflow: Elephant flow detected: %pI4:%u -> %pI4:%u, bytes: %ld, delta: %ld\n",
-					 &inet->inet_saddr, ntohs(inet->inet_sport),
-					 &inet->inet_daddr, ntohs(inet->inet_dport), received_bytes, delta);
+				pr_info(
+					"cacheflow: Elephant flow detected: "
+					"%pI4:%u -> %pI4:%u, bytes: %ld, "
+					"delta: %ld, rate: %lld Mbps\n",
+					&inet->inet_saddr,
+					ntohs(inet->inet_sport),
+					&inet->inet_daddr,
+					ntohs(inet->inet_dport),
+					received_bytes,
+					delta,
+					rate);
 			} else if (sk->sk_family == AF_INET6) {
 				struct inet_sock *inet = inet_sk(sk);
-				pr_info("cacheflow: Elephant flow detected: [%pI6c]:%u -> [%pI6c]:%u, bytes: %ld, delta: %ld\n",
-					 &sk->sk_v6_rcv_saddr, ntohs(inet->inet_sport),
-					 &sk->sk_v6_daddr, ntohs(inet->inet_dport), received_bytes, delta);
+				pr_info(
+					"cacheflow: Elephant flow detected: "
+					"[%pI6c]:%u -> [%pI6c]:%u, bytes: %ld, "
+					"delta: %ld, rate: %lld Mbps\n",
+					&sk->sk_v6_rcv_saddr,
+					ntohs(inet->inet_sport),
+					&sk->sk_v6_daddr,
+					ntohs(inet->inet_dport),
+					received_bytes,
+					delta,
+					rate);
 			}
 			CACHEFLOW_SK_SET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW, 1);
 			tp->scaling_ratio = (1 << (TCP_RMEM_TO_WIN_SCALE - 1));

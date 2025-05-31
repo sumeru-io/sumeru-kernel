@@ -394,6 +394,30 @@ proc_dolongvec_minmax_bpf_restricted(const struct ctl_table *table, int write,
 }
 #endif
 
+#ifdef CONFIG_NET_CACHEFLOW
+static int proc_do_cacheflow_stack_cores(const struct ctl_table *table, int write,
+					 void *buffer, size_t *lenp, loff_t *ppos)
+{
+	int i = 0, ret = 0, num_cores = 0;
+
+	WRITE_ONCE(cacheflow_stack_cores_num, 0);
+
+	ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+	if (ret)
+		return ret;
+
+	while (cacheflow_stack_cores[i++]) {
+		if (cacheflow_stack_cores[i] > num_possible_cpus())
+			return -EINVAL;
+		num_cores++;
+	}
+
+	WRITE_ONCE(cacheflow_stack_cores_num, num_cores);
+
+	return ret;
+}
+#endif
+
 static struct ctl_table net_core_table[] = {
 	{
 		.procname	= "mem_pcpu_rsv",
@@ -483,6 +507,14 @@ static struct ctl_table net_core_table[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec
+	},
+	{
+		.procname	= "cacheflow_stack_cores",
+		.data		= &cacheflow_stack_cores,
+		.maxlen		= sizeof(cacheflow_stack_cores),
+		.mode		= 0644,
+		.proc_handler	= proc_do_cacheflow_stack_cores,
+		.extra1		= SYSCTL_ZERO,
 	},
 	{
 		.procname	= "cacheflow_ipi_packet_thresh",

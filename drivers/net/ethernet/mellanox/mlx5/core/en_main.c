@@ -2879,12 +2879,22 @@ int mlx5e_open_channels(struct mlx5e_priv *priv,
 	int i;
 
 #ifdef CONFIG_NET_CACHEFLOW
-	pr_info("cacheflow: control bits: steer: %s, aqm: %s (alpha: %d, beta: %d), ndesp: %d\n", 
-		is_cacheflow_steer_enabled() ? "on" : "off",
-		cacheflow_aqm_to_str(cacheflow_aqm),
-		cacheflow_alpha,
-		cacheflow_beta,
-		(1 << cacheflow_channel_descriptor));
+	if (is_cacheflow_steer_enabled()) {
+		char buf[1024] = "";
+
+		if (cacheflow_stack_cores_num)
+			show_cacheflow_stack_cores(buf, sizeof(buf));
+
+		pr_info("cacheflow: QuickPath (steer core: %d, stack cores: %s, descriptors: %d)",
+			cacheflow_steer_core,
+			buf,
+			(1 << cacheflow_channel_descriptor));
+		pr_info("AQM: %s (thresh: %d, alpha: %d, beta: %d)",
+			cacheflow_aqm_to_str(cacheflow_aqm),
+			cacheflow_thresh,
+			cacheflow_alpha,
+			cacheflow_beta);
+	}
 #endif
 
 	chs->num = chs->params.num_channels;

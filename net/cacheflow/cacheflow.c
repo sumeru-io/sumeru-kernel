@@ -19,6 +19,9 @@ struct static_key_false cacheflow_steer_enable __read_mostly;
 EXPORT_SYMBOL(cacheflow_steer_enable);
 
 int cacheflow_steer_core __read_mostly;
+int cacheflow_stack_cores[NR_CPUS] __read_mostly;
+int cacheflow_stack_cores_num __read_mostly;
+
 int cacheflow_thresh __read_mostly = 2048;
 int cacheflow_aqm __read_mostly;
 int cacheflow_alpha __read_mostly = 2;
