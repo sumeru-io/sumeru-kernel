@@ -126,6 +126,8 @@ void mlx5e_tir_builder_build_rss(struct mlx5e_tir_builder *builder,
 
 		MLX5_SET(tirc, tirc, rx_hash_symmetric, 1);
 		memcpy(rss_key, rss_hash->toeplitz_hash_key, len);
+
+		pr_info("rss: rx_hash_toeplitz_key: %*phC\n", (int)len, rss_key);
 	}
 
 	if (inner)
@@ -146,17 +148,25 @@ void mlx5e_tir_builder_build_direct(struct mlx5e_tir_builder *builder)
 	MLX5_SET(tirc, tirc, rx_hash_fn, MLX5_RX_HASH_FN_INVERTED_XOR8);
 }
 
-void mlx5e_tir_builder_build_cacheflow(struct mlx5e_tir_builder *builder)
+void mlx5e_tir_builder_build_cacheflow(struct mlx5e_tir_builder *builder,
+				       const struct mlx5e_rss_params_hash rss_hash)
 {
 	void *tirc = mlx5e_tir_builder_get_tirc(builder);
 	void *hfso;
 
 	WARN_ON(builder->modify);
 
-	MLX5_SET(tirc, tirc, rx_hash_fn, MLX5_RX_HASH_FN_TOEPLITZ);
-	MLX5_SET(tirc, tirc, rx_hash_symmetric, 1);
-	netdev_rss_key_fill(MLX5_ADDR_OF(tirc, tirc, rx_hash_toeplitz_key), 
-				MLX5_FLD_SZ_BYTES(tirc, rx_hash_toeplitz_key));
+	MLX5_SET(tirc, tirc, rx_hash_fn, mlx5e_hfunc_to_hw(rss_hash.hfunc));
+	if (rss_hash.hfunc == ETH_RSS_HASH_TOP) {
+		const size_t len = MLX5_FLD_SZ_BYTES(tirc, rx_hash_toeplitz_key);
+		void *rss_key = MLX5_ADDR_OF(tirc, tirc, rx_hash_toeplitz_key);
+
+		MLX5_SET(tirc, tirc, rx_hash_symmetric, 1);
+		memcpy(rss_key, rss_hash.toeplitz_hash_key, len);
+
+		pr_info("cacheflow: rx_hash_toeplitz_key: %*phC\n", (int)len, rss_key);
+	}
+
 
 	hfso = MLX5_ADDR_OF(tirc, tirc, rx_hash_field_selector_outer);
 	MLX5_SET(rx_hash_field_select, hfso, l3_prot_type, MLX5_L3_PROT_TYPE_IPV4);

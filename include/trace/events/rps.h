@@ -63,22 +63,52 @@ TRACE_EVENT(sk_rps_core_change,
 );
 
 TRACE_EVENT(sk_rps_flow_update,
-	TP_PROTO(int flow_id, int filter_id, int rxq, int next_cpu),
-	TP_ARGS(flow_id, filter_id, rxq, next_cpu),
+	TP_PROTO(int flow_id, int filter_id, int prev_rxq, int next_rxq, int prev_cpu, int next_cpu),
+	TP_ARGS(flow_id, filter_id, prev_rxq, next_rxq, prev_cpu, next_cpu),
 	TP_STRUCT__entry(
 		__field(int, flow_id)
 		__field(int, filter_id)
-		__field(int, rxq)
+		__field(int, prev_rxq)
+		__field(int, next_rxq)
+		__field(int, prev_cpu)
 		__field(int, next_cpu)
 	),
 	TP_fast_assign(
 		__entry->flow_id = flow_id;
 		__entry->filter_id = filter_id;
-		__entry->rxq = rxq;
+		__entry->prev_rxq = prev_rxq;
+		__entry->next_rxq = next_rxq;
+		__entry->prev_cpu = prev_cpu;
 		__entry->next_cpu = next_cpu;
 	),
-	TP_printk("flow_id=%d filter_id=%d rxq=%d next_cpu=%d",
-		__entry->flow_id, __entry->filter_id, __entry->rxq, __entry->next_cpu)
+	TP_printk("flow_id=%d filter_id=%d prev_rxq=%d next_rxq=%d prev_cpu=%d next_cpu=%d",
+		__entry->flow_id, __entry->filter_id, __entry->prev_rxq, __entry->next_rxq, __entry->prev_cpu, __entry->next_cpu)
+);
+
+TRACE_EVENT(rps_flow_expire,
+	TP_PROTO(int rxq, int flow_id, int filter_id, int cpu, int prev_filter, int core_head, int flow_head),
+	TP_ARGS(rxq, flow_id, filter_id, cpu, prev_filter, core_head, flow_head),
+	TP_STRUCT__entry(
+		__field(int, flow_id)
+		__field(int, filter_id)
+		__field(int, rxq)
+		__field(int, cpu)
+		__field(int, prev_filter)
+		__field(int, core_head)
+		__field(int, flow_head)
+	),
+	TP_fast_assign(
+		__entry->flow_id = flow_id;
+		__entry->filter_id = filter_id;
+		__entry->rxq = rxq;
+		__entry->cpu = cpu;
+		__entry->prev_filter = prev_filter;
+		__entry->core_head = core_head;
+		__entry->flow_head = flow_head;
+	),
+
+	TP_printk("flow_id=%d filter_id=%d rxq=%d cpu=%d prev_filter=%d core_head=%d flow_head=%d",
+		__entry->flow_id, __entry->filter_id, __entry->rxq, __entry->cpu, __entry->prev_filter, __entry->core_head, __entry->flow_head)
 );
 
 #endif /* _TRACE_RPS_H */

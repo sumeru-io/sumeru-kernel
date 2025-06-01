@@ -4699,8 +4699,10 @@ set_rps_cpu(struct net_device *dev, struct sk_buff *skb,
 		flow_id = skb_get_hash(skb) & flow_table->mask;
 		rc = dev->netdev_ops->ndo_rx_flow_steer(dev, skb,
 							rxq_index, flow_id);
-		if (rc < 0)
+		if (rc < 0) {
+			pr_err("redirect flow ID %d to rxq %d failed, rc: %d\n", flow_id, rxq_index, rc);
 			goto out;
+		}
 		old_rflow = rflow;
 		rflow = &flow_table->flows[flow_id];
 
@@ -4708,7 +4710,7 @@ set_rps_cpu(struct net_device *dev, struct sk_buff *skb,
 		if (old_rflow->filter == rc)
 			WRITE_ONCE(old_rflow->filter, RPS_NO_FILTER);
 
-		trace_sk_rps_flow_update(flow_id, rc, rxq_index, next_cpu);
+		trace_sk_rps_flow_update(flow_id, rc, skb_get_rx_queue(skb), rxq_index, rflow->cpu, next_cpu);
 out:
 #endif
 		head = READ_ONCE(per_cpu(softnet_data, rps_core(next_cpu)).input_queue_head);
@@ -4853,6 +4855,17 @@ bool rps_may_expire_flow(struct net_device *dev, u16 rxq_index,
 			   READ_ONCE(rflow->last_qtail)) <
 		     (int)(10 * flow_table->mask)))
 			expire = false;
+		else {
+			u32 core_head = 0;
+			u32 flow_head = 0;
+
+			if (rflow->filter == filter_id && rps_core(cpu) < nr_cpu_ids) {
+				core_head = READ_ONCE(per_cpu(softnet_data, rps_core(cpu)).input_queue_head);
+				flow_head = READ_ONCE(rflow->last_qtail);
+			}
+
+			trace_rps_flow_expire(rxq_index, flow_id, filter_id, cpu, rflow->filter, core_head, flow_head);
+		}
 	}
 	rcu_read_unlock();
 	return expire;

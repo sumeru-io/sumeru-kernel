@@ -606,8 +606,7 @@ static struct mlx5_flow_handle *arfs_add_rule(struct mlx5e_priv *priv,
 	if (IS_ERR(rule)) {
 		err = PTR_ERR(rule);
 		ARFS_STATS_INC(priv, arfs_rule->rxq, arfs_err);
-		netdev_dbg(priv->netdev,
-			   "%s: add rule(filter id=%d, rq idx=%d, ip proto=0x%x) failed,err=%d\n",
+		pr_err("%s: add rule(filter id=%d, rq idx=%d, ip proto=0x%x) failed,err=%d\n",
 			   __func__, arfs_rule->filter_id, arfs_rule->rxq,
 			   tuple->ip_proto, err);
 	}
@@ -660,6 +659,7 @@ static void arfs_handle_work(struct work_struct *work)
 	} else {
 		arfs_modify_rule_rq(priv, arfs_rule->rule,
 				    arfs_rule->rxq);
+		trace_mlx5e_flow_rule_update(arfs_rule->flow_id, arfs_rule->filter_id, arfs_rule->rxq, &arfs_rule->tuple, 2);
 	}
 out:
 	arfs_may_expire_flow(priv);
@@ -780,8 +780,10 @@ int mlx5e_rx_flow_steer(struct net_device *dev, const struct sk_buff *skb,
 		ARFS_STATS_INC(priv, rxq_index, arfs_request_in);
 		ARFS_STATS_INC(priv, arfs_rule->rxq, arfs_request_out);
 		arfs_rule->rxq = rxq_index;
+		arfs_rule->flow_id = flow_id;
 	} else {
 		arfs_rule = arfs_alloc_rule(priv, arfs_t, &fk, rxq_index, flow_id);
+
 		if (!arfs_rule) {
 			spin_unlock_bh(&arfs->arfs_lock);
 			return -ENOMEM;
