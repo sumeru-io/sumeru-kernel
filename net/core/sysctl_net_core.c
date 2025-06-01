@@ -402,6 +402,12 @@ static int proc_do_cacheflow_stack_cores(const struct ctl_table *table, int writ
 
 	WRITE_ONCE(cacheflow_stack_cores_num, 0);
 
+	/* Handle empty buffer case */
+	if (!*lenp) {
+		memset(cacheflow_stack_cores, 0, sizeof(cacheflow_stack_cores));
+		return 0;
+	}
+
 	ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
 	if (ret)
 		return ret;
