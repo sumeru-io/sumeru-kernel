@@ -67,11 +67,8 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 		}
 		break;
 	case 4:
-		if (sock_qlen > 65536) {
-			mark = ((u64)sock_qlen * rtt * 3) * (u64)U32_MAX >
-			       (((u64)remaining_pages *
-				 drain_rate * cacheflow_beta) *
-				(u64)get_random_u32());
+		if (sock_qlen >= thresh) {
+			mark = 1;
 		}
 		break;
 	default:
