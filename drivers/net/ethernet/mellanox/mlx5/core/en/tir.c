@@ -126,8 +126,6 @@ void mlx5e_tir_builder_build_rss(struct mlx5e_tir_builder *builder,
 
 		MLX5_SET(tirc, tirc, rx_hash_symmetric, 1);
 		memcpy(rss_key, rss_hash->toeplitz_hash_key, len);
-
-		pr_info("rss: rx_hash_toeplitz_key: %*phC\n", (int)len, rss_key);
 	}
 
 	if (inner)
@@ -163,8 +161,6 @@ void mlx5e_tir_builder_build_cacheflow(struct mlx5e_tir_builder *builder,
 
 		MLX5_SET(tirc, tirc, rx_hash_symmetric, 1);
 		memcpy(rss_key, rss_hash.toeplitz_hash_key, len);
-
-		pr_info("cacheflow: rx_hash_toeplitz_key: %*phC\n", (int)len, rss_key);
 	}
 
 

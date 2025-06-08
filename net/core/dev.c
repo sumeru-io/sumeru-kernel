@@ -7142,6 +7142,98 @@ static bool napi_busy_loop_end(void *p, unsigned long start_time) {
 	return time_after(busy_loop_current_time(), end_time);
 }
 
+static void cacheflow_napi_busy_loop(unsigned int napi_id,
+		      bool (*loop_end)(void *, unsigned long),
+		      void *loop_end_arg, unsigned flags, u16 budget)
+{
+	unsigned long start_time = loop_end ? busy_loop_current_time() : 0;
+	int (*napi_poll)(struct napi_struct *napi, int budget);
+	struct bpf_net_context __bpf_net_ctx, *bpf_net_ctx;
+	void *have_poll_lock = NULL;
+	struct napi_struct *napi;
+	struct softnet_data *sd;
+	WARN_ON_ONCE(!rcu_read_lock_held());
+
+restart:
+	napi_poll = NULL;
+
+	napi = napi_by_id(napi_id);
+	if (!napi)
+		return;
+
+	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
+		preempt_disable();
+	for (;;) {
+		int work = 0;
+
+		local_bh_disable();
+		bpf_net_ctx = bpf_net_ctx_set(&__bpf_net_ctx);
+
+		sd = this_cpu_ptr(&softnet_data);
+		sd->in_napi_threaded_poll = true;
+
+		if (!napi_poll) {
+			unsigned long val = READ_ONCE(napi->state);
+
+			/* If multiple threads are competing for this napi,
+			 * we avoid dirtying napi->state as much as we can.
+			 */
+			if (val & (NAPIF_STATE_DISABLE | NAPIF_STATE_SCHED |
+				   NAPIF_STATE_IN_BUSY_POLL)) {
+				goto count;
+			}
+			if (cmpxchg(&napi->state, val,
+				    val | NAPIF_STATE_IN_BUSY_POLL |
+					  NAPIF_STATE_SCHED) != val) {
+				goto count;
+			}
+			have_poll_lock = netpoll_poll_lock(napi);
+			napi_poll = napi->poll;
+		}
+		WRITE_ONCE(napi->list_owner, smp_processor_id());
+
+		work = napi_poll(napi, budget);
+		trace_napi_poll(napi, work, budget);
+		gro_normal_list(napi);
+count:
+		if (work > 0)
+			__NET_ADD_STATS(dev_net(napi->dev),
+					LINUX_MIB_BUSYPOLLRXPACKETS, work);
+
+		sd->in_napi_threaded_poll = false;
+		barrier();
+
+		if (sd_has_rps_ipi_waiting(sd)) {
+			local_irq_disable();
+			net_rps_action_and_irq_enable(sd);
+		}
+
+		bpf_net_ctx_clear(bpf_net_ctx);
+		local_bh_enable();
+
+		if (!loop_end || loop_end(loop_end_arg, start_time))
+			break;
+
+		if (unlikely(need_resched())) {
+			if (napi_poll)
+				busy_poll_stop(napi, have_poll_lock, flags, budget);
+			if (!IS_ENABLED(CONFIG_PREEMPT_RT))
+				preempt_enable();
+			rcu_read_unlock();
+			cond_resched();
+			rcu_read_lock();
+			if (loop_end(loop_end_arg, start_time))
+				return;
+			goto restart;
+		}
+		cpu_relax();
+	}
+	if (napi_poll)
+		busy_poll_stop(napi, have_poll_lock, flags, budget);
+	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
+		preempt_enable();
+}
+
 static int napi_threaded_busy_poll(void *data)
 {
 	struct napi_struct *napi = data;
@@ -7153,7 +7245,7 @@ static int napi_threaded_busy_poll(void *data)
 		clear_bit(NAPI_STATE_SCHED, &napi->state);
 
 		rcu_read_lock();
-		__napi_busy_loop(napi->napi_id, napi_busy_loop_end, napi, NAPI_F_THREADED_POLL, budget);
+		cacheflow_napi_busy_loop(napi->napi_id, napi_busy_loop_end, napi, 0, budget);
 		rcu_read_unlock();
 	}
 	return 0;
