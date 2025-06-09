@@ -8,6 +8,7 @@
 
 #include <net/ip.h>
 #include <net/sock_reuseport.h>
+#include <net/hotdata.h>
 #include <linux/bpf.h>
 #include <linux/idr.h>
 #include <linux/filter.h>
@@ -233,6 +234,7 @@ int reuseport_alloc(struct sock *sk, bool bind_inany)
 	reuse->bind_inany = bind_inany;
 	reuse->socks[0] = sk;
 	reuse->num_socks = 1;
+	reuse->handled_flows = 0;
 	reuseport_get_incoming_cpu(sk, reuse);
 	rcu_assign_pointer(sk->sk_reuseport_cb, reuse);
 
@@ -530,7 +532,12 @@ static struct sock *reuseport_select_sock_by_hash(struct sock_reuseport *reuse,
 	struct sock *first_valid_sk = NULL;
 	int i, j;
 
-	i = j = reciprocal_scale(hash, num_socks);
+	if (net_hotdata.sysctl_reuseport_select_sock_round_robin) {
+		i = j = (reuse->handled_flows++) % num_socks;
+	} else {
+		i = j = reciprocal_scale(hash, num_socks);
+	}
+
 	do {
 		struct sock *sk = reuse->socks[i];
 
