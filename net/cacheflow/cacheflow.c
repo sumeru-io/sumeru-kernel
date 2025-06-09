@@ -18,6 +18,8 @@
 struct static_key_false cacheflow_steer_enable __read_mostly;
 EXPORT_SYMBOL(cacheflow_steer_enable);
 
+atomic_t cacheflow_id_counter = ATOMIC_INIT(0);
+
 int cacheflow_steer_core __read_mostly;
 int cacheflow_stack_cores[NR_CPUS] __read_mostly;
 int cacheflow_stack_cores_num __read_mostly;
@@ -82,7 +84,7 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 		mark = 0;
 	}
 
-	trace_cacheflow_mark(__sock_gen_cookie(sk), allocated_pages, free_pages, thresh,
+	trace_cacheflow_mark(__sock_gen_cookie(sk), tp->cacheflow_id, allocated_pages, free_pages, thresh,
 			     sock_recv_len, sock_backlog_len, rtt, drain_rate,
 			     recv_rate, mark);
 
@@ -112,7 +114,7 @@ int cacheflow_schedule_priority(struct cacheflow_page_pool *pool, struct sock *s
 	if (priority != tp->drain_priority) {
 		set_user_nice(tp->drain_task, priority);
 		tcp_sk(sk)->drain_priority = priority;
-		trace_cacheflow_schedule_priority(__sock_gen_cookie(sk), sock_recv_len, sock_backlog_len, tp->drain_task->pid, priority);
+		trace_cacheflow_schedule_priority(__sock_gen_cookie(sk), tp->cacheflow_id, sock_recv_len, sock_backlog_len, tp->drain_task->pid, priority);
 	}
 
 	return 0;

@@ -880,6 +880,7 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 					rate);
 			}
 			CACHEFLOW_SK_SET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW, 1);
+			tp->cacheflow_id = atomic_inc_return(&cacheflow_id_counter);
 			tp->scaling_ratio = (1 << (TCP_RMEM_TO_WIN_SCALE - 1));
 		}
 

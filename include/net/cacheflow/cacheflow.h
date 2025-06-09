@@ -11,6 +11,7 @@
 #include <trace/events/skb.h>
 
 extern struct static_key_false cacheflow_steer_enable;
+extern atomic_t cacheflow_id_counter;
 
 extern int cacheflow_steer_core;
 extern int cacheflow_stack_cores[NR_CPUS];

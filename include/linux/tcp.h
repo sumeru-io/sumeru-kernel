@@ -366,6 +366,7 @@ struct tcp_sock {
 	} rcv_rate_est;
 	struct task_struct *drain_task;
 	int 		drain_priority;
+	u32		cacheflow_id;
 	u8		cacheflow;
 	__cacheline_group_end(cacheflow);
 
