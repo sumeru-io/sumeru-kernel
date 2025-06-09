@@ -96,16 +96,17 @@ int cacheflow_schedule_priority(struct cacheflow_page_pool *pool, struct sock *s
 	struct tcp_sock *tp = tcp_sk(sk);
 	u32 sock_recv_len = tp->rcv_nxt - tp->copied_seq;
 	u32 sock_backlog_len = sk->sk_backlog.len;
+	int qlen = sock_recv_len + sock_backlog_len;
 	int priority = 0;
 
 	switch (READ_ONCE(cacheflow_aqm)) {
 	case 0:
 		return 0;
 	case 1:
-		priority = 0 - min((sock_recv_len + sock_backlog_len) >> 16, 20);
+		priority = 0 - min((qlen) >> 16, 20);
 		break;
 	case 2:
-		priority = 0 - min(((max(sock_recv_len + sock_backlog_len - (1 << 17), 0)) >> 16), 20);
+		priority = 0 - (min(ilog2((qlen >> 17) + 1), 20));
 		break;
 	default:
 		return 0;
