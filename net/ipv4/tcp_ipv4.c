@@ -2158,12 +2158,7 @@ int tcp_filter(struct sock *sk, struct sk_buff *skb)
 			INET_ECN_set_ce(skb);
 
 		if (READ_ONCE(cacheflow_schedule) && tcp_sk(sk)->drain_task) {
-			int priority = cacheflow_schedule_priority(skb->page_pool, sk);
-			if (priority != tcp_sk(sk)->drain_priority) {
-				set_user_nice(tcp_sk(sk)->drain_task, priority);
-				tcp_sk(sk)->drain_priority = priority;
-				trace_cacheflow_schedule_priority(__sock_gen_cookie(sk), sk->sk_backlog.len, sk->sk_backlog.len, tcp_sk(sk)->drain_task->pid, priority);
-			}
+			cacheflow_schedule_priority(skb->page_pool, sk);
 		}
 	}
 #endif
