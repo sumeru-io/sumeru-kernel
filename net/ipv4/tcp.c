@@ -2889,6 +2889,13 @@ int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int flags,
 			tcp_sk(sk)->drain_task = get_task_struct(current);
 			tcp_sk(sk)->drain_priority = 0;
 		}
+
+		// We reset the priority to 0 when we receive data,
+		// to avoid that it continues to occupy the CPU
+		if (tcp_sk(sk)->drain_priority != 0) {
+			set_user_nice(tcp_sk(sk)->drain_task, 0);
+			tcp_sk(sk)->drain_priority = 0;
+		}
 	}
 
 	if ((cmsg_flags || msg->msg_get_inq) && ret >= 0) {
