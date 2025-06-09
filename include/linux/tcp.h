@@ -21,6 +21,19 @@
 #include <net/inet_timewait_sock.h>
 #include <uapi/linux/tcp.h>
 
+typedef enum enum_tcp_ack_reason {
+	ACK_REASON_NORMAL = 0,
+	ACK_REASON_QUICKACK = 1,
+	ACK_REASON_DUPACK = 2,
+	ACK_REASON_SACK_COMPRESSED = 3,
+	ACK_REASON_DELAY_EXPIRED = 4,
+	ACK_REASON_CHALLENGE_ACK = 5,
+	ACK_REASON_FIN_ACK = 6,
+	ACK_REASON_PROTOCOL = 7,
+	ACK_REASON_DATA_COPIED = 8,
+	ACK_REASON_BPF = 9,
+} enum_tcp_ack_reason;
+
 static inline struct tcphdr *tcp_hdr(const struct sk_buff *skb)
 {
 	return (struct tcphdr *)skb_transport_header(skb);

@@ -509,7 +509,7 @@ static inline bool tcp_can_send_ack(const struct sock *ssk)
 void __mptcp_subflow_send_ack(struct sock *ssk)
 {
 	if (tcp_can_send_ack(ssk))
-		tcp_send_ack(ssk);
+		tcp_send_ack(ssk, ACK_REASON_NORMAL);
 }
 
 static void mptcp_subflow_send_ack(struct sock *ssk)
@@ -2937,7 +2937,7 @@ void mptcp_subflow_shutdown(struct sock *sk, struct sock *ssk, int how)
 			mptcp_schedule_work(sk);
 		} else {
 			pr_debug("Sending DATA_FIN on subflow %p\n", ssk);
-			tcp_send_ack(ssk);
+			tcp_send_ack(ssk, ACK_REASON_FIN_ACK);
 			if (!mptcp_rtx_timer_pending(sk))
 				mptcp_reset_rtx_timer(sk);
 		}

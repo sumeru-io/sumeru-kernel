@@ -1305,7 +1305,7 @@ static void mptcp_subflow_fail(struct mptcp_sock *msk, struct sock *ssk)
 	if (!fail_tout)
 		fail_tout = 1;
 	WRITE_ONCE(subflow->fail_tout, fail_tout);
-	tcp_send_ack(ssk);
+	tcp_send_ack(ssk, ACK_REASON_PROTOCOL);
 
 	mptcp_reset_tout_timer(msk, subflow->fail_tout);
 }

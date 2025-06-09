@@ -728,6 +728,32 @@ DEFINE_EVENT(tcp_ao_event_sne, tcp_ao_rcv_sne_update,
 	TP_ARGS(sk, new_sne)
 );
 
+
+TRACE_EVENT(tcp_ack_event,
+
+	TP_PROTO(struct sock *sk, u32 rcv_nxt, enum_tcp_ack_reason reason),
+
+	TP_ARGS(sk, rcv_nxt, reason),
+
+	TP_STRUCT__entry(
+		__field(u64, sock_cookie)
+		__field(u32, rcv_nxt)
+		__field(u32, ecn_flags)
+		__field(int, reason)
+	),
+
+	TP_fast_assign(
+		__entry->sock_cookie = sock_net(sk)->net_cookie;
+		__entry->rcv_nxt = rcv_nxt;
+		__entry->ecn_flags = tcp_sk(sk)->ecn_flags;
+		__entry->reason = reason;
+	),
+
+	TP_printk("sock_cookie=%llu rcv_nxt=%u ecn_flags=%u reason=%d",
+		  __entry->sock_cookie, __entry->rcv_nxt,
+		  __entry->ecn_flags, __entry->reason)
+);
+
 #endif /* _TRACE_TCP_H */
 
 /* This part must be outside protection */

@@ -1169,7 +1169,7 @@ void tcp_release_cb(struct sock *sk)
 		__sock_put(sk);
 	}
 	if ((flags & TCPF_ACK_DEFERRED) && inet_csk_ack_scheduled(sk))
-		tcp_send_ack(sk);
+		tcp_send_ack(sk, ACK_REASON_DELAY_EXPIRED);
 }
 EXPORT_SYMBOL(tcp_release_cb);
 
@@ -4219,7 +4219,7 @@ void tcp_send_delayed_ack(struct sock *sk)
 	if (icsk->icsk_ack.pending & ICSK_ACK_TIMER) {
 		/* If delack timer is about to expire, send ACK now. */
 		if (time_before_eq(icsk->icsk_ack.timeout, jiffies + (ato >> 2))) {
-			tcp_send_ack(sk);
+			tcp_send_ack(sk, ACK_REASON_DELAY_EXPIRED);
 			return;
 		}
 
@@ -4232,7 +4232,7 @@ void tcp_send_delayed_ack(struct sock *sk)
 }
 
 /* This routine sends an ack and also updates the window. */
-void __tcp_send_ack(struct sock *sk, u32 rcv_nxt)
+void __tcp_send_ack(struct sock *sk, u32 rcv_nxt, enum_tcp_ack_reason reason)
 {
 	struct sk_buff *buff;
 
@@ -4269,14 +4269,15 @@ void __tcp_send_ack(struct sock *sk, u32 rcv_nxt)
 	 */
 	skb_set_tcp_pure_ack(buff);
 
+	trace_tcp_ack_event(sk, rcv_nxt, reason);
 	/* Send it off, this clears delayed acks for us. */
 	__tcp_transmit_skb(sk, buff, 0, (__force gfp_t)0, rcv_nxt);
 }
 EXPORT_SYMBOL_GPL(__tcp_send_ack);
 
-void tcp_send_ack(struct sock *sk)
+void tcp_send_ack(struct sock *sk, enum_tcp_ack_reason reason)
 {
-	__tcp_send_ack(sk, tcp_sk(sk)->rcv_nxt);
+	__tcp_send_ack(sk, tcp_sk(sk)->rcv_nxt, reason);
 }
 
 /* This routine sends a packet with an out of date sequence

@@ -942,7 +942,7 @@ static bool check_fully_established(struct mptcp_sock *msk, struct sock *ssk,
 		    TCP_SKB_CB(skb)->end_seq == TCP_SKB_CB(skb)->seq &&
 		    subflow->mp_join && (mp_opt->suboptions & OPTIONS_MPTCP_MPJ) &&
 		    !subflow->request_join)
-			tcp_send_ack(ssk);
+			tcp_send_ack(ssk, ACK_REASON_PROTOCOL);
 		goto check_notify;
 	}
 
