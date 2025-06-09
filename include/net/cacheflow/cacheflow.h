@@ -21,6 +21,8 @@ extern int cacheflow_alpha;
 extern int cacheflow_beta;
 extern int cacheflow_thresh;
 
+extern int cacheflow_schedule;
+
 extern int cacheflow_elephant_flow_thresh;
 
 extern int cacheflow_ipi_packet_thresh;
@@ -52,6 +54,7 @@ enum sk_cacheflow_flag {
 #define CACHEFLOW_SK_GET_FLAG(tp, pflag) (!!((tp)->cacheflow & (BIT(pflag))))
 
 int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk);
+int cacheflow_schedule_priority(struct cacheflow_page_pool *pool, struct sock *sk);
 
 static inline bool is_cacheflow_steer_enabled(void)
 {

@@ -364,7 +364,9 @@ struct tcp_sock {
 		u32	delta;
 		u64	mstamp;
 	} rcv_rate_est;
-	u8	cacheflow;
+	struct task_struct *drain_task;
+	int 		drain_priority;
+	u8		cacheflow;
 	__cacheline_group_end(cacheflow);
 
 	/* End of Hot Path */

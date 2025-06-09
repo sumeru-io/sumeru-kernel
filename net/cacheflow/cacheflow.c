@@ -22,10 +22,14 @@ int cacheflow_steer_core __read_mostly;
 int cacheflow_stack_cores[NR_CPUS] __read_mostly;
 int cacheflow_stack_cores_num __read_mostly;
 
-int cacheflow_thresh __read_mostly = 2048;
 int cacheflow_aqm __read_mostly;
+int cacheflow_thresh __read_mostly = 2048;
+
 int cacheflow_alpha __read_mostly = 2;
 int cacheflow_beta __read_mostly = 1;
+
+int cacheflow_schedule __read_mostly;
+
 int cacheflow_ipi_packet_thresh __read_mostly = 16;
 int cacheflow_ipi_usec_thresh __read_mostly = 128;
 int cacheflow_elephant_flow_thresh __read_mostly = 256;
@@ -83,4 +87,14 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 			     recv_rate, mark);
 
 	return mark;
+}
+
+int cacheflow_schedule_priority(struct cacheflow_page_pool *pool, struct sock *sk)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+	u32 sock_recv_len = tp->rcv_nxt - tp->copied_seq;
+	u32 sock_backlog_len = sk->sk_backlog.len;
+	u32 sock_qlen = (sock_recv_len + sock_backlog_len) >> 16;
+
+	return 0 - min(sock_qlen, 20);
 }

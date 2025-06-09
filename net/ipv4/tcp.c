@@ -2880,6 +2880,17 @@ int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int flags,
 	ret = tcp_recvmsg_locked(sk, msg, len, flags, &tss, &cmsg_flags);
 	release_sock(sk);
 
+	if (CACHEFLOW_SK_GET_FLAG(tcp_sk(sk), SK_CACHEFLOW_ELEPHANT_FLOW) && ret >= 0) {
+		if (tcp_sk(sk)->drain_task != current) {
+			if (tcp_sk(sk)->drain_task) {
+				set_user_nice(tcp_sk(sk)->drain_task, 0);
+				put_task_struct(tcp_sk(sk)->drain_task);
+			}
+			tcp_sk(sk)->drain_task = get_task_struct(current);
+			tcp_sk(sk)->drain_priority = 0;
+		}
+	}
+
 	if ((cmsg_flags || msg->msg_get_inq) && ret >= 0) {
 		if (cmsg_flags & TCP_CMSG_TS)
 			tcp_recv_timestamp(msg, sk, &tss);
@@ -3101,6 +3112,9 @@ void __tcp_close(struct sock *sk, long timeout)
 		data_was_unread += len;
 		__kfree_skb(skb);
 	}
+
+	if (tcp_sk(sk)->drain_task)
+		put_task_struct(tcp_sk(sk)->drain_task);
 
 	/* If socket has been already reset (e.g. in tcp_reset()) - kill it. */
 	if (sk->sk_state == TCP_CLOSE)

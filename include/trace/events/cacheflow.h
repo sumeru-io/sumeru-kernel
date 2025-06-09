@@ -241,6 +241,35 @@ TRACE_EVENT(
 	)
 );
 
+TRACE_EVENT(
+	cacheflow_schedule_priority,
+
+	TP_PROTO(u64 sock_cookie, u32 recv_qlen, u32 backlog_qlen, u32 pid, int priority),
+
+	TP_ARGS(sock_cookie, recv_qlen, backlog_qlen, pid, priority),
+
+	TP_STRUCT__entry(
+		__field(u64, sock_cookie)
+		__field(u32, recv_qlen)
+		__field(u32, backlog_qlen)
+		__field(u32, pid)
+		__field(int, priority)
+	),
+
+	TP_fast_assign(
+		__entry->sock_cookie = sock_cookie;
+		__entry->recv_qlen = recv_qlen;
+		__entry->backlog_qlen = backlog_qlen;
+		__entry->pid = pid;
+		__entry->priority = priority;
+	),
+
+	TP_printk(
+		"sock_cookie=%llu recv_qlen=%u backlog_qlen=%u pid=%u priority=%d",
+		__entry->sock_cookie, __entry->recv_qlen, __entry->backlog_qlen, __entry->pid, __entry->priority
+	)
+)
+
 #endif /* _TRACE_CACHEFLOW_H */
 
 /* This part must be outside protection */
