@@ -359,8 +359,10 @@ static void tcp_ecn_accept_cwr(struct sock *sk, const struct sk_buff *skb)
 		 * cwnd may be very low (even just 1 packet), so we should ACK
 		 * immediately.
 		 */
-		if (TCP_SKB_CB(skb)->seq != TCP_SKB_CB(skb)->end_seq)
+		if ((TCP_SKB_CB(skb)->seq != TCP_SKB_CB(skb)->end_seq) && !CACHEFLOW_SK_GET_FLAG(tcp_sk(sk), SK_CACHEFLOW_ELEPHANT_FLOW)) {
 			inet_csk(sk)->icsk_ack.pending |= ICSK_ACK_NOW;
+			tcp_sk(sk)->cacheflow_ack_reason = ACK_REASON_DCTCP_CWR;
+		}
 	}
 }
 
@@ -5909,7 +5911,9 @@ static void __tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 			return;
 		}
 send_now:
-		tcp_send_ack(sk, tcp_in_quickack_mode(sk) ? ACK_REASON_QUICKACK : inet_csk(sk)->icsk_ack.pending & ICSK_ACK_NOW ? ACK_REASON_DELAY_EXPIRED : ACK_REASON_NORMAL);
+		tcp_send_ack(sk, tcp_in_quickack_mode(sk) ? ACK_REASON_QUICKACK : inet_csk(sk)->icsk_ack.pending & ICSK_ACK_NOW ? tcp_sk(sk)->cacheflow_ack_reason : ACK_REASON_NORMAL);
+
+		tcp_sk(sk)->cacheflow_ack_reason = 0;
 		return;
 	}
 

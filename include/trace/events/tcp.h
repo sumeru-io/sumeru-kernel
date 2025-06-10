@@ -743,7 +743,7 @@ TRACE_EVENT(tcp_ack_event,
 	),
 
 	TP_fast_assign(
-		__entry->sock_cookie = sock_net(sk)->net_cookie;
+		__entry->sock_cookie = __sock_gen_cookie(sk);
 		__entry->rcv_nxt = rcv_nxt;
 		__entry->ecn_flags = tcp_sk(sk)->ecn_flags;
 		__entry->reason = reason;

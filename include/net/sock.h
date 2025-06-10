@@ -1135,8 +1135,6 @@ static inline void sock_rps_save_rxhash(struct sock *sk,
 	 * here, and another one in sock_rps_record_flow().
 	 */
 	if (unlikely(READ_ONCE(sk->sk_rxhash) != skb->hash)) {
-		pr_info("sock_rps_save_rxhash: coon %lld: old hash: %d ==> new hash: %d\n",
-			atomic64_read(&sk->sk_cookie), READ_ONCE(sk->sk_rxhash), skb->hash);
 		WRITE_ONCE(sk->sk_rxhash, skb->hash);
 	}
 #endif

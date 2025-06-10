@@ -22,7 +22,7 @@
 #include <uapi/linux/tcp.h>
 
 typedef enum enum_tcp_ack_reason {
-	ACK_REASON_NORMAL = 0,
+	ACK_REASON_UNKNOWN = 0,
 	ACK_REASON_QUICKACK = 1,
 	ACK_REASON_DUPACK = 2,
 	ACK_REASON_SACK_COMPRESSED = 3,
@@ -32,6 +32,10 @@ typedef enum enum_tcp_ack_reason {
 	ACK_REASON_PROTOCOL = 7,
 	ACK_REASON_DATA_COPIED = 8,
 	ACK_REASON_BPF = 9,
+	ACK_REASON_DCTCP_BYPASS_TIMER = 10,
+	ACK_REASON_DCTCP_CE_CHANGE = 11,
+	ACK_REASON_DCTCP_CWR = 12,
+	ACK_REASON_NORMAL = 13,
 } enum_tcp_ack_reason;
 
 static inline struct tcphdr *tcp_hdr(const struct sk_buff *skb)
@@ -367,6 +371,7 @@ struct tcp_sock {
 	struct task_struct *drain_task;
 	int 		drain_priority;
 	u32		cacheflow_id;
+	u32		cacheflow_ack_reason;
 	u8		cacheflow;
 	__cacheline_group_end(cacheflow);
 
