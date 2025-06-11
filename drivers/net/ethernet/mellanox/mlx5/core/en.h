@@ -326,6 +326,7 @@ struct mlx5e_params {
 	struct mlx5e_xsk *xsk;
 	unsigned int sw_mtu;
 	int hard_mtu;
+	bool cacheflow;
 	bool ptp_rx;
 	__be32 terminate_lkey_be;
 };

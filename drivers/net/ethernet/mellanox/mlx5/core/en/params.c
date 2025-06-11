@@ -686,7 +686,7 @@ static int mlx5e_build_rq_frags_info(struct mlx5_core_dev *mdev,
 				     u32 *xdp_frag_size)
 {
 	u32 byte_count = MLX5E_SW2HW_MTU(params, params->sw_mtu);
-	int frag_size_max = DEFAULT_FRAG_SIZE;
+	int frag_size_max = params->cacheflow ? 1 << order_base_2(MLX5E_SW2HW_MTU(params, params->sw_mtu)) : DEFAULT_FRAG_SIZE;
 	int first_frag_size_max;
 	u32 buf_size = 0;
 	u16 headroom;
@@ -763,7 +763,7 @@ static int mlx5e_build_rq_frags_info(struct mlx5_core_dev *mdev,
 	 * is not completed yet, WQE 2*N must not be allocated, as it's
 	 * responsible for allocating a new page.
 	 */
-	if (frag_size_max == PAGE_SIZE) {
+	if (frag_size_max == PAGE_SIZE || params->cacheflow) {
 		/* No WQE can start in the middle of a page. */
 		info->wqe_index_mask = 0;
 	} else {

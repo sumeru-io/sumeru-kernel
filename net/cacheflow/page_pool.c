@@ -853,6 +853,9 @@ static bool
 cacheflow_page_pool_recycle_in_cache(netmem_ref netmem,
 				     struct cacheflow_page_pool *pool)
 {
+	if (unlikely(pool->alloc.mini_array == NULL))
+		return false;
+
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
 	if (unlikely(pool->alloc.mini_array->count > CF_PP_MINI_ARRAY_SIZE ||
 		     pool->alloc.mini_array->count < 0))

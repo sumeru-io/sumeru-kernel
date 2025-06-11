@@ -34,6 +34,7 @@ mlx5e_cacheflow_build_rq_param(struct mlx5_core_dev *mdev,
 
 	params->rq_wq_type = MLX5_WQ_TYPE_CYCLIC;
 	params->log_rq_mtu_frames = cacheflow_channel_descriptor;
+	params->cacheflow = true;
 
 	if (MLX5E_GET_PFLAG(params, MLX5E_PFLAG_DROPLESS_RQ))
 		MLX5_SET(rqc, rq_param->rqc, delay_drop_en, 1);
@@ -363,7 +364,7 @@ static int mlx5e_cacheflow_alloc_rq(struct mlx5e_params *params,
 	/* Create a page_pool and register it with rxq */
 	struct cacheflow_page_pool_params pp_params = { 0 };
 
-	pp_params.order = 0;
+	pp_params.order = order_base_2(max(MLX5E_SW2HW_MTU(params, params->sw_mtu), PAGE_SIZE)) - PAGE_SHIFT;
 	pp_params.pool_size = 4096;
 	pp_params.nid = node;
 	pp_params.dev = rq->pdev;
