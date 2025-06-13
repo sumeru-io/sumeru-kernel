@@ -101,7 +101,7 @@ int cacheflow_schedule_priority(struct cacheflow_page_pool *pool, struct sock *s
 	int qlen = sock_recv_len + sock_backlog_len;
 	int priority = 0;
 
-	switch (READ_ONCE(cacheflow_aqm)) {
+	switch (READ_ONCE(cacheflow_schedule)) {
 	case 0:
 		return 0;
 	case 1:
@@ -112,8 +112,8 @@ int cacheflow_schedule_priority(struct cacheflow_page_pool *pool, struct sock *s
 		break;
 	case 3:
 		if ((skb = skb_peek(&sk->sk_receive_queue))) {
-			if (ktime_get_real_ns() - skb_shinfo(skb)->ms_timestamp.enqueue_timestamp > 1000) {
-				priority = -5;	
+			if (ktime_get_real_ns() - skb_shinfo(skb)->ms_timestamp.enqueue_timestamp > 1000000) {
+				priority = -5;
 			}
 		}
 		break;
