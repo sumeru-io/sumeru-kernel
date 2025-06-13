@@ -95,6 +95,7 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 int cacheflow_schedule_priority(struct cacheflow_page_pool *pool, struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+	struct sk_buff *skb;
 	u32 sock_recv_len = tp->rcv_nxt - tp->copied_seq;
 	u32 sock_backlog_len = sk->sk_backlog.len;
 	int qlen = sock_recv_len + sock_backlog_len;
@@ -108,6 +109,13 @@ int cacheflow_schedule_priority(struct cacheflow_page_pool *pool, struct sock *s
 		break;
 	case 2:
 		priority = 0 - (min(ilog2((qlen >> 17) + 1), 20));
+		break;
+	case 3:
+		if ((skb = skb_peek(&sk->sk_receive_queue))) {
+			if (ktime_get_real_ns() - skb_shinfo(skb)->ms_timestamp.enqueue_timestamp > 1000) {
+				priority = -5;	
+			}
+		}
 		break;
 	default:
 		return 0;
