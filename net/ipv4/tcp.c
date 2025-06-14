@@ -287,6 +287,7 @@
 #include <net/rps.h>
 #if IS_ENABLED(CONFIG_NET_CACHEFLOW)
 #include <net/cacheflow/cacheflow.h>
+#include <trace/events/cacheflow.h>
 #endif
 
 
@@ -2888,6 +2889,7 @@ int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int flags,
 			}
 			tcp_sk(sk)->drain_task = get_task_struct(current);
 			tcp_sk(sk)->drain_priority = 0;
+			trace_cacheflow_schedule_priority(__sock_gen_cookie(sk), tcp_sk(sk)->cacheflow_id, tcp_sk(sk)->rcv_nxt - tcp_sk(sk)->copied_seq, sk->sk_backlog.len, tcp_sk(sk)->drain_task->pid, 0);
 		}
 
 		// We reset the priority to 0 when we receive data,
@@ -2895,6 +2897,7 @@ int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int flags,
 		if (tcp_sk(sk)->drain_priority != 0) {
 			set_user_nice(tcp_sk(sk)->drain_task, 0);
 			tcp_sk(sk)->drain_priority = 0;
+			trace_cacheflow_schedule_priority(__sock_gen_cookie(sk), tcp_sk(sk)->cacheflow_id, tcp_sk(sk)->rcv_nxt - tcp_sk(sk)->copied_seq, sk->sk_backlog.len, tcp_sk(sk)->drain_task->pid, 0);
 		}
 	}
 

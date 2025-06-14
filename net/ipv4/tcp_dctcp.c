@@ -42,6 +42,9 @@
 #include <linux/mm.h>
 #include <net/tcp.h>
 #include <linux/inet_diag.h>
+#ifdef CONFIG_NET_CACHEFLOW
+#include <net/cacheflow/cacheflow.h>
+#endif
 #include "tcp_dctcp.h"
 
 #define DCTCP_MAX_ALPHA	1024U
