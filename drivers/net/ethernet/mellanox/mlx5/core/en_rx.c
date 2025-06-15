@@ -2885,6 +2885,9 @@ static noinline int mlx5e_cacheflow_th_poll(struct mlx5e_cacheflow_th *c, int bu
 
 	for (i = 0; i < n; i++) {
 		prefetch(cqe + 1);
+		prefetch(cqe + 2);
+		prefetch(cqe + 3);
+
 		skb = mlx5e_cacheflow_skb_from_cqe(c->rq, cqe);
 		if (!skb) {
 			pr_err("cacheflow: fail to build skb on the tophalf handler\n");
