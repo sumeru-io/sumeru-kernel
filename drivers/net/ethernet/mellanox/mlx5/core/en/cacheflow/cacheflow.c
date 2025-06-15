@@ -9,6 +9,7 @@
 #include "en/cacheflow/rq_tracker.h"
 #include "en/params.h"
 #include "en/xdp.h"
+#include "lib/eq.h"
 
 #include "trace/events/skb.h"
 #include "diag/cacheflow_tracepoint.h"
@@ -233,7 +234,7 @@ static int mlx5e_cacheflow_open_rx_cq(struct mlx5e_cacheflow *c,
 		.napi = &c->napi,
 		.ch_stats = c->stats,
 		.node = dev_to_node(mlx5_core_dma_dev(c->mdev)),
-		.ix = 0,
+		.ix = c->vector_ix,
 	};
 
 	err = mlx5e_open_cq(c->mdev, moder, &cparams->rq_param.cqp, &ccp,
@@ -744,7 +745,8 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	struct mlx5e_cacheflow *c;
 	struct mlx5e_cacheflow_th *th;
 	struct mlx5e_cacheflow_rq_tracker *rq_tracker = NULL;
-	int err, cpu;
+	int err, cpu, vector;
+	unsigned int irq;
 
 	c = kvzalloc_node(sizeof(*c), GFP_KERNEL,
 			  dev_to_node(mlx5_core_dma_dev(mdev)));
@@ -765,6 +767,22 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 		}
 	}
 
+	for (vector = 0; vector < mlx5_comp_vectors_max(mdev); vector++) {
+		if (mlx5_comp_vector_get_cpu(mdev, vector) == get_cacheflow_steer_core())
+			break;
+	}
+	if (vector == mlx5_comp_vectors_max(mdev)) {
+		pr_err("cacheflow: no vector found for core %d\n",
+			get_cacheflow_steer_core());
+		err = -EINVAL;
+		goto err_free;
+	}
+
+	err = mlx5_comp_irqn_get(mdev, vector, &irq);
+	if (err)
+		return err;
+
+
 	c->priv = priv;
 	c->mdev = mdev;
 	c->netdev = netdev;
@@ -775,19 +793,30 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	c->stats = &priv->cacheflow_stats.ch;
 	c->lag_port = lag_port;
 	c->rq_tracker = rq_tracker;
+	c->vector_ix = vector;
 
 	mlx5e_cacheflow_debugfs_init(c);
 
 	mlx5e_cacheflow_build_params(c, cparams, params);
 	mlx5e_cacheflow_print_params(cparams);
 
-	netif_cacheflow_napi_add_weight(netdev, &c->napi,
-					mlx5e_cacheflow_bh_napi_poll, 16,
-					get_cacheflow_steer_core());
-	pr_info("cacheflow: add NAPI %d (kthread) on core %d, res: %s\n",
-		c->napi.napi_id, get_cacheflow_steer_core(),
-		test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" :
-								 "fail");
+	if (READ_ONCE(cacheflow_thread)) {
+		netif_cacheflow_napi_add_weight(netdev, &c->napi,
+						mlx5e_cacheflow_bh_napi_poll, 16,
+						get_cacheflow_steer_core());
+		pr_info("cacheflow: add NAPI %d (kthread) on core %d, vector %d, res: %s\n",
+			c->napi.napi_id, get_cacheflow_steer_core(), vector,
+			test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" :
+									"fail");
+	} else {
+		netif_napi_add(netdev, &c->napi,
+			       mlx5e_cacheflow_bh_napi_poll);
+		netif_napi_set_irq(&c->napi, irq);
+		pr_info("cacheflow: add NAPI %d (irq) on core %d, vector %d, res: %s\n",
+			c->napi.napi_id, get_cacheflow_steer_core(), vector,
+			test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" :
+									"fail");
+	}
 
 	err = mlx5e_cacheflow_open_queues(c, cparams);
 	if (unlikely(err))

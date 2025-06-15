@@ -76,6 +76,7 @@ struct mlx5e_cacheflow {
 	struct mlx5e_priv *priv;
 	struct mlx5_core_dev *mdev;
 	struct hwtstamp_config *tstamp;
+	int vector_ix;
 	int cpu;
 
 	struct mlx5e_cacheflow_rq_tracker *rq_tracker;

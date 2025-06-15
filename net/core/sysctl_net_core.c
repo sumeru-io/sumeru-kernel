@@ -522,6 +522,13 @@ static struct ctl_table net_core_table[] = {
 		.proc_handler	= proc_dointvec
 	},
 	{
+		.procname	= "cacheflow_thread",
+		.data		= &cacheflow_thread,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec
+	},
+	{
 		.procname	= "cacheflow_stack_cores",
 		.data		= &cacheflow_stack_cores,
 		.maxlen		= sizeof(cacheflow_stack_cores),

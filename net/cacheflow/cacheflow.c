@@ -20,6 +20,7 @@ EXPORT_SYMBOL(cacheflow_steer_enable);
 
 atomic_t cacheflow_id_counter = ATOMIC_INIT(0);
 
+int cacheflow_thread __read_mostly;
 int cacheflow_steer_core __read_mostly;
 int cacheflow_stack_cores[NR_CPUS] __read_mostly;
 int cacheflow_stack_cores_num __read_mostly;
