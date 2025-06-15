@@ -2720,7 +2720,8 @@ static inline void mlx5e_cacheflow_build_rx_skb(struct mlx5e_cacheflow_cqe *cach
 	skb->mac_len = ETH_HLEN;
 
 	if (unlikely(mlx5e_rx_hw_stamp(rq->tstamp))) {
-		skb_hwtstamps(skb)->hwtstamp = cacheflow_cqe->receive_timestamp;
+		skb_hwtstamps(skb)->hwtstamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time, rq->clock,
+					       get_cqe_ts(cqe));
 	}
 	skb_record_rx_queue(skb, rq->ix);
 
@@ -2824,7 +2825,6 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 	struct mlx5e_cacheflow_xdp_buff mxbuf;
 	u32 frag_consumed_bytes;
 	dma_addr_t addr;
-	int page_index = 0;
 	u32 cqe_bcnt;
 	u16 ci;
 	struct sk_buff *skb;
@@ -2836,10 +2836,14 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 	head_wi  = wi;
 	cqe_bcnt = be32_to_cpu(cqe->cqe.byte_cnt);
 
-	va = page_address(cqe->page[0]);
+	struct page *page = (struct page *)
+		((u64)cqe->cqe.cacheflow.page_addr_high << 32 |
+		 cqe->cqe.cacheflow.page_addr_low);
+
+	va = page_address(page);
 	frag_consumed_bytes = min_t(u32, frag_info->frag_size, cqe_bcnt);
 
-	addr = page_pool_get_dma_addr(cqe->page[0]);
+	addr = page_pool_get_dma_addr(page);
 	dma_sync_single_range_for_cpu(rq->pdev, addr, 0, rq->buff.frame0_sz, rq->buff.map_dir);
 	net_prefetchw(va); /* xdp_frame data area */
 	net_prefetch(va + rx_headroom);
@@ -2848,28 +2852,6 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 			 frag_consumed_bytes, &mxbuf);
 	sinfo = xdp_get_shared_info_from_buff(&mxbuf.xdp);
 	truesize = 0;
-
-	cqe_bcnt -= frag_consumed_bytes;
-	frag_info++;
-	wi++;
-	page_index++;
-
-	while (cqe_bcnt) {
-		frag_consumed_bytes = min_t(u32, frag_info->frag_size, cqe_bcnt);
-	
-		mlx5e_cacheflow_add_skb_shared_info_frag(rq, sinfo, &mxbuf.xdp, cqe->page[page_index], frag_consumed_bytes);
-		truesize += frag_info->frag_stride;
-
-		cqe_bcnt -= frag_consumed_bytes;
-		frag_info++;
-		wi++;
-		page_index++;
-	}
-
-	while (unlikely(page_index < rq->wqe.info.num_frags)) {
-		cacheflow_page_pool_put_page(rq->page_pool, cqe->page[page_index], -1, false);
-		page_index++;
-	}
 
 	skb = mlx5e_cacheflow_build_linear_skb(rq, mxbuf.xdp.data_hard_start, rq->buff.frame0_sz,
 				     mxbuf.xdp.data - mxbuf.xdp.data_hard_start,
@@ -2883,8 +2865,6 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 	skb_mark_for_recycle(skb);
 
 	CACHEFLOW_SET_FLAG(skb, SKB_CACHEFLOW, true);
-
-	skb->cacheflow_id = cqe->cacheflow_id;
 
 	if (xdp_buff_has_frags(&mxbuf.xdp)) {
 		/* sinfo->nr_frags is reset by build_skb, calculate again. */
@@ -2913,13 +2893,16 @@ static noinline int mlx5e_cacheflow_th_poll(struct mlx5e_cacheflow_th *c, int bu
 
 		mlx5e_cacheflow_complete_rx_cqe(c->rq, cqe, be32_to_cpu(cqe->cqe.byte_cnt), skb);
 
-		skb->used_pages = cqe->used_pages;
-		skb->free_pages = cqe->free_pages;
+		// trace_skb_cacheflow_queue_timestamp(cqe->cacheflow_id, c->cpu,
+			// cqe->process_timestamp, ktime_get_real_ns());
 
-		trace_skb_cacheflow_queue_timestamp(cqe->cacheflow_id, c->cpu,
-			cqe->process_timestamp, ktime_get_real_ns());
+		if (tracepoint_enabled(mlx5e_cacheflow_th_skb)) {
+			struct page *page = (struct page *)
+			((u64)cqe->cqe.cacheflow.page_addr_high << 32 |
+			cqe->cqe.cacheflow.page_addr_low);
+			trace_mlx5e_cacheflow_th_skb(smp_processor_id(), skb, page);
+		}
 
-		trace_mlx5e_cacheflow_th_skb(smp_processor_id(), skb, cqe->page);
 		cacheflow_track_page_move(skb, NETMEM_LOCATION_STACK);
 
 		napi_gro_receive(&c->napi, skb);

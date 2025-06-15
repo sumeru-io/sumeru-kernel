@@ -1028,8 +1028,6 @@ struct sk_buff {
 #endif
 #if defined(CONFIG_NET_CACHEFLOW)
 	struct cacheflow_page_pool 	*page_pool;
-	u32				used_pages;
-	u32				free_pages;
 	u64				cacheflow_id;
 #endif
 	u16			alloc_cpu;

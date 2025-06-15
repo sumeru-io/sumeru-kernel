@@ -43,11 +43,13 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
 	int tcpu;
 	struct mlx5e_cacheflow_th *th;
 	struct mlx5e_cacheflow_cqe *cacheflow_cqe;
-	int i;
 	u64 cacheflow_id = 0;
 
+	WARN_ON(rq->wqe.info.log_num_frags != 0);
+	WARN_ON(rq->wqe.info.num_frags != 1);
+
 	ci = mlx5_wq_cyc_ctr2ix(wq, be16_to_cpu(cqe->wqe_counter));
-	wi = &rq->wqe.frags[ci << rq->wqe.info.log_num_frags];
+	wi = &rq->wqe.frags[ci];
 	cqe_bcnt = be32_to_cpu(cqe->byte_cnt);
 
 	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
@@ -67,35 +69,26 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
 		goto wq_cyc_pop;
 	}
 
-	if (cacheflow->rq_tracker) {
-		cacheflow_cqe->receive_timestamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time, rq->clock,
-					       get_cqe_ts(cqe));
-		cacheflow_cqe->process_timestamp = ktime_get_real_ns();
-		
+	if (cacheflow->rq_tracker) {		
 		cacheflow_id = mlx5e_cacheflow_rq_tracker_update(cacheflow->rq_tracker,						  
-						cacheflow_cqe->process_timestamp,
-						cacheflow_cqe->receive_timestamp);
+						mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time, rq->clock,
+					       get_cqe_ts(cqe)),
+						ktime_get_real_ns());
 	}
 
 	memcpy(&cacheflow_cqe->cqe, cqe, sizeof(struct mlx5_cqe64));
-	for (i = 0; i < rq->wqe.info.num_frags; i++) {
-		cacheflow_cqe->page[i] = *wi;
-		trace_skb_cacheflow_memory_location(page_to_netmem(*wi), NETMEM_LOCATION_NAPI);
-		*wi = NULL;
-		wi++;
-	}
+	cacheflow_cqe->cqe.cacheflow.page_addr_high = (u64)(*wi) >> 32;
+	cacheflow_cqe->cqe.cacheflow.page_addr_low = (u64)(*wi) & 0xffffffff;
 
-	cacheflow_cqe->used_pages = rq->page_pool->allocated_pages;
-	cacheflow_cqe->free_pages = rq->page_pool->array_pages + rq->page_pool->ring_pages;
-	cacheflow_cqe->cacheflow_id = cacheflow_id;
+	trace_skb_cacheflow_memory_location(page_to_netmem(*wi), NETMEM_LOCATION_NAPI);
+	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, *wi,
+				     tcpu);
+	*wi = NULL;
 
 	item_ring_submit(th->cqe_ring);
 	th->inserted++;
 
 	__cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
-
-	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, cacheflow_cqe->page,
-				     tcpu);
 
 	stats->packets++;
 	stats->bytes += cqe_bcnt;

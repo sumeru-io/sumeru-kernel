@@ -113,44 +113,42 @@ TRACE_EVENT(mlx5e_flow_rule_update,
 );
 
 TRACE_EVENT(mlx5e_cacheflow_bh_cqe,
-	TP_PROTO(int rq_index, int cqe_bcnt, struct page **t_pages, int cpu),
-	TP_ARGS(rq_index, cqe_bcnt, t_pages, cpu),
+	TP_PROTO(int rq_index, int cqe_bcnt, struct page *page, int cpu),
+	TP_ARGS(rq_index, cqe_bcnt, page, cpu),
 	TP_STRUCT__entry(
 		__field(int, rq_index)
 		__field(int, cqe_bcnt)
-		__array(struct page *, pages, 4)
+		__field(struct page *, page)
 		__field(int, cpu)
 	),
 	TP_fast_assign(
 		__entry->rq_index = rq_index;
 		__entry->cqe_bcnt = cqe_bcnt;
-		memcpy(__entry->pages, t_pages, sizeof(struct page *) * 4);
+		__entry->page = page;
 		__entry->cpu = cpu;
 	),
-	TP_printk("rq_index=%d cqe_bcnt=%d pages[0]=%px pages[1]=%px pages[2]=%px pages[3]=%px cpu=%d",
+	TP_printk("rq_index=%d cqe_bcnt=%d page=%px cpu=%d",
 		  __entry->rq_index, __entry->cqe_bcnt,
-		  __entry->pages[0], __entry->pages[1],
-		  __entry->pages[2], __entry->pages[3],
+		  __entry->page,
 		  __entry->cpu)
 );
 
 TRACE_EVENT(mlx5e_cacheflow_th_skb,
-	TP_PROTO(int cpu, struct sk_buff *skb, struct page **t_pages),
-	TP_ARGS(cpu, skb, t_pages),
+	TP_PROTO(int cpu, struct sk_buff *skb, struct page *page),
+	TP_ARGS(cpu, skb, page),
 	TP_STRUCT__entry(
 		__field(int, cpu)
 		__field(int, len)
-		__array(struct page *, pages, 4)
+		__field(struct page *, page)
 	),
 	TP_fast_assign(
 		__entry->cpu = cpu;
 		__entry->len = skb->len;
-		memcpy(__entry->pages, t_pages, sizeof(struct page *) * 4);
+		__entry->page = page;
 	),
-	TP_printk("cpu=%d len=%d pages[0]=%px pages[1]=%px pages[2]=%px pages[3]=%px",
+	TP_printk("cpu=%d len=%d page=%px",
 		  __entry->cpu, __entry->len,
-		  __entry->pages[0], __entry->pages[1],
-		  __entry->pages[2], __entry->pages[3])
+		  __entry->page)
 );
 
 TRACE_EVENT(mlx5e_cacheflow_th_ipi_scheduled,

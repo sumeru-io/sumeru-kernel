@@ -838,6 +838,10 @@ struct mlx5_cqe64 {
 			__be16	header_entry_index;
 			__be32	data_offset;
 		} shampo;
+		struct {
+			u32 page_addr_high;
+			u32 page_addr_low;
+		} cacheflow;
 	};
 	__be32		rss_hash_result;
 	u8		rss_hash_type;
