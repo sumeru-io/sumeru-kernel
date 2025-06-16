@@ -2884,6 +2884,8 @@ int mlx5e_open_channels(struct mlx5e_priv *priv,
 
 		if (cacheflow_stack_cores_num)
 			show_cacheflow_stack_cores(buf, sizeof(buf));
+		else
+			snprintf(buf, sizeof(buf), "[]");
 
 		pr_info("cacheflow: QuickPath (steer core: %d, stack cores: %s, descriptors: %d)",
 			cacheflow_steer_core,

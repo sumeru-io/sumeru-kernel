@@ -23,7 +23,7 @@ static int mlx5e_cacheflow_get_cpu(u32 hash)
 			sock_flow_table->ents[hash & sock_flow_table->mask]);
 		if ((ident ^ hash) & ~net_hotdata.rps_cpu_mask)
 			return 0;
-
+  
 		return rps_core(ident & net_hotdata.rps_cpu_mask);
 	}
 
@@ -113,6 +113,9 @@ static noinline int mlx5e_cacheflow_bh_poll(struct mlx5e_cacheflow *c,
 	while (work_done < budget && (cqe = mlx5_cqwq_get_cqe(cqwq))) {
 		// it's almostly correct since cqes are packed on pages.
 		prefetch(cqe + 1);
+		prefetch(cqe + 2);
+		prefetch(cqe + 3);
+
 		mlx5_cqwq_pop(cqwq);
 		mlx5e_cacheflow_handle_rx_cqe(rq, cqe);
 		work_done++;

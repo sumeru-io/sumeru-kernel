@@ -348,6 +348,8 @@ static int mlx5e_cacheflow_alloc_rq(struct mlx5e_params *params,
 
 	rq->buff.map_dir = DMA_FROM_DEVICE;
 	rq->buff.headroom = mlx5e_get_rq_headroom(mdev, params, xsk);
+
+	pr_info("cacheflow: RQ headroom=%d\n", rq->buff.headroom);
 	pool_size = 1 << params->log_rq_mtu_frames;
 
 	rq->mkey_be = cpu_to_be32(mdev->mlx5e_res.hw_objs.mkey);
@@ -813,9 +815,7 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 			       mlx5e_cacheflow_bh_napi_poll);
 		netif_napi_set_irq(&c->napi, irq);
 		pr_info("cacheflow: add NAPI %d (irq) on core %d, vector %d, res: %s\n",
-			c->napi.napi_id, get_cacheflow_steer_core(), vector,
-			test_bit(NAPI_STATE_CACHEFLOW, &c->napi.state) ? "succeed" :
-									"fail");
+			c->napi.napi_id, get_cacheflow_steer_core(), vector, "succeed");
 	}
 
 	err = mlx5e_cacheflow_open_queues(c, cparams);
