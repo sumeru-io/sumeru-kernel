@@ -32,19 +32,23 @@ extern struct kmem_cache *netmem_mini_array_cache;
 
 /* Size array to fit within two cachelines minus the count field */
 #define CF_PP_MINI_ARRAY_METADATA_SIZE				8
-#define CF_PP_MINI_ARRAY_SIZE 					(((2 * L1_CACHE_BYTES) - CF_PP_MINI_ARRAY_METADATA_SIZE) / sizeof(netmem_ref))
+#define CF_PP_MINI_ARRAY_SIZE 					(((2 * L1_CACHE_BYTES)) / sizeof(netmem_ref))
 #define CF_PP_FULL_MINI_ARRAY_CACHE_SIZE			16
 #define CF_PP_MINI_ARRAY_REFILL_BATCH_SIZE			(CF_PP_FULL_MINI_ARRAY_CACHE_SIZE / 2)
 #define CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_SIZE			(CF_PP_FULL_MINI_ARRAY_CACHE_SIZE * 2)
 
 struct netmem_mini_array {
 	netmem_ref array[CF_PP_MINI_ARRAY_SIZE];
+} ____cacheline_aligned_in_smp;
+
+struct netmem_partial_mini_array {
+	netmem_ref array[CF_PP_MINI_ARRAY_SIZE - 1];
 	int count;
 	int flags;
 } ____cacheline_aligned_in_smp;
 
 struct cacheflow_pp_alloc_cache {
-	struct netmem_mini_array* mini_array;
+	struct netmem_partial_mini_array* partial_array;
 
 	struct netmem_mini_array* full_mini_array_cache[CF_PP_FULL_MINI_ARRAY_CACHE_SIZE];
 	u32 full_mini_array_count;
@@ -98,7 +102,7 @@ struct cacheflow_page_pool_proc {
 
 struct cacheflow_page_pool_recycle_stub {
 	struct cacheflow_page_pool *pool;
-	struct netmem_mini_array *mini_array;
+	struct netmem_partial_mini_array *mini_array;
 
 	struct netmem_mini_array *mini_array_cache[CACHEFLOW_TH_EMPTY_MINI_ARRAY_CACHE_SIZE];
 	int mini_array_cache_count;
@@ -154,7 +158,8 @@ void cacheflow_page_pool_destroy(struct cacheflow_page_pool *pool);
 
 struct page *cacheflow_page_pool_alloc_pages(struct cacheflow_page_pool *pool, gfp_t gfp);
 netmem_ref cacheflow_page_pool_alloc_netmem(struct cacheflow_page_pool *pool, gfp_t gfp);
-int cacheflow_page_pool_alloc_n_netmem(struct cacheflow_page_pool *pool, gfp_t gfp, struct page** pages, int n);
+struct netmem_mini_array *cacheflow_page_pool_get_full_mini_array(struct cacheflow_page_pool *pool, gfp_t gfp);
+void cacheflow_page_pool_put_empty_mini_array(struct cacheflow_page_pool *pool, struct netmem_mini_array *mini_array);
 
 void cacheflow_page_pool_put_netmem(struct cacheflow_page_pool *pool,
 					netmem_ref netmem,

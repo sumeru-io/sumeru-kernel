@@ -8,7 +8,7 @@
 #include "en.h"
 
 #define CACHEFLOW_CHANNEL_SIZE	128
-#define CACHEFLOW_WQE_BULK 	8
+
 struct mlx5e_cacheflow_xdp_buff {
 	struct xdp_buff xdp;
 	struct mlx5_cqe64 *cqe;

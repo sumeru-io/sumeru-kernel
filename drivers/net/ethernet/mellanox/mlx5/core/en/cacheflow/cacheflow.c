@@ -41,8 +41,8 @@ mlx5e_cacheflow_build_rq_param(struct mlx5_core_dev *mdev,
 		MLX5_SET(rqc, rq_param->rqc, delay_drop_en, 1);
 
 	mlx5e_build_rq_param(mdev, params, NULL, rq_param);
-	rq_param->frags_info.wqe_bulk = CACHEFLOW_WQE_BULK;
-	rq_param->frags_info.refill_unit = CACHEFLOW_WQE_BULK;
+	rq_param->frags_info.wqe_bulk = CF_PP_MINI_ARRAY_SIZE;
+	rq_param->frags_info.refill_unit = CF_PP_MINI_ARRAY_SIZE;
 }
 
 static void mlx5e_cacheflow_build_params(struct mlx5e_cacheflow *c,
@@ -119,18 +119,25 @@ static int mlx5e_cacheflow_alloc_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix,
 					 int wqe_bulk)
 {
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
-	struct page *pages[CACHEFLOW_WQE_BULK];
-	int i, n;
+	struct netmem_mini_array *mini_array;
+	int i, j;
 
-	n = cacheflow_page_pool_alloc_n_netmem(rq->page_pool, GFP_ATOMIC | __GFP_NOWARN, pages, wqe_bulk);
+	mini_array = cacheflow_page_pool_get_full_mini_array(rq->page_pool, GFP_ATOMIC | __GFP_NOWARN);
 
-	for (i = 0; i < min(n, wqe_bulk); i++) {
+	for (i = 0; i < min(CF_PP_MINI_ARRAY_SIZE, wqe_bulk); i++) {
 		int j = mlx5_wq_cyc_ctr2ix(wq, ix + i);
 		struct mlx5e_rx_wqe_cyc *wqe;
 
 		wqe = mlx5_wq_cyc_get_wqe(wq, j);
-		mlx5e_cacheflow_alloc_rx_wqe(rq, wqe, j, pages[i]);
+		mlx5e_cacheflow_alloc_rx_wqe(rq, wqe, j, netmem_to_page(mini_array->array[i]));
 	}
+
+	for (j = i; j < min(CF_PP_MINI_ARRAY_SIZE, wqe_bulk); j++) {
+		pr_warn("cacheflow: batch descriptor allocation alignment fails \n");
+		cacheflow_page_pool_put_page(rq->page_pool, netmem_to_page(mini_array->array[j]), -1, true);
+	}
+
+	cacheflow_page_pool_put_empty_mini_array(rq->page_pool, mini_array);
 
 	return i;
 }
@@ -148,7 +155,7 @@ static int mlx5e_cacheflow_refill_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix,
 	 * the page pool cache due to too many page releases at once.
 	 */
 	do {
-		refill = min_t(u16, rq->wqe.info.refill_unit, remaining);
+		refill = min_t(u16, CF_PP_MINI_ARRAY_SIZE, remaining);
 
 		mlx5e_cacheflow_free_rx_wqes(rq, ix + total_alloc, refill);
 		refill_alloc = mlx5e_cacheflow_alloc_rx_wqes(
@@ -178,10 +185,12 @@ bool mlx5e_cacheflow_post_rx_wqes(struct mlx5e_cacheflow_rq *rq)
 	if (unlikely(!test_bit(MLX5E_RQ_STATE_ENABLED, &rq->state)))
 		return false;
 
-	if (mlx5_wq_cyc_missing(wq) < rq->wqe.info.wqe_bulk)
+	if (mlx5_wq_cyc_missing(wq) < CF_PP_MINI_ARRAY_SIZE)
 		return false;
 
 	wqe_bulk = mlx5_wq_cyc_missing(wq);
+	wqe_bulk -= wqe_bulk % CF_PP_MINI_ARRAY_SIZE;
+
 	head = mlx5_wq_cyc_get_head(wq);
 
 	count = mlx5e_cacheflow_refill_rx_wqes(rq, head, wqe_bulk);
