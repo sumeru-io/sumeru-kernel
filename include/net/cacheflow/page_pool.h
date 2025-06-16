@@ -154,7 +154,7 @@ void cacheflow_page_pool_destroy(struct cacheflow_page_pool *pool);
 
 struct page *cacheflow_page_pool_alloc_pages(struct cacheflow_page_pool *pool, gfp_t gfp);
 netmem_ref cacheflow_page_pool_alloc_netmem(struct cacheflow_page_pool *pool, gfp_t gfp);
-void cacheflow_page_pool_alloc_pages_bulk(struct cacheflow_page_pool *pool, void **data, int count);
+int cacheflow_page_pool_alloc_n_netmem(struct cacheflow_page_pool *pool, gfp_t gfp, struct page** pages, int n);
 
 void cacheflow_page_pool_put_netmem(struct cacheflow_page_pool *pool,
 					netmem_ref netmem,

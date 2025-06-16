@@ -41,9 +41,8 @@ mlx5e_cacheflow_build_rq_param(struct mlx5_core_dev *mdev,
 		MLX5_SET(rqc, rq_param->rqc, delay_drop_en, 1);
 
 	mlx5e_build_rq_param(mdev, params, NULL, rq_param);
-	rq_param->frags_info.wqe_bulk =
-		max_t(u16, rq_param->frags_info.wqe_index_mask + 1, 8);
-	rq_param->frags_info.refill_unit = rq_param->frags_info.wqe_bulk;
+	rq_param->frags_info.wqe_bulk = CACHEFLOW_WQE_BULK;
+	rq_param->frags_info.refill_unit = CACHEFLOW_WQE_BULK;
 }
 
 static void mlx5e_cacheflow_build_params(struct mlx5e_cacheflow *c,
@@ -95,56 +94,42 @@ static void mlx5e_cacheflow_free_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix,
 	}
 }
 
-static int mlx5e_cacheflow_alloc_rx_wqe(struct mlx5e_cacheflow_rq *rq,
-					struct mlx5e_rx_wqe_cyc *wqe, u16 ix)
+static void mlx5e_cacheflow_alloc_rx_wqe(struct mlx5e_cacheflow_rq *rq,
+					struct mlx5e_rx_wqe_cyc *wqe, u16 ix, struct page *page)
 {
 	struct page **frag = get_frag(rq, ix);
-	int i;
 
-	for (i = 0; i < rq->wqe.info.num_frags; i++, frag++) {
-		dma_addr_t addr;
-		u16 headroom;
+	dma_addr_t addr;
+	u16 headroom;
 
-		if (unlikely(*frag != NULL)) {
-			BUG();
-		}
-
-		*frag = cacheflow_page_pool_alloc_pages(
-			rq->page_pool, GFP_ATOMIC | __GFP_NOWARN);
-
-		trace_skb_cacheflow_memory_location(page_to_netmem(*frag), NETMEM_LOCATION_RING);
-
-		if (unlikely(*frag == NULL))
-			goto free_frags;
-
-		headroom = i == 0 ? rq->buff.headroom : 0;
-		addr = page_pool_get_dma_addr(*frag);
-		wqe->data[i].addr = cpu_to_be64(addr + headroom);
+	if (unlikely(*frag != NULL)) {
+		BUG();
 	}
 
-	return 0;
+	*frag = page;
 
-free_frags:
-	while (--i >= 0)
-		mlx5e_cacheflow_put_rx_frag(rq, --frag);
+	trace_skb_cacheflow_memory_location(page_to_netmem(*frag), NETMEM_LOCATION_RING);
 
-	return -ENOMEM;
+	headroom = rq->buff.headroom;
+	addr = page_pool_get_dma_addr(*frag);
+	wqe->data[0].addr = cpu_to_be64(addr + headroom);
 }
 
 static int mlx5e_cacheflow_alloc_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix,
 					 int wqe_bulk)
 {
 	struct mlx5_wq_cyc *wq = &rq->wqe.wq;
-	int i;
+	struct page *pages[CACHEFLOW_WQE_BULK];
+	int i, n;
 
-	for (i = 0; i < wqe_bulk; i++) {
+	n = cacheflow_page_pool_alloc_n_netmem(rq->page_pool, GFP_ATOMIC | __GFP_NOWARN, pages, wqe_bulk);
+
+	for (i = 0; i < min(n, wqe_bulk); i++) {
 		int j = mlx5_wq_cyc_ctr2ix(wq, ix + i);
 		struct mlx5e_rx_wqe_cyc *wqe;
 
 		wqe = mlx5_wq_cyc_get_wqe(wq, j);
-
-		if (unlikely(mlx5e_cacheflow_alloc_rx_wqe(rq, wqe, j)))
-			break;
+		mlx5e_cacheflow_alloc_rx_wqe(rq, wqe, j, pages[i]);
 	}
 
 	return i;
