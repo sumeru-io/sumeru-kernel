@@ -30,6 +30,15 @@
 
 extern struct kmem_cache *netmem_mini_array_cache;
 
+#define CF_PP_EMPTY_MINI_ARRAY_GLBOAL_CACHE_SIZE 1024
+
+struct netmem_empty_mini_array_global_cache {
+	struct netmem_mini_array *array[CF_PP_EMPTY_MINI_ARRAY_GLBOAL_CACHE_SIZE];
+	u32 count;
+	spinlock_t lock;
+};
+
+
 /* Size array to fit within two cachelines minus the count field */
 #define CF_PP_MINI_ARRAY_METADATA_SIZE				8
 #define CF_PP_MINI_ARRAY_SIZE 					(((2 * L1_CACHE_BYTES)) / sizeof(netmem_ref))
@@ -227,5 +236,7 @@ static inline bool cacheflow_page_pool_put(struct cacheflow_page_pool *pool)
 }
 
 void cacheflow_page_pool_set_pp_info(struct cacheflow_page_pool *pool, netmem_ref netmem);
+int cacheflow_page_pool_alloc_empty_mini_array_bulk(struct netmem_mini_array **array, int count, gfp_t gfp);
+void cacheflow_page_pool_free_empty_mini_array_bulk(struct netmem_mini_array **array, int count);
 
 #endif /* __CACHEFLOW_PAGE_POOL_H */

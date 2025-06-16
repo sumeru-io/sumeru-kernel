@@ -36,6 +36,32 @@
 #define BIAS_MAX (LONG_MAX >> 1)
 
 struct kmem_cache *netmem_mini_array_cache;
+static struct netmem_empty_mini_array_global_cache netmem_empty_mini_array_global_cache;
+
+int cacheflow_page_pool_alloc_empty_mini_array_bulk(struct netmem_mini_array **array, int count, gfp_t gfp)
+{
+	if (likely(netmem_empty_mini_array_global_cache.count >= count)) {
+		spin_lock(&netmem_empty_mini_array_global_cache.lock);
+		netmem_empty_mini_array_global_cache.count -= count;
+		memcpy(array, netmem_empty_mini_array_global_cache.array + netmem_empty_mini_array_global_cache.count, count * sizeof(struct netmem_mini_array*));
+		spin_unlock(&netmem_empty_mini_array_global_cache.lock);
+		return count;
+	}
+
+	return kmem_cache_alloc_bulk(netmem_mini_array_cache, gfp, count, (void **)array);
+}
+
+void cacheflow_page_pool_free_empty_mini_array_bulk(struct netmem_mini_array **array, int count)
+{
+	if (likely(netmem_empty_mini_array_global_cache.count + count <= CF_PP_EMPTY_MINI_ARRAY_GLBOAL_CACHE_SIZE)) {
+		spin_lock(&netmem_empty_mini_array_global_cache.lock);
+		memcpy(netmem_empty_mini_array_global_cache.array + netmem_empty_mini_array_global_cache.count, array, count * sizeof(struct netmem_mini_array*));
+		netmem_empty_mini_array_global_cache.count += count;
+		spin_unlock(&netmem_empty_mini_array_global_cache.lock);
+		return;
+	}
+	kmem_cache_free_bulk(netmem_mini_array_cache, count, (void **)array);
+}
 
 enum {
 	PAGE_POOL_ALLOC,
@@ -140,11 +166,7 @@ cacheflow_page_pool_put_empty_mini_array(struct cacheflow_page_pool *pool,
 					[pool->alloc.empty_mini_array_count + i],
 				kmem_cache_size(netmem_mini_array_cache));
 
-		kmem_cache_free_bulk(
-			netmem_mini_array_cache,
-			CF_PP_FULL_MINI_ARRAY_CACHE_SIZE,
-			(void **)(pool->alloc.empty_mini_array_cache +
-				  pool->alloc.empty_mini_array_count));
+		cacheflow_page_pool_free_empty_mini_array_bulk(pool->alloc.empty_mini_array_cache + pool->alloc.empty_mini_array_count, CF_PP_FULL_MINI_ARRAY_CACHE_SIZE);
 	}
 	pool->alloc
 		.empty_mini_array_cache[pool->alloc.empty_mini_array_count++] =
@@ -159,11 +181,8 @@ cacheflow_page_pool_get_empty_mini_array(struct cacheflow_page_pool *pool)
 	struct netmem_mini_array *mini_array;
 
 	if (pool->alloc.empty_mini_array_count == 0) {
-		n = kmem_cache_alloc_bulk(
-			netmem_mini_array_cache, GFP_ATOMIC | GFP_NOWAIT,
-			CF_PP_FULL_MINI_ARRAY_CACHE_SIZE,
-			(void **)(pool->alloc.empty_mini_array_cache +
-				  pool->alloc.empty_mini_array_count));
+		n = cacheflow_page_pool_alloc_empty_mini_array_bulk(pool->alloc.empty_mini_array_cache + pool->alloc.empty_mini_array_count, CF_PP_FULL_MINI_ARRAY_CACHE_SIZE, GFP_ATOMIC | GFP_NOWAIT);
+
 		for (i = 0; i < n; i++) {
 			mini_array =
 				pool->alloc.empty_mini_array_cache
@@ -913,10 +932,7 @@ cacheflow_page_pool_put_netmem_to_recycle_ring(struct cacheflow_page_pool *pool,
 		}
 
 		if (unlikely(!stub->mini_array_cache_count)) {
-			stub->mini_array_cache_count = kmem_cache_alloc_bulk(
-				netmem_mini_array_cache, GFP_ATOMIC,
-				CACHEFLOW_TH_EMPTY_MINI_ARRAY_CACHE_SIZE,
-				(void **)stub->mini_array_cache);
+			stub->mini_array_cache_count = cacheflow_page_pool_alloc_empty_mini_array_bulk(stub->mini_array_cache, CACHEFLOW_TH_EMPTY_MINI_ARRAY_CACHE_SIZE, GFP_ATOMIC);
 
 			for (i = 0; i < stub->mini_array_cache_count; i++) {
 				memset(stub->mini_array_cache[i], 0,
@@ -1243,6 +1259,9 @@ static int __init netmem_bulk_cache_init(void)
 	netmem_mini_array_cache = kmem_cache_create(
 		"netmem_bulk_cache", sizeof(struct netmem_mini_array), 0,
 		SLAB_HWCACHE_ALIGN | SLAB_PANIC, NULL);
+
+	netmem_empty_mini_array_global_cache.count = kmem_cache_alloc_bulk(netmem_mini_array_cache, GFP_KERNEL, CF_PP_EMPTY_MINI_ARRAY_GLBOAL_CACHE_SIZE, (void **)netmem_empty_mini_array_global_cache.array);
+	spin_lock_init(&netmem_empty_mini_array_global_cache.lock);
 	return 0;
 }
 
