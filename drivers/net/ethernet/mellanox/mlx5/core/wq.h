@@ -134,6 +134,11 @@ static inline void mlx5_wq_cyc_pop(struct mlx5_wq_cyc *wq)
 	wq->cur_sz--;
 }
 
+static inline void mlx5_wq_cyc_pop_n(struct mlx5_wq_cyc *wq, u16 n)
+{
+	wq->cur_sz -= n;
+}
+
 static inline void mlx5_wq_cyc_update_db_record(struct mlx5_wq_cyc *wq)
 {
 	*wq->db = cpu_to_be32(wq->wqe_ctr);

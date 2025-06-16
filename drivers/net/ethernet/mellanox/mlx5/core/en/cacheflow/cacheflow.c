@@ -818,6 +818,7 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 
 	c->th_array = th;
 	cpumask_clear(&c->notify_cpu_set);
+	cpumask_clear(&c->cqes_cpu_set);
 	for_each_possible_cpu(cpu) {
 		mlx5e_cacheflow_th_init(&c->th_array[cpu], cpu, c, &c->rq);
 		netif_napi_add(netdev, &c->th_array[cpu].napi,

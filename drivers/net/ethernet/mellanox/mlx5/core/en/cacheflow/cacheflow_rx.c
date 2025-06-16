@@ -31,7 +31,8 @@ static int mlx5e_cacheflow_get_cpu(u32 hash)
 }
 
 static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
-					  struct mlx5_cqe64 *cqe)
+					  struct mlx5_cqe64 *cqe,
+					  struct mlx5e_cacheflow_cqe *cacheflow_cqe)
 {
 	struct mlx5e_cacheflow *cacheflow =
 		container_of(rq, struct mlx5e_cacheflow, rq);
@@ -40,9 +41,6 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
 	struct page **wi;
 	u32 cqe_bcnt;
 	u16 ci;
-	int tcpu;
-	struct mlx5e_cacheflow_th *th;
-	struct mlx5e_cacheflow_cqe *cacheflow_cqe;
 	u64 cacheflow_id = 0;
 
 	WARN_ON(rq->wqe.info.log_num_frags != 0);
@@ -51,23 +49,6 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
 	ci = mlx5_wq_cyc_ctr2ix(wq, be16_to_cpu(cqe->wqe_counter));
 	wi = &rq->wqe.frags[ci];
 	cqe_bcnt = be32_to_cpu(cqe->byte_cnt);
-
-	if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
-		rq->stats->wqe_err++;
-		pr_info("cacheflow: wqe error, op_code=%d\n",
-			get_cqe_opcode(cqe));
-		goto wq_cyc_pop;
-	}
-	tcpu = mlx5e_cacheflow_get_cpu(be32_to_cpu(cqe->rss_hash_result));
-	th = &cacheflow->th_array[tcpu];
-
-	cacheflow_cqe = item_ring_reserve(th->cqe_ring);
-
-	if (unlikely(!cacheflow_cqe)) {
-		pr_err("cacheflow: kfifo to core %d is full\n", tcpu);
-		th->missed++;
-		goto wq_cyc_pop;
-	}
 
 	if (cacheflow->rq_tracker) {		
 		cacheflow_id = mlx5e_cacheflow_rq_tracker_update(cacheflow->rq_tracker,						  
@@ -81,20 +62,12 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
 	cacheflow_cqe->cqe.cacheflow.page_addr_low = (u64)(*wi) & 0xffffffff;
 
 	trace_skb_cacheflow_memory_location(page_to_netmem(*wi), NETMEM_LOCATION_NAPI);
-	trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, *wi,
-				     tcpu);
+	// trace_mlx5e_cacheflow_bh_cqe(rq->ix, cqe_bcnt, *wi,
+				//      tcpu);
 	*wi = NULL;
-
-	item_ring_submit(th->cqe_ring);
-	th->inserted++;
-
-	__cpumask_set_cpu(tcpu, &cacheflow->notify_cpu_set);
 
 	stats->packets++;
 	stats->bytes += cqe_bcnt;
-
-wq_cyc_pop:
-	mlx5_wq_cyc_pop(wq);
 }
 
 static noinline int mlx5e_cacheflow_bh_poll(struct mlx5e_cacheflow *c,
@@ -104,22 +77,63 @@ static noinline int mlx5e_cacheflow_bh_poll(struct mlx5e_cacheflow *c,
 	struct mlx5e_cq *cq = &c->rq.cq;
 	struct mlx5_cqwq *cqwq = &cq->wq;
 	struct mlx5_cqe64 *cqe;
-	int cpu, work_done = 0;
+	struct mlx5e_cacheflow_cqe *cacheflow_cqes;
+
+	int cpu, work_done = 0, tcpu, n, i, j;
 	u64 current_time;
 
 	if (unlikely(!test_bit(MLX5E_RQ_STATE_ENABLED, &rq->state)))
 		return 0;
 
 	while (work_done < budget && (cqe = mlx5_cqwq_get_cqe(cqwq))) {
-		// it's almostly correct since cqes are packed on pages.
-		prefetch(cqe + 1);
-		prefetch(cqe + 2);
-		prefetch(cqe + 3);
-
 		mlx5_cqwq_pop(cqwq);
-		mlx5e_cacheflow_handle_rx_cqe(rq, cqe);
 		work_done++;
+
+		if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
+			rq->stats->wqe_err++;
+			pr_info("cacheflow: wqe error, op_code=%d\n",
+				get_cqe_opcode(cqe));
+			continue;
+		}
+
+		tcpu = mlx5e_cacheflow_get_cpu(be32_to_cpu(cqe->rss_hash_result));
+
+		if (unlikely(tcpu >= CACHEFLOW_MAX_CPU_NUM || c->cqes_nums[tcpu] >= CACHEFLOW_MAX_BUDGET)) {
+			rq->stats->wqe_err++;
+			pr_info("invalide dispatch cpu=%d, cqe_nums=%d\n", tcpu, c->cqes_nums[tcpu]);
+			continue;
+		}
+
+		__cpumask_set_cpu(tcpu, &c->notify_cpu_set);
+		__cpumask_set_cpu(tcpu, &c->cqes_cpu_set);
+		c->cqes[tcpu][c->cqes_nums[tcpu]++] = cqe;
 	}
+
+	for_each_cpu(cpu, &c->cqes_cpu_set) {
+		n = item_ring_reserve_n(c->th_array[cpu].cqe_ring, c->cqes_nums[cpu], (void **)&cacheflow_cqes);
+		for (i = 0; i < n; i++) {
+			mlx5e_cacheflow_handle_rx_cqe(rq, c->cqes[cpu][i], cacheflow_cqes + i);
+			c->th_array[cpu].inserted++;
+		}
+		item_ring_submit_n(c->th_array[cpu].cqe_ring, n);
+
+		if (n < c->cqes_nums[cpu]) {
+			n += item_ring_reserve_n(c->th_array[cpu].cqe_ring, c->cqes_nums[cpu] - n, (void **)&cacheflow_cqes);
+			for (j = 0; i < n; i++, j++) {
+				mlx5e_cacheflow_handle_rx_cqe(rq, c->cqes[cpu][i], cacheflow_cqes + j);
+			}
+			item_ring_submit_n(c->th_array[cpu].cqe_ring, j);
+		}
+
+		for (i = n; i < c->cqes_nums[cpu]; i++) {
+			pr_info("cacheflow: missed cqe, cpu=%d\n", cpu);
+			c->th_array[cpu].missed++;
+		}
+		c->cqes_nums[cpu] = 0;
+	}
+	cpumask_clear(&c->cqes_cpu_set);
+
+	mlx5_wq_cyc_pop_n(&rq->wqe.wq, work_done);
 
 	if (work_done == 0)
 		return 0;

@@ -59,6 +59,9 @@ struct mlx5e_cacheflow_rq {
 	cqe_ts_to_ns ptp_cyc2time;
 };
 
+#define CACHEFLOW_MAX_BUDGET 64
+#define CACHEFLOW_MAX_CPU_NUM 32
+
 struct mlx5e_cacheflow {
 	struct mlx5e_cacheflow_rq rq;
 
@@ -71,7 +74,12 @@ struct mlx5e_cacheflow {
 
 	struct mlx5e_ch_stats *stats;
 	struct mlx5e_cacheflow_th *th_array;
+
 	cpumask_t notify_cpu_set;
+	cpumask_t cqes_cpu_set;
+	struct mlx5_cqe64 *cqes[CACHEFLOW_MAX_CPU_NUM][CACHEFLOW_MAX_BUDGET];
+	int cqes_nums[CACHEFLOW_MAX_CPU_NUM];
+
 	/* control */
 	struct mlx5e_priv *priv;
 	struct mlx5_core_dev *mdev;
