@@ -621,23 +621,18 @@ netmem_ref cacheflow_page_pool_alloc_netmem(struct cacheflow_page_pool *pool,
 	netmem_ref netmem = 0;
 	struct netmem_mini_array *mini_array;
 
-	if (likely(pool->alloc.partial_array)) {
-#ifdef CONFIG_NET_CACHEFLOW_DEBUG
-		if (unlikely(pool->alloc.partial_array->count == 0))
-			BUG();
-#endif
-		netmem = pool->alloc.partial_array->array[--pool->alloc.partial_array->count];
-		cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_ARRAY, PAGE_POOL_ALLOC);
-
-		if (pool->alloc.partial_array->count == 0) {
-			cacheflow_page_pool_put_empty_mini_array(pool, (struct netmem_mini_array *)pool->alloc.partial_array);
-			pool->alloc.partial_array = NULL;
-		}
-
-		return netmem;
+	if (unlikely(pool->alloc.partial_array == NULL)) {
+		return 0;
 	}
 
+	if (likely(pool->alloc.partial_array->count > 0)) {
+		netmem = pool->alloc.partial_array->array[--pool->alloc.partial_array->count];
+		cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_ARRAY, PAGE_POOL_ALLOC);
+		return netmem;
+	} 
+
 	if (likely(mini_array = cacheflow_page_pool_get_full_mini_array(pool, gfp))) {
+		cacheflow_page_pool_put_empty_mini_array(pool, (struct netmem_mini_array *)pool->alloc.partial_array);
 		netmem = mini_array->array[CF_PP_MINI_ARRAY_SIZE - 1];
 		cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_ARRAY, PAGE_POOL_ALLOC);
 		pool->alloc.partial_array = (struct netmem_partial_mini_array *)mini_array;
@@ -773,8 +768,7 @@ cacheflow_page_pool_recycle_in_cache(netmem_ref netmem,
 	struct netmem_mini_array *mini_array;
 
 	if (unlikely(pool->alloc.partial_array == NULL)) {
-		pool->alloc.partial_array = (struct netmem_partial_mini_array *)cacheflow_page_pool_get_empty_mini_array(pool);
-		pool->alloc.partial_array->count = 0;
+		return false;
 	}
 
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
@@ -787,7 +781,8 @@ cacheflow_page_pool_recycle_in_cache(netmem_ref netmem,
 		mini_array = (struct netmem_mini_array *)pool->alloc.partial_array;
 		mini_array->array[CF_PP_MINI_ARRAY_SIZE - 1] = netmem;
 		cacheflow_page_pool_push_full_mini_array(pool, mini_array);
-		pool->alloc.partial_array = NULL;
+		pool->alloc.partial_array = (struct netmem_partial_mini_array *)cacheflow_page_pool_get_empty_mini_array(pool);
+		pool->alloc.partial_array->count = 0;
 	} else {
 		pool->alloc.partial_array->array[pool->alloc.partial_array->count++] = netmem;
 	}
@@ -1071,9 +1066,26 @@ cacheflow_page_pool_empty_mini_array(struct cacheflow_page_pool *pool,
 static void
 cacheflow_page_pool_empty_alloc_cache_once(struct cacheflow_page_pool *pool)
 {
+	int i;
 	struct netmem_mini_array *mini_array;
+
 	if (pool->destroy_cnt)
 		return;
+	
+	if (pool->alloc.partial_array) {
+		cacheflow_page_pool_account_usages(pool, pool->alloc.partial_array->array,
+						pool->alloc.partial_array->count,
+						PAGE_POOL_ARRAY,
+						PAGE_POOL_UNALLOC);
+
+		for (i = 0; i < pool->alloc.partial_array->count; i++) {
+			cacheflow_page_pool_return_page(pool, pool->alloc.partial_array->array[i]);
+			pool->alloc.partial_array->array[i] = 0;
+		}
+		pool->alloc.partial_array->count = 0;
+		cacheflow_page_pool_put_empty_mini_array(pool, (struct netmem_mini_array *)pool->alloc.partial_array);
+		pool->alloc.partial_array = NULL;
+	}
 
 	/* Empty alloc cache, assume caller made sure this is
 	 * no-longer in use, and page_pool_alloc_pages() cannot be
