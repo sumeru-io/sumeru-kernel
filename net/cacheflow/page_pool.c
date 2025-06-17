@@ -928,7 +928,17 @@ cacheflow_page_pool_put_netmem_to_recycle_ring(struct cacheflow_page_pool *pool,
 		if (unlikely(ptr_ring_produce_any(
 			    &pool->recycle_ring,
 			    (__force void *)mini_array))) {
-			BUG();
+			for (i = 0; i < CF_PP_MINI_ARRAY_SIZE; i++) {
+				atomic_inc(&pool->oob_recycle_cnt);
+				netmem = mini_array->array[i];
+				trace_cacheflow_page_pool_page_move(
+					pool, netmem, PAGE_POOL_ALLOC, PAGE_POOL_UNALLOC,
+					pool->allocated_pages, pool->array_pages,
+					pool->ring_pages);
+				cacheflow_page_pool_return_page(pool, netmem);
+			}
+			kmem_cache_free(netmem_mini_array_cache, mini_array);
+			stub->mini_array = NULL;
 		}
 
 		if (unlikely(!stub->mini_array_cache_count)) {
