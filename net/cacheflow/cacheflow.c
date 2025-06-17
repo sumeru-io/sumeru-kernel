@@ -35,7 +35,7 @@ int cacheflow_beta __read_mostly = 1;
 int cacheflow_schedule __read_mostly;
 
 int cacheflow_ipi_packet_thresh __read_mostly = 16;
-int cacheflow_ipi_usec_thresh __read_mostly = 128;
+int cacheflow_ipi_usec_thresh __read_mostly = 64;
 int cacheflow_elephant_flow_thresh __read_mostly = 256;
 
 int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)

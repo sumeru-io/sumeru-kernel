@@ -89,6 +89,10 @@ static noinline int mlx5e_cacheflow_bh_poll(struct mlx5e_cacheflow *c,
 		mlx5_cqwq_pop(cqwq);
 		work_done++;
 
+		prefetch(cqe + 1);
+		prefetch(cqe + 2);
+		prefetch(cqe + 3);
+
 		if (unlikely(MLX5E_RX_ERR_CQE(cqe))) {
 			rq->stats->wqe_err++;
 			pr_info("cacheflow: wqe error, op_code=%d\n",
@@ -97,12 +101,6 @@ static noinline int mlx5e_cacheflow_bh_poll(struct mlx5e_cacheflow *c,
 		}
 
 		tcpu = mlx5e_cacheflow_get_cpu(be32_to_cpu(cqe->rss_hash_result));
-
-		if (unlikely(tcpu >= CACHEFLOW_MAX_CPU_NUM || c->cqes_nums[tcpu] >= CACHEFLOW_MAX_BUDGET)) {
-			rq->stats->wqe_err++;
-			pr_info("invalide dispatch cpu=%d, cqe_nums=%d\n", tcpu, c->cqes_nums[tcpu]);
-			continue;
-		}
 
 		__cpumask_set_cpu(tcpu, &c->notify_cpu_set);
 		__cpumask_set_cpu(tcpu, &c->cqes_cpu_set);
@@ -130,8 +128,8 @@ static noinline int mlx5e_cacheflow_bh_poll(struct mlx5e_cacheflow *c,
 			c->th_array[cpu].missed++;
 		}
 		c->cqes_nums[cpu] = 0;
+		__cpumask_clear_cpu(cpu, &c->cqes_cpu_set);
 	}
-	cpumask_clear(&c->cqes_cpu_set);
 
 	mlx5_wq_cyc_pop_n(&rq->wqe.wq, work_done);
 
@@ -146,10 +144,8 @@ static noinline int mlx5e_cacheflow_bh_poll(struct mlx5e_cacheflow *c,
 	current_time = ktime_to_us(ktime_get());
 
 	for_each_cpu(cpu, &c->notify_cpu_set) {
-		if ((current_time - c->th_array[cpu].last_scheduled_time >
-		     get_cacheflow_ipi_usec_thresh()) ||
-		    (item_ring_items_available(c->th_array[cpu].cqe_ring) >
-		     get_cacheflow_ipi_packet_thresh())) {
+		if (current_time - c->th_array[cpu].last_scheduled_time >
+		    get_cacheflow_ipi_usec_thresh()) {
 			if (!cmpxchg(&c->th_array[cpu].ipi_scheduled, 0, 1)) {
 				smp_call_function_single_async(
 					cpu, &c->th_array[cpu].csd);
