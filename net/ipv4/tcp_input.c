@@ -837,6 +837,9 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 	int alpha = READ_ONCE(cacheflow_alpha);
 	int cacheflow_supported = sk->sk_route_caps & NETIF_F_CACHEFLOW;
 
+	if (!is_cacheflow_steer_enabled())
+		return;
+
 	if (unlikely(!cacheflow_supported))
 		return;
 
