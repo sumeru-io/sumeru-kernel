@@ -686,7 +686,7 @@ static int mlx5e_build_rq_frags_info(struct mlx5_core_dev *mdev,
 				     u32 *xdp_frag_size)
 {
 	u32 byte_count = MLX5E_SW2HW_MTU(params, params->sw_mtu);
-	int frag_size_max = params->cacheflow ? 1 << order_base_2(MLX5E_SW2HW_MTU(params, params->sw_mtu)) : DEFAULT_FRAG_SIZE;
+	int frag_size_max = params->cacheflow ? 1 << order_base_2(SKB_HEAD_ALIGN(MLX5E_SW2HW_MTU(params, params->sw_mtu))) : DEFAULT_FRAG_SIZE;
 	int first_frag_size_max;
 	u32 buf_size = 0;
 	u16 headroom;
@@ -757,6 +757,11 @@ static int mlx5e_build_rq_frags_info(struct mlx5_core_dev *mdev,
 		i++;
 	}
 	info->num_frags = i;
+
+	if (params->cacheflow && info->num_frags != 1) {
+		mlx5_core_err(mdev, "cacheflow requires 1 fragment, got %d\n", info->num_frags);
+		return -EINVAL;
+	}
 
 	/* The last fragment of WQE with index 2*N may share the page with the
 	 * first fragment of WQE with index 2*N+1 in certain cases. If WQE 2*N+1

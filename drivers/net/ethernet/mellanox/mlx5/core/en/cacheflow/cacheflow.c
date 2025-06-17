@@ -367,7 +367,7 @@ static int mlx5e_cacheflow_alloc_rq(struct mlx5e_params *params,
 	/* Create a page_pool and register it with rxq */
 	struct cacheflow_page_pool_params pp_params = { 0 };
 
-	pp_params.order = order_base_2(max(MLX5E_SW2HW_MTU(params, params->sw_mtu), PAGE_SIZE)) - PAGE_SHIFT;
+	pp_params.order = order_base_2(max(SKB_HEAD_ALIGN(MLX5E_SW2HW_MTU(params, params->sw_mtu)), PAGE_SIZE)) - PAGE_SHIFT;
 	pp_params.pool_size = 4096;
 	pp_params.nid = node;
 	pp_params.dev = rq->pdev;
