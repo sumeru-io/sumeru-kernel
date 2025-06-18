@@ -79,6 +79,10 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 		mark = ((u64)sock_qlen * rtt * 12500) >
 			((u64)remaining_pages * tcp_sk(sk)->mss_cache * drain_rate * cacheflow_beta);
 		break;
+	case 5:
+		mark = ((u64)sock_qlen * rtt * 12500) >
+			((((u64)remaining_pages * tcp_sk(sk)->mss_cache * drain_rate * cacheflow_beta) >> 16) * (u64)get_random_u32()) >> 16;
+		break;
 	default:
 		pr_err("cacheflow: unknown AQM mode: %d\n",
 		       READ_ONCE(cacheflow_aqm));
