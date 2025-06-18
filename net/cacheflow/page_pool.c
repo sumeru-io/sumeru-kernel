@@ -40,26 +40,30 @@ static struct netmem_empty_mini_array_global_cache netmem_empty_mini_array_globa
 
 int cacheflow_page_pool_alloc_empty_mini_array_bulk(struct netmem_mini_array **array, int count, gfp_t gfp)
 {
+	spin_lock(&netmem_empty_mini_array_global_cache.lock);
+
 	if (likely(netmem_empty_mini_array_global_cache.count >= count)) {
-		spin_lock(&netmem_empty_mini_array_global_cache.lock);
 		netmem_empty_mini_array_global_cache.count -= count;
 		memcpy(array, netmem_empty_mini_array_global_cache.array + netmem_empty_mini_array_global_cache.count, count * sizeof(struct netmem_mini_array*));
 		spin_unlock(&netmem_empty_mini_array_global_cache.lock);
 		return count;
 	}
 
+	spin_unlock(&netmem_empty_mini_array_global_cache.lock);
 	return kmem_cache_alloc_bulk(netmem_mini_array_cache, gfp, count, (void **)array);
 }
 
 void cacheflow_page_pool_free_empty_mini_array_bulk(struct netmem_mini_array **array, int count)
 {
+	spin_lock(&netmem_empty_mini_array_global_cache.lock);
 	if (likely(netmem_empty_mini_array_global_cache.count + count <= CF_PP_EMPTY_MINI_ARRAY_GLBOAL_CACHE_SIZE)) {
-		spin_lock(&netmem_empty_mini_array_global_cache.lock);
 		memcpy(netmem_empty_mini_array_global_cache.array + netmem_empty_mini_array_global_cache.count, array, count * sizeof(struct netmem_mini_array*));
 		netmem_empty_mini_array_global_cache.count += count;
 		spin_unlock(&netmem_empty_mini_array_global_cache.lock);
 		return;
 	}
+
+	spin_unlock(&netmem_empty_mini_array_global_cache.lock);
 	kmem_cache_free_bulk(netmem_mini_array_cache, count, (void **)array);
 }
 
