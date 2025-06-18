@@ -90,8 +90,7 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 	}
 
 	trace_cacheflow_mark(__sock_gen_cookie(sk), tp->cacheflow_id, allocated_pages, free_pages, thresh,
-			     sock_recv_len, sock_backlog_len, rtt, drain_rate,
-			     recv_rate, mark);
+			     sock_recv_len, sock_backlog_len, rtt, tp, mark);
 
 	return mark;
 }

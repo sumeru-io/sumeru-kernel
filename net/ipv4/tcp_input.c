@@ -901,6 +901,9 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 						tp->rcv_nxt - tp->copied_seq, sk->sk_backlog.len);
 		}
 
+		tp->rcv_rate_est.latest_recv_rate = received_bytes;
+		tp->rcv_rate_est.latest_copied_rate = copied_bytes;
+
 		if (tp->rcv_rate_est.recv_rate == 0) {
 			tp->rcv_rate_est.recv_rate = received_bytes;
 		} else {
