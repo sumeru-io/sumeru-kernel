@@ -5149,7 +5149,7 @@ static void tcp_data_queue_ofo(struct sock *sk, struct sk_buff *skb)
 		return;
 	}
 
-	if (skb_shinfo(skb)->ms_timestamp.enqueue_timestamp == 0) {
+	if (tracepoint_enabled(skb_sock_timestamp) && skb_shinfo(skb)->ms_timestamp.enqueue_timestamp == 0) {
 		skb_shinfo(skb)->ms_timestamp.enqueue_timestamp = ktime_get_real_ns();
 	}
 
@@ -5288,7 +5288,7 @@ static int __must_check tcp_queue_rcv(struct sock *sk, struct sk_buff *skb,
 	int eaten;
 	struct sk_buff *tail = skb_peek_tail(&sk->sk_receive_queue);
 
-	if (skb_shinfo(skb)->ms_timestamp.enqueue_timestamp == 0) {
+	if (tracepoint_enabled(skb_sock_timestamp) && skb_shinfo(skb)->ms_timestamp.enqueue_timestamp == 0) {
 		skb_shinfo(skb)->ms_timestamp.enqueue_timestamp = ktime_get_real_ns();
 	}
 

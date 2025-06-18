@@ -2023,7 +2023,7 @@ bool tcp_add_backlog(struct sock *sk, struct sk_buff *skb,
 	u64 limit;
 	int delta;
 
-	if (skb_shinfo(skb)->ms_timestamp.enqueue_timestamp == 0) {
+	if (tracepoint_enabled(skb_sock_timestamp) && skb_shinfo(skb)->ms_timestamp.enqueue_timestamp == 0) {
 		skb_shinfo(skb)->ms_timestamp.enqueue_timestamp = ktime_get_real_ns();
 	}
 
