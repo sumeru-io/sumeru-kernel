@@ -1169,7 +1169,7 @@ void tcp_release_cb(struct sock *sk)
 		__sock_put(sk);
 	}
 	if ((flags & TCPF_ACK_DEFERRED) && inet_csk_ack_scheduled(sk))
-		tcp_send_ack(sk, ACK_REASON_DELAY_EXPIRED);
+		tcp_send_ack(sk, ACK_REASON_DEFERRED);
 }
 EXPORT_SYMBOL(tcp_release_cb);
 

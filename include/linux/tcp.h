@@ -35,7 +35,8 @@ typedef enum enum_tcp_ack_reason {
 	ACK_REASON_DCTCP_BYPASS_TIMER = 10,
 	ACK_REASON_DCTCP_CE_CHANGE = 11,
 	ACK_REASON_DCTCP_CWR = 12,
-	ACK_REASON_NORMAL = 13,
+	ACK_REASON_DEFERRED = 13,
+	ACK_REASON_NORMAL = 14,
 } enum_tcp_ack_reason;
 
 static inline struct tcphdr *tcp_hdr(const struct sk_buff *skb)
