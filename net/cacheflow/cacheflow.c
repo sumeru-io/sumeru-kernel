@@ -27,7 +27,6 @@ int cacheflow_stack_cores_num __read_mostly;
 
 int cacheflow_aqm __read_mostly;
 int cacheflow_thresh __read_mostly = 2048;
-int cacheflow_quantum __read_mostly = 9000;
 
 int cacheflow_alpha __read_mostly = 2;
 int cacheflow_beta __read_mostly = 1;
@@ -78,7 +77,7 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 	case 4:
 		// Based on the paper "ABM: Active Buffer Management in Datacenters [SIGCOMM '22]"
 		mark = ((u64)sock_qlen * rtt * 12500) >
-			((u64)remaining_pages * cacheflow_quantum * drain_rate * cacheflow_beta);
+			((u64)remaining_pages * tcp_sk(sk)->mss_cache * drain_rate * cacheflow_beta);
 		break;
 	default:
 		pr_err("cacheflow: unknown AQM mode: %d\n",
