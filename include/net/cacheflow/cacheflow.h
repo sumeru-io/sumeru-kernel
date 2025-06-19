@@ -25,6 +25,8 @@ extern int cacheflow_thresh;
 
 extern int cacheflow_schedule;
 
+extern int cacheflow_ack_mod;
+
 extern int cacheflow_elephant_flow_thresh;
 
 extern int cacheflow_ipi_packet_thresh;
@@ -42,6 +44,7 @@ enum {
 
 enum sk_cacheflow_flag {
 	SK_CACHEFLOW_ELEPHANT_FLOW,
+	SK_CACHEFLOW_ACK_MODERATE,
 	SK_CACHEFLOW_UNSCHED_FLOW,
 	SK_CACHEFLOW_NUM_FLAGS
 };

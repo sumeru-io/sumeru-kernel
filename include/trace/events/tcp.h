@@ -740,7 +740,8 @@ TRACE_EVENT(tcp_ack_event,
 		__field(u32, rcv_nxt)
 		__field(u32, lrcv_nxt)
 		__field(u32, rcv_wup)
-		__field(u32, ecn_flags)
+		__field(u8, pending_flags)
+		__field(u8, ecn_flags)
 		__field(int, reason)
 	),
 
@@ -749,13 +750,14 @@ TRACE_EVENT(tcp_ack_event,
 		__entry->rcv_nxt = rcv_nxt;
 		__entry->lrcv_nxt = tcp_sk(sk)->rcv_nxt;
 		__entry->rcv_wup = tcp_sk(sk)->rcv_wup;
+		__entry->pending_flags = inet_csk(sk)->icsk_ack.pending;
 		__entry->ecn_flags = tcp_sk(sk)->ecn_flags;
 		__entry->reason = reason;
 	),
 
-	TP_printk("sock_cookie=%llu rcv_nxt=%u lrcv_nxt=%u rcv_wup=%u ecn_flags=%u reason=%d",
+	TP_printk("sock_cookie=%llu rcv_nxt=%u lrcv_nxt=%u rcv_wup=%u pending_flags=%u ecn_flags=%u reason=%d",
 		  __entry->sock_cookie, __entry->rcv_nxt, __entry->lrcv_nxt,
-		  __entry->rcv_wup,
+		  __entry->rcv_wup, __entry->pending_flags,
 		  __entry->ecn_flags, __entry->reason)
 );
 

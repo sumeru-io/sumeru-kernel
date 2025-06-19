@@ -359,7 +359,7 @@ static void tcp_ecn_accept_cwr(struct sock *sk, const struct sk_buff *skb)
 		 * cwnd may be very low (even just 1 packet), so we should ACK
 		 * immediately.
 		 */
-		if ((TCP_SKB_CB(skb)->seq != TCP_SKB_CB(skb)->end_seq) && !CACHEFLOW_SK_GET_FLAG(tcp_sk(sk), SK_CACHEFLOW_ELEPHANT_FLOW)) {
+		if ((TCP_SKB_CB(skb)->seq != TCP_SKB_CB(skb)->end_seq) && !CACHEFLOW_SK_GET_FLAG(tcp_sk(sk), SK_CACHEFLOW_ACK_MODERATE)) {
 			inet_csk(sk)->icsk_ack.pending |= ICSK_ACK_NOW;
 			tcp_sk(sk)->cacheflow_ack_reason = ACK_REASON_DCTCP_CWR;
 		}
@@ -885,6 +885,7 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 					rate);
 			}
 			CACHEFLOW_SK_SET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW, 1);
+			CACHEFLOW_SK_SET_FLAG(tp, SK_CACHEFLOW_ACK_MODERATE, cacheflow_ack_mod);
 			tp->cacheflow_id = atomic_inc_return(&cacheflow_id_counter);
 			tp->scaling_ratio = (1 << (TCP_RMEM_TO_WIN_SCALE - 1));
 		}
@@ -5912,6 +5913,7 @@ static void __tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 	      * If application uses SO_RCVLOWAT, we want send ack now if
 	      * we have not received enough bytes to satisfy the condition.
 	      */
+	    !CACHEFLOW_SK_GET_FLAG(tp, SK_CACHEFLOW_ACK_MODERATE) &&
 	    (tp->rcv_nxt - tp->copied_seq < sk->sk_rcvlowat ||
 	     __tcp_select_window(sk) >= tp->rcv_wnd)) {
 		if (__tcp_ack_defer(sk))

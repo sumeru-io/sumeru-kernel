@@ -33,6 +33,8 @@ int cacheflow_beta __read_mostly = 1;
 
 int cacheflow_schedule __read_mostly;
 
+int cacheflow_ack_mod __read_mostly;
+
 int cacheflow_ipi_packet_thresh __read_mostly = 16;
 int cacheflow_ipi_usec_thresh __read_mostly = 64;
 int cacheflow_elephant_flow_thresh __read_mostly = 256;

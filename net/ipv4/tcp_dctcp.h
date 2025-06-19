@@ -30,7 +30,7 @@ static inline void dctcp_ece_ack_update(struct sock *sk, enum tcp_ca_event evt,
 			dctcp_ece_ack_cwr(sk, *ce_state);
 			__tcp_send_ack(sk, *prior_rcv_nxt, ACK_REASON_DCTCP_BYPASS_TIMER);
 		}
-		if (!CACHEFLOW_SK_GET_FLAG(tcp_sk(sk), SK_CACHEFLOW_ELEPHANT_FLOW)) {
+		if (!CACHEFLOW_SK_GET_FLAG(tcp_sk(sk), SK_CACHEFLOW_ACK_MODERATE)) {
 			inet_csk(sk)->icsk_ack.pending |= ICSK_ACK_NOW;
 			tcp_sk(sk)->cacheflow_ack_reason = ACK_REASON_DCTCP_CE_CHANGE;
 		}

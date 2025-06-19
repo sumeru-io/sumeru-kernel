@@ -257,12 +257,16 @@ EXPORT_SYMBOL(tcp_select_initial_window);
  * value can be stuffed directly into th->window for an outgoing
  * frame.
  */
-static u16 tcp_select_window(struct sock *sk)
+static u16 tcp_select_window(struct sock *sk, u32 rcv_nxt)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct net *net = sock_net(sk);
 	u32 old_win = tp->rcv_wnd;
 	u32 cur_win, new_win;
+
+	/* tp->rcv_wup <= rcv_nxt <= tp->rcv_nxt */
+	BUG_ON(after(rcv_nxt, tp->rcv_nxt));
+	BUG_ON(before(rcv_nxt, tp->rcv_wup));
 
 	/* Make the window 0 if we failed to queue the data because we
 	 * are out of memory.
@@ -292,8 +296,10 @@ static u16 tcp_select_window(struct sock *sk)
 		}
 	}
 
+	new_win += (tp->rcv_nxt - rcv_nxt);
+
 	tp->rcv_wnd = new_win;
-	tp->rcv_wup = tp->rcv_nxt;
+	tp->rcv_wup = rcv_nxt;
 
 	/* Make sure we do not exceed the maximum possible
 	 * scaled window.
@@ -1405,7 +1411,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	skb_shinfo(skb)->gso_type = sk->sk_gso_type;
 	if (likely(!(tcb->tcp_flags & TCPHDR_SYN))) {
-		th->window      = htons(tcp_select_window(sk));
+		th->window      = htons(tcp_select_window(sk, rcv_nxt));
 		tcp_ecn_send(sk, skb, th, tcp_header_size);
 	} else {
 		/* RFC1323: The window in SYN & SYN/ACK segments
