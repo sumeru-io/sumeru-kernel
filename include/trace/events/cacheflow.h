@@ -132,41 +132,39 @@ TRACE_EVENT(
 TRACE_EVENT(
 	cacheflow_rate_est,
 
-	TP_PROTO(const struct sock *sk, u64 sock_cookie, u64 rcv_rtt, u64 latest_rcv_rtt,
-		 u64 recv_bytes, u64 latest_recv_bytes, u64 copied_bytes, u64 latest_copied_bytes, u64 receive_queue, u64 backlog_queue),
+	TP_PROTO(const struct sock *sk, u64 sock_cookie),
 
-	TP_ARGS(sk, sock_cookie, rcv_rtt, latest_rcv_rtt, recv_bytes, latest_recv_bytes, copied_bytes, latest_copied_bytes, receive_queue, backlog_queue),
+	TP_ARGS(sk, sock_cookie),
 
 	TP_STRUCT__entry(
 		__field(const struct sock *, sk)
 		__field(u64, sock_cookie)
-		__field(u64, rcv_rtt)
-		__field(u64, latest_rcv_rtt)
-		__field(u64, recv_bytes)
-		__field(u64, latest_recv_bytes)
-		__field(u64, copied_bytes)
-		__field(u64, latest_copied_bytes)
-		__field(u64, receive_queue)
-		__field(u64, backlog_queue)
+		__field(u32, rcv_rtt)
+		__field(u32, smooth_recv_rate)
+		__field(u32, latest_recv_rate)
+		__field(u32, smooth_copied_rate)
+		__field(u32, latest_copied_rate)
+		__field(u32, smooth_ack_rate)
+		__field(u32, latest_ack_rate)
 	),
 
 	TP_fast_assign(
+		const struct tcp_sock *tp = tcp_sk(sk);
 		__entry->sk = sk;
 		__entry->sock_cookie = sock_cookie;
-		__entry->rcv_rtt = rcv_rtt;
-		__entry->latest_rcv_rtt = latest_rcv_rtt;
-		__entry->recv_bytes = recv_bytes;
-		__entry->latest_recv_bytes = latest_recv_bytes;
-		__entry->copied_bytes = copied_bytes;
-		__entry->latest_copied_bytes = latest_copied_bytes;
-		__entry->receive_queue = receive_queue;
-		__entry->backlog_queue = backlog_queue;
+		__entry->rcv_rtt = tp->rcv_rtt_est.rtt_us >> cacheflow_alpha;
+		__entry->smooth_recv_rate = tp->rcv_rate_est.recv_rate >> cacheflow_alpha;
+		__entry->latest_recv_rate = tp->rcv_rate_est.latest_recv_rate;
+		__entry->smooth_copied_rate = tp->rcv_rate_est.copied_rate >> cacheflow_alpha;
+		__entry->latest_copied_rate = tp->rcv_rate_est.latest_copied_rate;
+		__entry->smooth_ack_rate = tp->rcv_rate_est.ack_rate >> cacheflow_alpha;
+		__entry->latest_ack_rate = tp->rcv_rate_est.latest_ack_rate;
 	),
 
 	TP_printk(
-		"sk=%p sock_cookie=%llu rcv_rtt=%llu latest_rcv_rtt=%llu recv_bytes=%llu latest_recv_bytes=%llu copied_bytes=%llu latest_copied_bytes=%llu receive_queue=%llu backlog_queue=%llu",
-		__entry->sk, __entry->sock_cookie, __entry->rcv_rtt, __entry->latest_rcv_rtt,
-		__entry->recv_bytes, __entry->latest_recv_bytes, __entry->copied_bytes, __entry->latest_copied_bytes, __entry->receive_queue, __entry->backlog_queue
+		"sk=%p sock_cookie=%llu rcv_rtt=%llu smooth_recv_rate=%llu latest_recv_rate=%llu smooth_copied_rate=%llu latest_copied_rate=%llu smooth_ack_rate=%llu latest_ack_rate=%llu",
+		__entry->sk, __entry->sock_cookie, __entry->rcv_rtt, __entry->smooth_recv_rate, __entry->latest_recv_rate,
+		__entry->smooth_copied_rate, __entry->latest_copied_rate, __entry->smooth_ack_rate, __entry->latest_ack_rate
 	)
 );
 
@@ -219,10 +217,12 @@ TRACE_EVENT(
 		__field(u32, recv_qlen)
 		__field(u32, backlog_qlen)
 		__field(u32, rtt)
-		__field(u32, drain_rate)
-		__field(u32, recv_rate)
+		__field(u32, smooth_recv_rate)
 		__field(u32, latest_recv_rate)
+		__field(u32, smooth_copied_rate)
 		__field(u32, latest_copied_rate)
+		__field(u32, smooth_ack_rate)
+		__field(u32, latest_ack_rate)
 		__field(int, mark)
 	),
 
@@ -235,18 +235,21 @@ TRACE_EVENT(
 		__entry->recv_qlen = recv_qlen;
 		__entry->backlog_qlen = backlog_qlen;
 		__entry->rtt = rtt;
-		__entry->drain_rate = tp->rcv_rate_est.copied_rate >> cacheflow_alpha;
-		__entry->recv_rate = tp->rcv_rate_est.recv_rate >> cacheflow_alpha;
+		__entry->smooth_recv_rate = tp->rcv_rate_est.recv_rate >> cacheflow_alpha;
 		__entry->latest_recv_rate = tp->rcv_rate_est.latest_recv_rate;
+		__entry->smooth_copied_rate = tp->rcv_rate_est.copied_rate >> cacheflow_alpha;
 		__entry->latest_copied_rate = tp->rcv_rate_est.latest_copied_rate;
+		__entry->smooth_ack_rate = tp->rcv_rate_est.ack_rate >> cacheflow_alpha;
+		__entry->latest_ack_rate = tp->rcv_rate_est.latest_ack_rate;
 		__entry->mark = mark;
 	),
 
 	TP_printk(
-		"sock_cookie=%llu cacheflow_cookie=%u allocated_pages=%u free_pages=%u thresh=%u recv_qlen=%u backlog_qlen=%u rtt=%u drain_rate=%u recv_rate=%u latest_recv_rate=%u latest_copied_rate=%u mark=%d",
+		"sock_cookie=%llu cacheflow_cookie=%u allocated_pages=%u free_pages=%u thresh=%u recv_qlen=%u backlog_qlen=%u rtt=%u smooth_recv_rate=%u latest_recv_rate=%u smooth_copied_rate=%u latest_copied_rate=%u smooth_ack_rate=%u latest_ack_rate=%u mark=%d",
 		__entry->sock_cookie, __entry->cacheflow_cookie, __entry->allocated_pages, __entry->free_pages, __entry->thresh,
 		__entry->recv_qlen, __entry->backlog_qlen, __entry->rtt,
-		__entry->drain_rate, __entry->recv_rate, __entry->latest_recv_rate, __entry->latest_copied_rate, __entry->mark
+		__entry->smooth_recv_rate, __entry->latest_recv_rate, __entry->smooth_copied_rate, __entry->latest_copied_rate,
+		__entry->smooth_ack_rate, __entry->latest_ack_rate, __entry->mark
 	)
 );
 

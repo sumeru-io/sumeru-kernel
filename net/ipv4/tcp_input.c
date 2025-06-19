@@ -833,7 +833,7 @@ static void tcp_save_lrcv_flowlabel(struct sock *sk, const struct sk_buff *skb)
 static void tcp_rcv_rate_estimate(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	long delta, received_bytes, copied_bytes;
+	long delta, received_bytes, copied_bytes, ack_bytes;
 	int alpha = READ_ONCE(cacheflow_alpha);
 	int cacheflow_supported = sk->sk_route_caps & NETIF_F_CACHEFLOW;
 
@@ -847,6 +847,7 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 		tp->rcv_rate_est.mstamp = tp->tcp_mstamp;
 		tp->rcv_rate_est.rcv_seq = tp->rcv_nxt;
 		tp->rcv_rate_est.copied_seq = tp->copied_seq;
+		tp->rcv_rate_est.ack_seq = tp->rcv_wup;
 		return;
 	}
 
@@ -854,6 +855,7 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 	if (likely((tp->rcv_rtt_est.rtt_us) && delta > (tp->rcv_rtt_est.rtt_us >> 3))) {
 		received_bytes = tp->rcv_nxt - tp->rcv_rate_est.rcv_seq;
 		copied_bytes = tp->copied_seq - tp->rcv_rate_est.copied_seq;
+		ack_bytes = tp->rcv_wup - tp->rcv_rate_est.ack_seq;
 
 		if (!CACHEFLOW_SK_GET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW) && (received_bytes > delta * get_cacheflow_elephant_flow_thresh())) {
 			u64 rate = 8 * do_div(received_bytes, delta);
@@ -893,17 +895,15 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 		tp->rcv_rate_est.mstamp = tp->tcp_mstamp;
 		tp->rcv_rate_est.rcv_seq = tp->rcv_nxt;
 		tp->rcv_rate_est.copied_seq = tp->copied_seq;
-
-		if (CACHEFLOW_SK_GET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW)) {
-			trace_cacheflow_rate_est(sk, __sock_gen_cookie(sk),
-						tp->rcv_rtt_est.rtt_us >> alpha, delta,
-						tp->rcv_rate_est.recv_rate >> alpha, received_bytes,
-						tp->rcv_rate_est.copied_rate >> alpha, copied_bytes,
-						tp->rcv_nxt - tp->copied_seq, sk->sk_backlog.len);
-		}
+		tp->rcv_rate_est.ack_seq = tp->rcv_wup;
 
 		tp->rcv_rate_est.latest_recv_rate = received_bytes;
 		tp->rcv_rate_est.latest_copied_rate = copied_bytes;
+		tp->rcv_rate_est.latest_ack_rate = ack_bytes;
+
+		if (CACHEFLOW_SK_GET_FLAG(tp, SK_CACHEFLOW_ELEPHANT_FLOW)) {
+			trace_cacheflow_rate_est(sk, __sock_gen_cookie(sk));
+		}
 
 		if (tp->rcv_rate_est.recv_rate == 0) {
 			tp->rcv_rate_est.recv_rate = received_bytes;
@@ -917,6 +917,13 @@ static void tcp_rcv_rate_estimate(struct sock *sk)
 		} else {
 			copied_bytes -= (tp->rcv_rate_est.copied_rate >> alpha);
 			tp->rcv_rate_est.copied_rate = (u32)((long)tp->rcv_rate_est.copied_rate + copied_bytes);
+		}
+
+		if (tp->rcv_rate_est.ack_rate == 0) {
+			tp->rcv_rate_est.ack_rate = ack_bytes;
+		} else {
+			ack_bytes -= (tp->rcv_rate_est.ack_rate >> alpha);
+			tp->rcv_rate_est.ack_rate = (u32)((long)tp->rcv_rate_est.ack_rate + ack_bytes);
 		}
 
 		if (tp->rcv_rate_est.delta == 0) {

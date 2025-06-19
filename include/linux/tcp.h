@@ -365,10 +365,16 @@ struct tcp_sock {
 	struct {
 		u32	rcv_seq;
 		u32	copied_seq;
+		u32	ack_seq;
+
 		u32	recv_rate;
 		u32	copied_rate;
+		u32	ack_rate;
+
 		u32	latest_recv_rate;
 		u32	latest_copied_rate;
+		u32	latest_ack_rate;
+
 		u32	delta;
 		u64	mstamp;
 	} rcv_rate_est;
