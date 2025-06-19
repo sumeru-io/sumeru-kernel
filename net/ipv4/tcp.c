@@ -1509,6 +1509,8 @@ void __tcp_cleanup_rbuf(struct sock *sk, int copied)
 	}
 	if (time_to_ack)
 		tcp_send_ack(sk, ACK_REASON_DATA_COPIED);
+	else
+		trace_tcp_ack_event(sk, tcp_sk(sk)->rcv_nxt, ACK_ON_COPY_SKIP);
 }
 
 void tcp_cleanup_rbuf(struct sock *sk, int copied)

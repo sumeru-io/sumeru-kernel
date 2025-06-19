@@ -738,6 +738,8 @@ TRACE_EVENT(tcp_ack_event,
 	TP_STRUCT__entry(
 		__field(u64, sock_cookie)
 		__field(u32, rcv_nxt)
+		__field(u32, lrcv_nxt)
+		__field(u32, rcv_wup)
 		__field(u32, ecn_flags)
 		__field(int, reason)
 	),
@@ -745,12 +747,15 @@ TRACE_EVENT(tcp_ack_event,
 	TP_fast_assign(
 		__entry->sock_cookie = __sock_gen_cookie(sk);
 		__entry->rcv_nxt = rcv_nxt;
+		__entry->lrcv_nxt = tcp_sk(sk)->rcv_nxt;
+		__entry->rcv_wup = tcp_sk(sk)->rcv_wup;
 		__entry->ecn_flags = tcp_sk(sk)->ecn_flags;
 		__entry->reason = reason;
 	),
 
-	TP_printk("sock_cookie=%llu rcv_nxt=%u ecn_flags=%u reason=%d",
-		  __entry->sock_cookie, __entry->rcv_nxt,
+	TP_printk("sock_cookie=%llu rcv_nxt=%u lrcv_nxt=%u rcv_wup=%u ecn_flags=%u reason=%d",
+		  __entry->sock_cookie, __entry->rcv_nxt, __entry->lrcv_nxt,
+		  __entry->rcv_wup,
 		  __entry->ecn_flags, __entry->reason)
 );
 

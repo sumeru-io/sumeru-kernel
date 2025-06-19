@@ -4726,12 +4726,12 @@ void tcp_fin(struct sock *sk)
 		 * happens, we must ack the received FIN and
 		 * enter the CLOSING state.
 		 */
-		tcp_send_ack(sk, ACK_REASON_FIN_ACK);
+		tcp_send_ack(sk, ACK_REASON_PROTOCOL);
 		tcp_set_state(sk, TCP_CLOSING);
 		break;
 	case TCP_FIN_WAIT2:
 		/* Received a FIN -- send ACK and enter TIME_WAIT. */
-		tcp_send_ack(sk, ACK_REASON_FIN_ACK);
+		tcp_send_ack(sk, ACK_REASON_PROTOCOL);
 		tcp_time_wait(sk, TCP_TIME_WAIT, 0);
 		break;
 	default:
@@ -5887,6 +5887,16 @@ static inline void tcp_data_snd_check(struct sock *sk)
 	tcp_check_space(sk);
 }
 
+static bool __tcp_ack_defer(struct sock *sk)
+{
+	if (sock_owned_by_user_nocheck(sk) &&
+		READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_backlog_ack_defer)) {
+		set_bit(TCP_ACK_DEFERRED, &sk->sk_tsq_flags);
+		return true;
+	}
+	return false;
+}
+
 /*
  * Check if sending an ack is needed.
  */
@@ -5895,43 +5905,54 @@ static void __tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 	struct tcp_sock *tp = tcp_sk(sk);
 	unsigned long rtt, delay;
 
-	    /* More than one full frame received... */
-	if (((tp->rcv_nxt - tp->rcv_wup) > inet_csk(sk)->icsk_ack.rcv_mss &&
+	/* More than one full frame received... */
+	if ((tp->rcv_nxt - tp->rcv_wup) > inet_csk(sk)->icsk_ack.rcv_mss &&
 	     /* ... and right edge of window advances far enough.
 	      * (tcp_recvmsg() will send ACK otherwise).
 	      * If application uses SO_RCVLOWAT, we want send ack now if
 	      * we have not received enough bytes to satisfy the condition.
 	      */
-	     !CACHEFLOW_SK_GET_FLAG(tcp_sk(sk), SK_CACHEFLOW_ELEPHANT_FLOW) &&
 	    (tp->rcv_nxt - tp->copied_seq < sk->sk_rcvlowat ||
-	     __tcp_select_window(sk) >= tp->rcv_wnd)) ||
-	    /* We ACK each frame or... */
-	    tcp_in_quickack_mode(sk) ||
-	    /* Protocol state mandates a one-time immediate ACK */
-	    inet_csk(sk)->icsk_ack.pending & ICSK_ACK_NOW) {
+	     __tcp_select_window(sk) >= tp->rcv_wnd)) {
+		if (__tcp_ack_defer(sk))
+			goto noack;
+
+		tcp_send_ack(sk, ACK_REASON_NORMAL);
+		return;
+	}
+
+	/* We ACK each frame or... */
+	if (tcp_in_quickack_mode(sk)) {
+		if (__tcp_ack_defer(sk))
+			goto noack;
+
+		tcp_send_ack(sk, ACK_REASON_QUICKACK);
+		return;
+	}
+
+	/* Protocol state mandates a one-time immediate ACK */
+	if (inet_csk(sk)->icsk_ack.pending & ICSK_ACK_NOW) {
 		/* If we are running from __release_sock() in user context,
 		 * Defer the ack until tcp_release_cb().
 		 */
-		if (sock_owned_by_user_nocheck(sk) &&
-		    READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_backlog_ack_defer)) {
-			set_bit(TCP_ACK_DEFERRED, &sk->sk_tsq_flags);
-			return;
-		}
+		if (__tcp_ack_defer(sk))
+			goto noack;
 send_now:
-		tcp_send_ack(sk, tcp_in_quickack_mode(sk) ? ACK_REASON_QUICKACK : inet_csk(sk)->icsk_ack.pending & ICSK_ACK_NOW ? tcp_sk(sk)->cacheflow_ack_reason : ACK_REASON_NORMAL);
-
+		tcp_send_ack(sk, tcp_sk(sk)->cacheflow_ack_reason);
 		tcp_sk(sk)->cacheflow_ack_reason = 0;
 		return;
 	}
 
 	if (!ofo_possible || RB_EMPTY_ROOT(&tp->out_of_order_queue)) {
 		tcp_send_delayed_ack(sk);
-		return;
+		goto noack;
 	}
 
 	if (!tcp_is_sack(tp) ||
-	    tp->compressed_ack >= READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_comp_sack_nr))
+	    tp->compressed_ack >= READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_comp_sack_nr)) {
+		tcp_sk(sk)->cacheflow_ack_reason = ACK_REASON_DUPACK;
 		goto send_now;
+	}
 
 	if (tp->compressed_ack_rcv_nxt != tp->rcv_nxt) {
 		tp->compressed_ack_rcv_nxt = tp->rcv_nxt;
@@ -5939,11 +5960,12 @@ send_now:
 	}
 	if (tp->dup_ack_counter < TCP_FASTRETRANS_THRESH) {
 		tp->dup_ack_counter++;
+		tcp_sk(sk)->cacheflow_ack_reason = ACK_REASON_DUPACK;
 		goto send_now;
 	}
 	tp->compressed_ack++;
 	if (hrtimer_is_queued(&tp->compressed_ack_timer))
-		return;
+		goto noack;
 
 	/* compress ack timer : 5 % of rtt, but no more than tcp_comp_sack_delay_ns */
 
@@ -5958,6 +5980,8 @@ send_now:
 	hrtimer_start_range_ns(&tp->compressed_ack_timer, ns_to_ktime(delay),
 			       READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_comp_sack_slack_ns),
 			       HRTIMER_MODE_REL_PINNED_SOFT);
+noack:
+	trace_tcp_ack_event(sk, tcp_sk(sk)->rcv_nxt, ACK_ON_RECV_SKIP);
 }
 
 static inline void tcp_ack_snd_check(struct sock *sk)
