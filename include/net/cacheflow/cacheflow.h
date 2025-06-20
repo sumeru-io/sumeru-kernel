@@ -21,7 +21,9 @@ extern int cacheflow_stack_cores_num;
 extern int cacheflow_aqm;
 extern int cacheflow_alpha;
 extern int cacheflow_beta;
+
 extern int cacheflow_thresh;
+extern int cacheflow_target;
 
 extern int cacheflow_schedule;
 

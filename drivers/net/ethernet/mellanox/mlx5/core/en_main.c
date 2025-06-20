@@ -2891,9 +2891,10 @@ int mlx5e_open_channels(struct mlx5e_priv *priv,
 			cacheflow_steer_core,
 			buf,
 			(1 << cacheflow_channel_descriptor));
-		pr_info("AQM: %s (thresh: %d, alpha: %d, beta: %d)",
+		pr_info("AQM: %s (thresh: %d, target: %d, alpha: %d, beta: %d)",
 			cacheflow_aqm_to_str(cacheflow_aqm),
 			cacheflow_thresh,
+			cacheflow_target,
 			cacheflow_alpha,
 			cacheflow_beta);
 	}

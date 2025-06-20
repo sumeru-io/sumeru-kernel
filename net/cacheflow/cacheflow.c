@@ -26,7 +26,8 @@ int cacheflow_stack_cores[NR_CPUS] __read_mostly;
 int cacheflow_stack_cores_num __read_mostly;
 
 int cacheflow_aqm __read_mostly;
-int cacheflow_thresh __read_mostly = 2048;
+int cacheflow_target __read_mostly = 2048;
+int cacheflow_thresh __read_mostly = 65536;
 
 int cacheflow_alpha __read_mostly = 2;
 int cacheflow_beta __read_mostly = 1;
@@ -49,10 +50,11 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 	u32 drain_rate = tp->rcv_rate_est.copied_rate >> cacheflow_alpha;
 	u32 recv_rate = tp->rcv_rate_est.recv_rate >> cacheflow_alpha;
 	u32 thresh = READ_ONCE(cacheflow_thresh);
+	u32 target = READ_ONCE(cacheflow_target);
 	u32 allocated_pages = READ_ONCE(pool->allocated_pages);
 	u32 free_pages = READ_ONCE(pool->ring_pages) + READ_ONCE(pool->array_pages);
 	u32 remaining_pages =
-		thresh > allocated_pages ? thresh - allocated_pages : 0;
+		target > allocated_pages ? target - allocated_pages : 0;
 	int mark = 0;
 
 	switch (READ_ONCE(cacheflow_aqm)) {
@@ -62,14 +64,13 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 		mark = (allocated_pages >= thresh);
 		break;
 	case 2:
-		if (sock_qlen > 65536) {
-			// Based on the paper "ABM: Active Buffer Management in Datacenters [SIGCOMM '22]"
+		if (sock_qlen > thresh) {
 			mark = ((u64)sock_qlen * rtt * 3) >
 			       ((u64)remaining_pages * drain_rate * cacheflow_beta);
 		}
 		break;
 	case 3:
-		if (sock_qlen > 65536) {
+		if (sock_qlen > thresh) {
 			mark = ((u64)sock_qlen * rtt * 3) * (u64)U32_MAX >
 			       (((u64)remaining_pages *
 				 drain_rate * cacheflow_beta) *
@@ -77,13 +78,16 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 		}
 		break;
 	case 4:
-		// Based on the paper "ABM: Active Buffer Management in Datacenters [SIGCOMM '22]"
-		mark = ((u64)sock_qlen * rtt * 12500) >
-			((u64)remaining_pages * tcp_sk(sk)->mss_cache * drain_rate * cacheflow_beta);
+		if (sock_qlen > thresh) {
+			mark = ((u64)sock_qlen * rtt * 12500) >
+				((u64)remaining_pages * tcp_sk(sk)->mss_cache * drain_rate * cacheflow_beta);
+		}
 		break;
 	case 5:
-		mark = ((u64)sock_qlen * rtt * 12500) >
-			((((u64)remaining_pages * tcp_sk(sk)->mss_cache * drain_rate * cacheflow_beta) >> 16) * (u64)get_random_u32()) >> 16;
+		if (sock_qlen > thresh) {
+			mark = ((u64)sock_qlen * rtt * 12500) >
+				((((u64)remaining_pages * tcp_sk(sk)->mss_cache * drain_rate * cacheflow_beta) >> 24) * (u64)get_random_u32()) >> 8;
+		}
 		break;
 	default:
 		pr_err("cacheflow: unknown AQM mode: %d\n",
