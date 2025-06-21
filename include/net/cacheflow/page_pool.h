@@ -155,8 +155,6 @@ struct cacheflow_page_pool {
 	 */
 	refcount_t user_cnt;
 
-	u64 destroy_cnt;
-
 	/* Slow/Control-path information follows */
 	struct cacheflow_page_pool_params_slow slow;
 };

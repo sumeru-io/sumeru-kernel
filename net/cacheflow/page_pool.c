@@ -942,8 +942,8 @@ cacheflow_page_pool_put_netmem_to_recycle_ring(struct cacheflow_page_pool *pool,
 				cacheflow_page_pool_return_page(pool, netmem);
 			}
 			kmem_cache_free(netmem_mini_array_cache, mini_array);
-			stub->mini_array = NULL;
 		}
+		stub->mini_array = NULL;
 
 		if (unlikely(!stub->mini_array_cache_count)) {
 			stub->mini_array_cache_count = cacheflow_page_pool_alloc_empty_mini_array_bulk(stub->mini_array_cache, CACHEFLOW_TH_EMPTY_MINI_ARRAY_CACHE_SIZE, GFP_ATOMIC);
@@ -1057,8 +1057,8 @@ static void __cacheflow_page_pool_destroy(struct cacheflow_page_pool *pool)
 		       pool->ring_pages);
 		pr_err("page_pool: full_mini_array_count=%u, empty_mini_array_count=%u, mini_array=%p\n",
 			pool->alloc.full_mini_array_count, pool->alloc.empty_mini_array_count, pool->alloc.partial_array);
-		pr_err("page_pool: hold_cnt=%u, inflight=%u, destroy_cnt=%llu\n",
-			pool->pages_state_hold_cnt, atomic_read(&pool->pages_state_release_cnt), pool->destroy_cnt);
+		pr_err("page_pool: hold_cnt=%u, inflight=%u\n",
+			pool->pages_state_hold_cnt, atomic_read(&pool->pages_state_release_cnt));
 		BUG();
 	}
 #endif
@@ -1094,14 +1094,11 @@ cacheflow_page_pool_empty_mini_array(struct cacheflow_page_pool *pool,
 }
 
 static void
-cacheflow_page_pool_empty_alloc_cache_once(struct cacheflow_page_pool *pool)
+cacheflow_page_pool_empty_alloc_cache(struct cacheflow_page_pool *pool)
 {
 	int i;
 	struct netmem_mini_array *mini_array;
 
-	if (pool->destroy_cnt)
-		return;
-	
 	if (pool->alloc.partial_array) {
 		cacheflow_page_pool_account_usages(pool, pool->alloc.partial_array->array,
 						pool->alloc.partial_array->count,
@@ -1183,8 +1180,7 @@ cacheflow_page_pool_scrub_recycle_ring(struct cacheflow_page_pool *pool)
 
 static void cacheflow_page_pool_scrub(struct cacheflow_page_pool *pool)
 {
-	cacheflow_page_pool_empty_alloc_cache_once(pool);
-	pool->destroy_cnt++;
+	cacheflow_page_pool_empty_alloc_cache(pool);
 
 	cacheflow_page_pool_scrub_recycle_ring(pool);
 
