@@ -342,7 +342,7 @@ struct gro_list {
  * size of gro hash buckets, must less than bit number of
  * napi_struct::gro_bitmask
  */
-#define GRO_HASH_BUCKETS	8
+#define GRO_HASH_BUCKETS	32
 
 /*
  * Structure for NAPI scheduling similar to tasklet but with weighting
