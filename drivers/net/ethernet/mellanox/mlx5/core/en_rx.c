@@ -1593,6 +1593,8 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 	if (unlikely(mlx5e_rx_hw_stamp(rq->tstamp))) {
 		skb_hwtstamps(skb)->hwtstamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time,
 								  rq->clock, get_cqe_ts(cqe));
+
+		trace_skb_ring_timestamp(0, rq->ix, skb_hwtstamps(skb)->hwtstamp, ktime_get_real_ns());
 	}
 	skb_record_rx_queue(skb, rq->ix);
 
@@ -2897,7 +2899,7 @@ static noinline int mlx5e_cacheflow_th_poll(struct mlx5e_cacheflow_th *c, int bu
 		mlx5e_cacheflow_complete_rx_cqe(c->rq, cqe, be32_to_cpu(cqe->cqe.byte_cnt), skb);
 
 		// trace_skb_cacheflow_queue_timestamp(cqe->cacheflow_id, c->cpu,
-			// cqe->process_timestamp, ktime_get_real_ns());
+		// 	cqe->process_timestamp, ktime_get_real_ns());
 
 		if (tracepoint_enabled(mlx5e_cacheflow_th_skb)) {
 			struct page *page = (struct page *)
