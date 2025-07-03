@@ -2934,6 +2934,8 @@ int mlx5e_cacheflow_th_napi_poll(struct napi_struct *napi, int budget)
 	if (unlikely(!napi_complete_done(napi, work_done)))
 		goto out;
 
+	trace_mlx5e_cacheflow_th_ipi_raised(c->cpu, work_done, budget, item_ring_items_available(c->cqe_ring));
+
 	smp_store_release(&c->ipi_scheduled, 0);
 out:
 	return work_done;

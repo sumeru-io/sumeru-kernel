@@ -172,6 +172,25 @@ TRACE_EVENT(mlx5e_cacheflow_th_ipi_scheduled,
 		  __entry->cpu, __entry->current_time, __entry->last_scheduled_time, __entry->schedule_delay, __entry->cqe_fifo_len)
 );
 
+TRACE_EVENT(mlx5e_cacheflow_th_ipi_raised,
+	TP_PROTO(int cpu, int work_done, int budget, int cqe_fifo_len),
+	TP_ARGS(cpu, work_done, budget, cqe_fifo_len),
+	TP_STRUCT__entry(
+		__field(int, cpu)
+		__field(int, work_done)
+		__field(int, budget)
+		__field(int, cqe_fifo_len)
+	),
+	TP_fast_assign(
+		__entry->cpu = cpu;
+		__entry->work_done = work_done;
+		__entry->budget = budget;
+		__entry->cqe_fifo_len = cqe_fifo_len;
+	),
+	TP_printk("cpu=%d work_done=%d budget=%d cqe_fifo_len=%d",
+		  __entry->cpu, __entry->work_done, __entry->budget, __entry->cqe_fifo_len)
+);
+
 #endif /* _MLX5_CACHEFLOW_TP_H_ */
 
 /* This part must be outside protection */
