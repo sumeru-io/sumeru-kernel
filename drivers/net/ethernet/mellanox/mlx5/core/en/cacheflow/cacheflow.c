@@ -218,8 +218,8 @@ static int mlx5e_cacheflow_open_rx_cq(struct mlx5e_cacheflow *c,
 
 	struct dim_cq_moder moder = {
 		.cq_period_mode = DIM_CQ_PERIOD_MODE_START_FROM_CQE,
-		.pkts = 16,
-		.usec = 32,
+		.pkts = cacheflow_dim_pkts,
+		.usec = cacheflow_dim_usec,
 	};
 
 	struct mlx5e_create_cq_param ccp = {

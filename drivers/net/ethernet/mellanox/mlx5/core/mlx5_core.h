@@ -45,6 +45,8 @@
 
 extern uint mlx5_core_debug_mask;
 extern uint cacheflow_channel_descriptor;
+extern uint cacheflow_dim_pkts;
+extern uint cacheflow_dim_usec;
 extern int cacheflow_rq_tracker;
 
 #define mlx5_core_dbg(__dev, format, ...)				\

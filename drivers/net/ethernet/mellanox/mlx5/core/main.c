@@ -91,6 +91,14 @@ unsigned int cacheflow_channel_descriptor = 7;
 module_param_named(cacheflow_channel_descriptor, cacheflow_channel_descriptor, uint, 0644);
 MODULE_PARM_DESC(cacheflow_channel_descriptor, "cacheflow channel descriptor. Valid range 64 - 8192");
 
+unsigned int cacheflow_dim_pkts = 16;
+module_param_named(cacheflow_dim_pkts, cacheflow_dim_pkts, uint, 0644);
+MODULE_PARM_DESC(cacheflow_dim_pkts, "cacheflow dim pkts.");
+
+unsigned int cacheflow_dim_usec = 32;
+module_param_named(cacheflow_dim_usec, cacheflow_dim_usec, uint, 0644);
+MODULE_PARM_DESC(cacheflow_dim_usec, "cacheflow dim usec.");
+
 int cacheflow_rq_tracker = 1;
 module_param_named(cacheflow_rq_tracker, cacheflow_rq_tracker, uint, 0644);
 MODULE_PARM_DESC(cacheflow_rq_tracker, "cacheflow rq tracker. Valid range 0 - 1");
