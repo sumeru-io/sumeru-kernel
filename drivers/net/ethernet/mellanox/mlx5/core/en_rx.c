@@ -2883,40 +2883,42 @@ static noinline int mlx5e_cacheflow_th_poll(struct mlx5e_cacheflow_th *c, int bu
 	int work_done = 0, i;
 	struct sk_buff *skb;
 	struct mlx5e_cacheflow_cqe* cqe;
-	int n = item_ring_peek_n(c->cqe_ring, budget, (void **)&cqe);
+	int n;
 
-	for (i = 0; i < n; i++) {
-		prefetch(cqe + 1);
-		prefetch(cqe + 2);
-		prefetch(cqe + 3);
-
-		skb = mlx5e_cacheflow_skb_from_cqe(c->rq, cqe);
-		if (!skb) {
-			pr_err("cacheflow: fail to build skb on the tophalf handler\n");
-			goto next_step;
+	while ((n = item_ring_peek_n(c->cqe_ring, budget - work_done, (void **)&cqe))) {
+		for (i = 0; i < n; i++) {
+			prefetch(cqe + 1);
+			prefetch(cqe + 2);
+			prefetch(cqe + 3);
+	
+			skb = mlx5e_cacheflow_skb_from_cqe(c->rq, cqe);
+			if (!skb) {
+				pr_err("cacheflow: fail to build skb on the tophalf handler\n");
+				goto next_step;
+			}
+	
+			mlx5e_cacheflow_complete_rx_cqe(c->rq, cqe, be32_to_cpu(cqe->cqe.byte_cnt), skb);
+	
+			// trace_skb_cacheflow_queue_timestamp(cqe->cacheflow_id, c->cpu,
+			// 	cqe->process_timestamp, ktime_get_real_ns());
+	
+			if (tracepoint_enabled(mlx5e_cacheflow_th_skb)) {
+				struct page *page = (struct page *)
+				((u64)cqe->cqe.cacheflow.page_addr_high << 32 |
+				cqe->cqe.cacheflow.page_addr_low);
+				trace_mlx5e_cacheflow_th_skb(smp_processor_id(), skb, page);
+			}
+	
+			cacheflow_track_page_move(skb, NETMEM_LOCATION_STACK);
+	
+			napi_gro_receive(&c->napi, skb);
+	next_step:
+			work_done++;
+			cqe++;
 		}
-
-		mlx5e_cacheflow_complete_rx_cqe(c->rq, cqe, be32_to_cpu(cqe->cqe.byte_cnt), skb);
-
-		// trace_skb_cacheflow_queue_timestamp(cqe->cacheflow_id, c->cpu,
-		// 	cqe->process_timestamp, ktime_get_real_ns());
-
-		if (tracepoint_enabled(mlx5e_cacheflow_th_skb)) {
-			struct page *page = (struct page *)
-			((u64)cqe->cqe.cacheflow.page_addr_high << 32 |
-			cqe->cqe.cacheflow.page_addr_low);
-			trace_mlx5e_cacheflow_th_skb(smp_processor_id(), skb, page);
-		}
-
-		cacheflow_track_page_move(skb, NETMEM_LOCATION_STACK);
-
-		napi_gro_receive(&c->napi, skb);
-next_step:
-		work_done++;
-		cqe++;
+	
+		item_ring_consume_n(c->cqe_ring, n);
 	}
-
-	item_ring_consume_n(c->cqe_ring, n);
 
 	return work_done;
 }
