@@ -2154,6 +2154,7 @@ int tcp_filter(struct sock *sk, struct sk_buff *skb)
 
 #ifdef CONFIG_NET_CACHEFLOW
 	if (!ret && CACHEFLOW_GET_FLAG(skb, SKB_CACHEFLOW)) {
+		tcp_sk(sk)->cacheflow_pool = skb->page_pool;
 		if (cacheflow_should_mark(skb->page_pool, sk))
 			INET_ECN_set_ce(skb);
 

@@ -101,6 +101,15 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 	return mark;
 }
 
+int cacheflow_should_ack(struct sock *sk)
+{
+	struct tcp_sock *tp = tcp_sk(sk);
+	if (!tp->cacheflow_pool)
+		return 1;
+
+	return !cacheflow_should_mark(tp->cacheflow_pool, sk);
+}
+
 int cacheflow_schedule_priority(struct cacheflow_page_pool *pool, struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);

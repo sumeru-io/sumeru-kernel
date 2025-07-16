@@ -1508,11 +1508,15 @@ void __tcp_cleanup_rbuf(struct sock *sk, int copied)
 		}
 	}
 	if (time_to_ack) {
-		if (CACHEFLOW_SK_GET_FLAG(tcp_sk(sk), SK_CACHEFLOW_ACK_MODERATE) && after(tp->copied_seq, tp->rcv_wup)) {
-			__tcp_send_ack(sk, tcp_sk(sk)->copied_seq, ACK_REASON_DATA_COPIED);
-			/* re-schedule ack if we have not copied all data */
-			if (tp->copied_seq != tp->rcv_nxt)
-				inet_csk_schedule_ack(sk);
+		if (CACHEFLOW_SK_GET_FLAG(tcp_sk(sk), SK_CACHEFLOW_ACK_MODERATE)) {
+			if (after(tp->copied_seq, tp->rcv_wup) && cacheflow_should_ack(sk)) {
+				__tcp_send_ack(sk, tcp_sk(sk)->copied_seq, ACK_REASON_DATA_COPIED);
+				/* re-schedule ack if we have not copied all data */
+				if (tp->copied_seq != tp->rcv_nxt)
+					inet_csk_schedule_ack(sk);
+			} else {
+				trace_tcp_ack_event(sk, tcp_sk(sk)->rcv_nxt, ACK_ON_MARK_SKIP);
+			}
 		} else {
 			tcp_send_ack(sk, ACK_REASON_DATA_COPIED);
 		}

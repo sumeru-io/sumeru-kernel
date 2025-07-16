@@ -38,6 +38,7 @@ typedef enum enum_tcp_ack_reason {
 	ACK_REASON_DEFERRED = 14,
 	ACK_ON_RECV_SKIP = 15,
 	ACK_ON_COPY_SKIP = 16,
+	ACK_ON_MARK_SKIP = 17,
 } enum_tcp_ack_reason;
 
 static inline struct tcphdr *tcp_hdr(const struct sk_buff *skb)
@@ -378,11 +379,12 @@ struct tcp_sock {
 		u32	delta;
 		u64	mstamp;
 	} rcv_rate_est;
-	struct task_struct *drain_task;
-	int 		drain_priority;
-	u32		cacheflow_id;
-	u32		cacheflow_ack_reason;
-	u8		cacheflow;
+	struct task_struct 		*drain_task;
+	int 				drain_priority;
+	u32				cacheflow_id;
+	u32				cacheflow_ack_reason;
+	u8				cacheflow;
+	struct cacheflow_page_pool 	*cacheflow_pool;
 	__cacheline_group_end(cacheflow);
 
 	/* End of Hot Path */
