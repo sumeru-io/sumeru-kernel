@@ -131,16 +131,17 @@ static noinline int mlx5e_cacheflow_bh_poll(struct mlx5e_cacheflow *c,
 		__cpumask_clear_cpu(cpu, &c->cqes_cpu_set);
 	}
 
-	mlx5_wq_cyc_pop_n(&rq->wqe.wq, work_done);
-
 	if (work_done == 0)
-		return 0;
+		goto skip_update;
+
+	mlx5_wq_cyc_pop_n(&rq->wqe.wq, work_done);
 
 	mlx5_cqwq_update_db_record(cqwq);
 
 	/* ensure cq space is freed before enabling more cqes */
 	wmb();
 
+skip_update:
 	current_time = ktime_to_us(ktime_get());
 
 	for_each_cpu(cpu, &c->notify_cpu_set) {
@@ -154,14 +155,15 @@ static noinline int mlx5e_cacheflow_bh_poll(struct mlx5e_cacheflow *c,
 					c->th_array[cpu].last_scheduled_time,
 					item_ring_items_available(
 						c->th_array[cpu].cqe_ring));
-				c->th_array[cpu].last_scheduled_time =
-					current_time;
-				__cpumask_clear_cpu(cpu, &c->notify_cpu_set);
 			}
+			c->th_array[cpu].last_scheduled_time =
+			current_time;
+			__cpumask_clear_cpu(cpu, &c->notify_cpu_set);
 		}
-	}
+	} 
 
-	return work_done;
+	// we request to be polled again if we have pending signal to send
+	return work_done ? : !cpumask_empty(&c->notify_cpu_set);
 }
 
 int mlx5e_cacheflow_bh_napi_poll(struct napi_struct *napi, int budget)
