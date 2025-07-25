@@ -400,6 +400,8 @@ cacheflow_page_pool_put_full_mini_array(struct cacheflow_page_pool *pool,
 {
 	int i;
 	for (i = 0; i < CF_PP_MINI_ARRAY_SIZE; i++) {
+		if (is_cacheflow_steer_page_clear_enabled())
+			clear_page(netmem_address(mini_array->array[i]));
 		trace_skb_cacheflow_memory_location(mini_array->array[i], NETMEM_LOCATION_POOL);
 	}
 

@@ -11,6 +11,7 @@
 #include <trace/events/skb.h>
 
 extern struct static_key_false cacheflow_steer_enable;
+extern struct static_key_false cacheflow_steer_page_clear;
 extern atomic_t cacheflow_id_counter;
 
 extern int cacheflow_steer_core;
@@ -68,6 +69,11 @@ int cacheflow_schedule_priority(struct cacheflow_page_pool *pool, struct sock *s
 static inline bool is_cacheflow_steer_enabled(void)
 {
 	return static_branch_likely(&cacheflow_steer_enable);
+}
+
+static inline bool is_cacheflow_steer_page_clear_enabled(void)
+{
+	return static_branch_likely(&cacheflow_steer_page_clear);
 }
 
 static inline int get_cacheflow_steer_core(void) {
