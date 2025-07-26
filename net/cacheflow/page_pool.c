@@ -213,11 +213,14 @@ cacheflow_page_pool_get_empty_mini_array(struct cacheflow_page_pool *pool)
 static inline struct netmem_mini_array *
 cacheflow_page_pool_pop_full_mini_array(struct cacheflow_page_pool *pool)
 {
+	struct netmem_mini_array *mini_array = NULL;
 	if (likely(pool->alloc.full_mini_array_count)) {
-		return pool->alloc.full_mini_array_cache[--pool->alloc.full_mini_array_count];
+		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_head];
+		pool->alloc.full_mini_array_head = (pool->alloc.full_mini_array_head + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+		pool->alloc.full_mini_array_count--;
 	}
 
-	return NULL;
+	return mini_array;
 }
 
 static inline struct netmem_mini_array *
@@ -241,9 +244,9 @@ cacheflow_page_pool_refill_full_mini_array(struct cacheflow_page_pool *pool)
 						   PAGE_POOL_RING,
 						   PAGE_POOL_ARRAY);
 
-		pool->alloc.full_mini_array_cache
-			[pool->alloc.full_mini_array_count++] = mini_array;
-
+		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_tail] = mini_array;
+		pool->alloc.full_mini_array_tail = (pool->alloc.full_mini_array_tail + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+		pool->alloc.full_mini_array_count++;
 	} while (pool->alloc.full_mini_array_count <
 		 CF_PP_MINI_ARRAY_REFILL_BATCH_SIZE);
 
@@ -351,7 +354,9 @@ cacheflow_page_pool_recycle_full_mini_array(struct cacheflow_page_pool *pool)
 #endif
 
 	for (i = 0; i < free_n; i++) {
-		mini_array = pool->alloc.full_mini_array_cache[i];
+		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_head];
+		pool->alloc.full_mini_array_head = (pool->alloc.full_mini_array_head + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+		pool->alloc.full_mini_array_count--;
 		ret = __ptr_stack_push(&pool->stack,
 				       (__force void *)mini_array);
 
@@ -373,15 +378,7 @@ cacheflow_page_pool_recycle_full_mini_array(struct cacheflow_page_pool *pool)
 			cacheflow_page_pool_put_empty_mini_array(pool,
 								 mini_array);
 		}
-
-		pool->alloc.full_mini_array_cache[i] = NULL;
 	}
-
-	for (i = free_n; i < pool->alloc.full_mini_array_count; i++)
-		pool->alloc.full_mini_array_cache[i - free_n] =
-			pool->alloc.full_mini_array_cache[i];
-	pool->alloc.full_mini_array_count =
-		pool->alloc.full_mini_array_count - free_n;
 }
 
 static inline void
@@ -391,7 +388,9 @@ cacheflow_page_pool_push_full_mini_array(struct cacheflow_page_pool *pool, struc
 		     CF_PP_FULL_MINI_ARRAY_CACHE_SIZE))
 		cacheflow_page_pool_recycle_full_mini_array(pool);
 
-	pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count++] = mini_array;
+	pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_tail] = mini_array;
+	pool->alloc.full_mini_array_tail = (pool->alloc.full_mini_array_tail + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+	pool->alloc.full_mini_array_count++;
 }
 
 static inline void cacheflow_recycle_page(struct cacheflow_page_pool *pool, netmem_ref netmem)
