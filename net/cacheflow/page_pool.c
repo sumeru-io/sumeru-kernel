@@ -219,7 +219,7 @@ cacheflow_page_pool_pop_full_mini_array(struct cacheflow_page_pool *pool)
 		pool->alloc.full_mini_array_head = (pool->alloc.full_mini_array_head + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
 		pool->alloc.full_mini_array_count--;
 	}
-
+	trace_cacheflow_queue_depth(pool->alloc.full_mini_array_count);
 	return mini_array;
 }
 

@@ -284,6 +284,27 @@ TRACE_EVENT(
 	)
 )
 
+TRACE_EVENT(
+	cacheflow_queue_depth,
+
+	TP_PROTO(u32 qlen),
+
+	TP_ARGS(qlen),
+
+	TP_STRUCT__entry(
+		__field(u32, qlen)
+	),
+
+	TP_fast_assign(
+		__entry->qlen = qlen;
+	),
+
+	TP_printk(
+		"qlen=%u",
+		__entry->qlen
+	)
+)
+
 #endif /* _TRACE_CACHEFLOW_H */
 
 /* This part must be outside protection */
