@@ -162,7 +162,7 @@ TRACE_EVENT(
 	),
 
 	TP_printk(
-		"sk=%p sock_cookie=%llu rcv_rtt=%llu smooth_recv_rate=%llu latest_recv_rate=%llu smooth_copied_rate=%llu latest_copied_rate=%llu smooth_ack_rate=%llu latest_ack_rate=%llu",
+		"sk=%p sock_cookie=%llu rcv_rtt=%u smooth_recv_rate=%u latest_recv_rate=%u smooth_copied_rate=%u latest_copied_rate=%u smooth_ack_rate=%u latest_ack_rate=%u",
 		__entry->sk, __entry->sock_cookie, __entry->rcv_rtt, __entry->smooth_recv_rate, __entry->latest_recv_rate,
 		__entry->smooth_copied_rate, __entry->latest_copied_rate, __entry->smooth_ack_rate, __entry->latest_ack_rate
 	)

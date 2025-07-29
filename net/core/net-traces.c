@@ -62,6 +62,13 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(neigh_cleanup_and_release);
 
 EXPORT_TRACEPOINT_SYMBOL_GPL(kfree_skb);
 
+#ifdef CONFIG_NET_CACHEFLOW
+EXPORT_TRACEPOINT_SYMBOL_GPL(cacheflow_napi_poll);
+EXPORT_TRACEPOINT_SYMBOL_GPL(skb_ring_timestamp);
+EXPORT_TRACEPOINT_SYMBOL_GPL(skb_cacheflow_memory_location);
+#endif
+
+EXPORT_TRACEPOINT_SYMBOL_GPL(sk_rps_core_change);
 EXPORT_TRACEPOINT_SYMBOL_GPL(napi_poll);
 
 EXPORT_TRACEPOINT_SYMBOL_GPL(tcp_send_reset);

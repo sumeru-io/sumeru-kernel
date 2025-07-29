@@ -1282,6 +1282,7 @@ void cacheflow_page_pool_recycle_ring(struct cacheflow_page_pool *pool)
 	if ((freed_count = atomic_xchg(&pool->oob_recycle_cnt, 0)))
 		pool->allocated_pages -= freed_count;
 }
+EXPORT_SYMBOL(cacheflow_page_pool_recycle_ring);
 
 static int __init netmem_bulk_cache_init(void)
 {

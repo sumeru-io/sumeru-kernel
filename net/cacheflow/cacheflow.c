@@ -23,23 +23,35 @@ EXPORT_SYMBOL(cacheflow_steer_page_clear);
 atomic_t cacheflow_id_counter = ATOMIC_INIT(0);
 
 int cacheflow_thread __read_mostly;
+EXPORT_SYMBOL(cacheflow_thread);
 int cacheflow_steer_core __read_mostly;
+EXPORT_SYMBOL(cacheflow_steer_core);
 int cacheflow_stack_cores[NR_CPUS] __read_mostly;
+EXPORT_SYMBOL(cacheflow_stack_cores);
 int cacheflow_stack_cores_num __read_mostly;
+EXPORT_SYMBOL(cacheflow_stack_cores_num);
 
 int cacheflow_aqm __read_mostly;
+EXPORT_SYMBOL(cacheflow_aqm);
 int cacheflow_target __read_mostly = 2048;
+EXPORT_SYMBOL(cacheflow_target);
 int cacheflow_thresh __read_mostly = 65536;
+EXPORT_SYMBOL(cacheflow_thresh);
 
 int cacheflow_alpha __read_mostly = 2;
+EXPORT_SYMBOL(cacheflow_alpha);
 int cacheflow_beta __read_mostly = 1;
+EXPORT_SYMBOL(cacheflow_beta);
 
 int cacheflow_schedule __read_mostly;
+EXPORT_SYMBOL(cacheflow_schedule);
 
 int cacheflow_ack_mod __read_mostly;
 
 int cacheflow_ipi_packet_thresh __read_mostly = 16;
+EXPORT_SYMBOL(cacheflow_ipi_packet_thresh);
 int cacheflow_ipi_usec_thresh __read_mostly = 64;
+EXPORT_SYMBOL(cacheflow_ipi_usec_thresh);
 int cacheflow_elephant_flow_thresh __read_mostly = 256;
 
 int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
