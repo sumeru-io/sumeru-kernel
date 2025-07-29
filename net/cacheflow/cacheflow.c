@@ -47,6 +47,7 @@ int cacheflow_schedule __read_mostly;
 EXPORT_SYMBOL(cacheflow_schedule);
 
 int cacheflow_ack_mod __read_mostly;
+EXPORT_SYMBOL(cacheflow_ack_mod);
 
 int cacheflow_ipi_packet_thresh __read_mostly = 16;
 EXPORT_SYMBOL(cacheflow_ipi_packet_thresh);

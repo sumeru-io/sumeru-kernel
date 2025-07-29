@@ -60,8 +60,10 @@ struct cacheflow_pp_alloc_cache {
 	struct netmem_partial_mini_array* partial_array;
 
 	struct netmem_mini_array* full_mini_array_cache[CF_PP_FULL_MINI_ARRAY_CACHE_SIZE];
+#ifdef CONFIG_CACHEFLOW_WARM_BUFFER
 	u32 full_mini_array_tail;
 	u32 full_mini_array_head;
+#endif
 	u32 full_mini_array_count;
 
 	struct netmem_mini_array* empty_mini_array_cache[CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_SIZE];

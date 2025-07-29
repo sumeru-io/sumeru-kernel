@@ -215,8 +215,13 @@ cacheflow_page_pool_pop_full_mini_array(struct cacheflow_page_pool *pool)
 {
 	struct netmem_mini_array *mini_array = NULL;
 	if (likely(pool->alloc.full_mini_array_count)) {
+#ifdef CONFIG_CACHEFLOW_WARM_BUFFER
 		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_head];
 		pool->alloc.full_mini_array_head = (pool->alloc.full_mini_array_head + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+#else
+		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count - 1];
+		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count - 1] = NULL;
+#endif
 		pool->alloc.full_mini_array_count--;
 	}
 	trace_cacheflow_queue_depth(pool->alloc.full_mini_array_count);
@@ -244,8 +249,12 @@ cacheflow_page_pool_refill_full_mini_array(struct cacheflow_page_pool *pool)
 						   PAGE_POOL_RING,
 						   PAGE_POOL_ARRAY);
 
+#ifdef CONFIG_CACHEFLOW_WARM_BUFFER
 		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_tail] = mini_array;
 		pool->alloc.full_mini_array_tail = (pool->alloc.full_mini_array_tail + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+#else
+		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count] = mini_array;
+#endif
 		pool->alloc.full_mini_array_count++;
 	} while (pool->alloc.full_mini_array_count <
 		 CF_PP_MINI_ARRAY_REFILL_BATCH_SIZE);
@@ -354,8 +363,13 @@ cacheflow_page_pool_recycle_full_mini_array(struct cacheflow_page_pool *pool)
 #endif
 
 	for (i = 0; i < free_n; i++) {
+#ifdef CONFIG_CACHEFLOW_WARM_BUFFER
 		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_head];
 		pool->alloc.full_mini_array_head = (pool->alloc.full_mini_array_head + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+#else
+		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count - 1];
+		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count - 1] = NULL;
+#endif
 		pool->alloc.full_mini_array_count--;
 		ret = __ptr_stack_push(&pool->stack,
 				       (__force void *)mini_array);
@@ -388,8 +402,12 @@ cacheflow_page_pool_push_full_mini_array(struct cacheflow_page_pool *pool, struc
 		     CF_PP_FULL_MINI_ARRAY_CACHE_SIZE))
 		cacheflow_page_pool_recycle_full_mini_array(pool);
 
+#ifdef CONFIG_CACHEFLOW_WARM_BUFFER
 	pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_tail] = mini_array;
 	pool->alloc.full_mini_array_tail = (pool->alloc.full_mini_array_tail + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+#else
+	pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count] = mini_array;
+#endif
 	pool->alloc.full_mini_array_count++;
 }
 
