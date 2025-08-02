@@ -112,7 +112,9 @@ static inline const char *cacheflow_aqm_to_str(int aqm)
 	case 1:
 		return "direct";
 	case 2:
-		return "abm";
+		return "ABM (direct)";
+	case 3:
+		return "ABM (linear)";
 	default:
 		return "unknown";
 	}

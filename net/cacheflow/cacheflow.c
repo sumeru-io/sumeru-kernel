@@ -80,25 +80,11 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 		break;
 	case 2:
 		if (sock_qlen > thresh) {
-			mark = ((u64)sock_qlen * rtt * 3) >
-			       ((u64)remaining_pages * drain_rate * cacheflow_beta);
-		}
-		break;
-	case 3:
-		if (sock_qlen > thresh) {
-			mark = ((u64)sock_qlen * rtt * 3) * (u64)U32_MAX >
-			       (((u64)remaining_pages *
-				 drain_rate * cacheflow_beta) *
-				(u64)get_random_u32());
-		}
-		break;
-	case 4:
-		if (sock_qlen > thresh) {
 			mark = ((u64)sock_qlen * rtt * 12500) >
 				((u64)remaining_pages * tcp_sk(sk)->mss_cache * drain_rate * cacheflow_beta);
 		}
 		break;
-	case 5:
+	case 3:
 		if (sock_qlen > thresh) {
 			mark = ((u64)sock_qlen * rtt * 12500) >
 				((((u64)remaining_pages * tcp_sk(sk)->mss_cache * drain_rate * cacheflow_beta) >> 24) * (u64)get_random_u32()) >> 8;
