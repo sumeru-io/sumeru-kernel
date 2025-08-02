@@ -140,6 +140,9 @@ struct cacheflow_page_pool {
 	u32 array_pages;
 	u32 ring_pages;
 	u32 allocated_pages;
+
+	struct delayed_work usage_track_work;
+
 	struct page_pool_proc *proc;
 
 	struct cacheflow_pp_alloc_cache alloc ____cacheline_aligned_in_smp;

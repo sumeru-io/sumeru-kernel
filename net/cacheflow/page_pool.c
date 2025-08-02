@@ -447,6 +447,21 @@ cacheflow_page_pool_put_full_mini_array(struct cacheflow_page_pool *pool,
 	cacheflow_page_pool_push_full_mini_array(pool, mini_array);
 }
 
+
+static s32 cacheflow_page_pool_inflight(const struct cacheflow_page_pool *pool,
+	bool strict);
+
+static void
+cacheflow_usage_print(struct work_struct *work)
+{
+	struct cacheflow_page_pool *pool = container_of(to_delayed_work(work), struct cacheflow_page_pool, usage_track_work);
+
+	int inflight = cacheflow_page_pool_inflight(pool, true);
+	pr_info("cacheflow: release the page pool %p, inflight %d, alloc %d, array %d, ring %d, oob free %d, hold %d, release %d\n", pool, inflight, pool->allocated_pages, pool->array_pages, pool->ring_pages, atomic_read(&pool->oob_recycle_cnt), pool->pages_state_hold_cnt, atomic_read(&pool->pages_state_release_cnt));
+
+	schedule_delayed_work(&pool->usage_track_work, 60 * HZ);
+}
+
 static int
 cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 			 const struct cacheflow_page_pool_params *params,
@@ -509,6 +524,9 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 	pool->array_pages = 0;
 	pool->ring_pages = 0;
 	pool->allocated_pages = 0;
+
+	INIT_DELAYED_WORK(&pool->usage_track_work, cacheflow_usage_print);
+	schedule_delayed_work(&pool->usage_track_work, HZ);
 
 	pool->alloc.partial_array = (struct netmem_partial_mini_array *)cacheflow_page_pool_get_empty_mini_array(pool);
 	pool->alloc.partial_array->count = 0;
@@ -1100,6 +1118,9 @@ static void __cacheflow_page_pool_destroy(struct cacheflow_page_pool *pool)
 		BUG();
 	}
 #endif
+
+	cancel_delayed_work_sync(&pool->usage_track_work);
+
 	free_percpu(pool->recycle_stub);
 
 	if (pool->disconnect)
@@ -1236,7 +1257,7 @@ static int cacheflow_page_pool_release(struct cacheflow_page_pool *pool)
 
 	inflight = cacheflow_page_pool_inflight(pool, true);
 
-	pr_info("cacheflow: release the page pool %p, inflight %d, alloc %d, array %d, ring %d\n", pool, inflight, pool->allocated_pages, pool->array_pages, pool->ring_pages);
+	pr_info("cacheflow: release the page pool %p, inflight %d, alloc %d, array %d, ring %d, oob free %d, hold %d, release %d\n", pool, inflight, pool->allocated_pages, pool->array_pages, pool->ring_pages, atomic_read(&pool->oob_recycle_cnt), pool->pages_state_hold_cnt, atomic_read(&pool->pages_state_release_cnt));
 	if (!inflight)
 		__cacheflow_page_pool_destroy(pool);
 
