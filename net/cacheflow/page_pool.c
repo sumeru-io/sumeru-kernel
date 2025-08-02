@@ -907,6 +907,7 @@ static __always_inline netmem_ref __cacheflow_page_pool_put_page(
 	 * doing refcnt based recycle tricks, meaning another process
 	 * will be invoking put_page.
 	 */
+	BUG();
 	cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_ALLOC,
 					  PAGE_POOL_UNALLOC);
 	cacheflow_page_pool_return_page(pool, netmem);
