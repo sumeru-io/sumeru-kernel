@@ -161,16 +161,14 @@ cacheflow_page_pool_put_empty_mini_array(struct cacheflow_page_pool *pool,
 	}
 
 	if (pool->alloc.empty_mini_array_count ==
-	    CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_SIZE) {
-		pool->alloc.empty_mini_array_count -=
-			CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
-		for (i = 0; i < CF_PP_FULL_MINI_ARRAY_CACHE_SIZE; i++)
+	    pool->alloc.empty_mini_array_cache_size) {
+		pool->alloc.empty_mini_array_count -= pool->alloc.full_mini_array_cache_size;
+		for (i = 0; i < pool->alloc.full_mini_array_cache_size; i++)
 			kasan_mempool_unpoison_object(
-				pool->alloc.empty_mini_array_cache
-					[pool->alloc.empty_mini_array_count + i],
+				pool->alloc.empty_mini_array_cache[pool->alloc.empty_mini_array_count + i],
 				kmem_cache_size(netmem_mini_array_cache));
 
-		cacheflow_page_pool_free_empty_mini_array_bulk(pool->alloc.empty_mini_array_cache + pool->alloc.empty_mini_array_count, CF_PP_FULL_MINI_ARRAY_CACHE_SIZE);
+		cacheflow_page_pool_free_empty_mini_array_bulk(pool->alloc.empty_mini_array_cache + pool->alloc.empty_mini_array_count, pool->alloc.full_mini_array_cache_size);
 	}
 	pool->alloc
 		.empty_mini_array_cache[pool->alloc.empty_mini_array_count++] =
@@ -185,7 +183,7 @@ cacheflow_page_pool_get_empty_mini_array(struct cacheflow_page_pool *pool)
 	struct netmem_mini_array *mini_array;
 
 	if (pool->alloc.empty_mini_array_count == 0) {
-		n = cacheflow_page_pool_alloc_empty_mini_array_bulk(pool->alloc.empty_mini_array_cache + pool->alloc.empty_mini_array_count, CF_PP_FULL_MINI_ARRAY_CACHE_SIZE, GFP_ATOMIC | GFP_NOWAIT);
+		n = cacheflow_page_pool_alloc_empty_mini_array_bulk(pool->alloc.empty_mini_array_cache, pool->alloc.empty_mini_array_cache_size, GFP_ATOMIC | GFP_NOWAIT);
 
 		for (i = 0; i < n; i++) {
 			mini_array =
@@ -217,7 +215,7 @@ cacheflow_page_pool_pop_full_mini_array(struct cacheflow_page_pool *pool)
 	if (likely(pool->alloc.full_mini_array_count)) {
 #ifdef CONFIG_CACHEFLOW_WARM_BUFFER
 		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_head];
-		pool->alloc.full_mini_array_head = (pool->alloc.full_mini_array_head + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+		pool->alloc.full_mini_array_head = (pool->alloc.full_mini_array_head + 1) % pool->alloc.full_mini_array_cache_size;
 #else
 		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count - 1];
 		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count - 1] = NULL;
@@ -251,7 +249,7 @@ cacheflow_page_pool_refill_full_mini_array(struct cacheflow_page_pool *pool)
 
 #ifdef CONFIG_CACHEFLOW_WARM_BUFFER
 		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_tail] = mini_array;
-		pool->alloc.full_mini_array_tail = (pool->alloc.full_mini_array_tail + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+		pool->alloc.full_mini_array_tail = (pool->alloc.full_mini_array_tail + 1) % pool->alloc.full_mini_array_cache_size;
 #else
 		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count] = mini_array;
 #endif
@@ -358,14 +356,14 @@ cacheflow_page_pool_recycle_full_mini_array(struct cacheflow_page_pool *pool)
 
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
 	if (unlikely(pool->alloc.full_mini_array_count !=
-		     CF_PP_FULL_MINI_ARRAY_CACHE_SIZE))
+		     pool->alloc.full_mini_array_cache_size))
 		BUG();
 #endif
 
 	for (i = 0; i < free_n; i++) {
 #ifdef CONFIG_CACHEFLOW_WARM_BUFFER
 		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_head];
-		pool->alloc.full_mini_array_head = (pool->alloc.full_mini_array_head + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+		pool->alloc.full_mini_array_head = (pool->alloc.full_mini_array_head + 1) % pool->alloc.full_mini_array_cache_size;
 #else
 		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count - 1];
 		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count - 1] = NULL;
@@ -399,12 +397,12 @@ static inline void
 cacheflow_page_pool_push_full_mini_array(struct cacheflow_page_pool *pool, struct netmem_mini_array *mini_array)
 {
 	if (unlikely(pool->alloc.full_mini_array_count >=
-		     CF_PP_FULL_MINI_ARRAY_CACHE_SIZE))
+		     pool->alloc.full_mini_array_cache_size))
 		cacheflow_page_pool_recycle_full_mini_array(pool);
 
 #ifdef CONFIG_CACHEFLOW_WARM_BUFFER
 	pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_tail] = mini_array;
-	pool->alloc.full_mini_array_tail = (pool->alloc.full_mini_array_tail + 1) % CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
+	pool->alloc.full_mini_array_tail = (pool->alloc.full_mini_array_tail + 1) % pool->alloc.full_mini_array_cache_size;
 #else
 	pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count] = mini_array;
 #endif
@@ -468,6 +466,7 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 			 int cpuid)
 {
 	unsigned int ring_qsize = 1024; /* Default */
+	unsigned int anneal_size = DEFAULT_CF_PP_FULL_MINI_ARRAY_CACHE_SIZE;
 	int i, cpu;
 
 	memcpy(&pool->p, &params->fast, sizeof(pool->p));
@@ -478,8 +477,14 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 	if (pool->p.pool_size)
 		ring_qsize = pool->p.pool_size;
 
+	if (pool->p.anneal_size)
+		anneal_size = pool->p.anneal_size;
+
 	/* Sanity limit mem that can be pinned down */
 	if (ring_qsize > 32768)
+		return -E2BIG;
+
+	if (anneal_size > 8192)
 		return -E2BIG;
 
 	/* DMA direction is either DMA_FROM_DEVICE or DMA_BIDIRECTIONAL.
@@ -494,20 +499,46 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 	if (!pool->p.max_len)
 		return -EINVAL;
 
+	pool->alloc.full_mini_array_cache_size = ((anneal_size + CF_PP_MINI_ARRAY_SIZE - 1) / CF_PP_MINI_ARRAY_SIZE);
+	pool->alloc.empty_mini_array_cache_size = pool->alloc.full_mini_array_cache_size * 2;
+
+	pool->alloc.full_mini_array_cache = kcalloc(pool->alloc.full_mini_array_cache_size, sizeof(struct netmem_mini_array *), GFP_KERNEL);
+	if (!pool->alloc.full_mini_array_cache) {
+		pr_err("Failed to allocate full_mini_array_cache\n");
+		return -ENOMEM;
+	}
+
+
+	pool->alloc.empty_mini_array_cache = kcalloc(pool->alloc.empty_mini_array_cache_size, sizeof(struct netmem_mini_array *), GFP_KERNEL);
+	if (!pool->alloc.empty_mini_array_cache) {
+		kfree(pool->alloc.full_mini_array_cache);
+		pr_err("Failed to allocate empty_mini_array_cache\n");
+		return -ENOMEM;
+	}
+
 	pool->recycle_stub =
 		alloc_percpu(struct cacheflow_page_pool_recycle_stub);
 	if (!pool->recycle_stub) {
+		kfree(pool->alloc.full_mini_array_cache);
+		kfree(pool->alloc.empty_mini_array_cache);
 		pr_err("Failed to allocate per-cpu recycle_stub\n");
 		return -ENOMEM;
 	}
 
 #ifdef CONFIG_PAGE_POOL_STATS
 	pool->recycle_stats = alloc_percpu(struct page_pool_recycle_stats);
-	if (!pool->recycle_stats)
+	if (!pool->recycle_stats) {
+		kfree(pool->alloc.full_mini_array_cache);
+		kfree(pool->alloc.empty_mini_array_cache);
+		free_percpu(pool->recycle_stub);
 		return -ENOMEM;
+	}
 #endif
 
 	if (ptr_stack_init(&pool->stack, ring_qsize, GFP_KERNEL) < 0) {
+		kfree(pool->alloc.full_mini_array_cache);
+		kfree(pool->alloc.empty_mini_array_cache);
+		free_percpu(pool->recycle_stub);
 #ifdef CONFIG_PAGE_POOL_STATS
 		free_percpu(pool->recycle_stats);
 #endif
@@ -1122,6 +1153,9 @@ static void __cacheflow_page_pool_destroy(struct cacheflow_page_pool *pool)
 	cancel_delayed_work_sync(&pool->usage_track_work);
 
 	free_percpu(pool->recycle_stub);
+
+	kfree(pool->alloc.full_mini_array_cache);
+	kfree(pool->alloc.empty_mini_array_cache);
 
 	if (pool->disconnect)
 		pool->disconnect(pool);

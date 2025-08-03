@@ -2897,6 +2897,7 @@ int mlx5e_open_channels(struct mlx5e_priv *priv,
 			cacheflow_target,
 			cacheflow_alpha,
 			cacheflow_beta);
+		pr_info("Annealing Buffer Pool: size=%u", cacheflow_pp_anneal_size);
 	}
 #endif
 

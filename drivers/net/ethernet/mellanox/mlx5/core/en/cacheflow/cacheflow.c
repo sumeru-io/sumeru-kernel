@@ -369,6 +369,7 @@ static int mlx5e_cacheflow_alloc_rq(struct mlx5e_params *params,
 
 	pp_params.order = order_base_2(max(SKB_HEAD_ALIGN(MLX5E_SW2HW_MTU(params, params->sw_mtu)), PAGE_SIZE)) - PAGE_SHIFT;
 	pp_params.pool_size = 4096;
+	pp_params.anneal_size = cacheflow_pp_anneal_size;
 	pp_params.nid = node;
 	pp_params.dev = rq->pdev;
 	pp_params.napi = rq->cq.napi;

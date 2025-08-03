@@ -35,6 +35,8 @@ extern int cacheflow_elephant_flow_thresh;
 extern int cacheflow_ipi_packet_thresh;
 extern int cacheflow_ipi_usec_thresh;
 
+extern int cacheflow_pp_anneal_size;
+
 enum {
 	NETMEM_LOCATION_POOL = 0,
 	NETMEM_LOCATION_RING = 1,

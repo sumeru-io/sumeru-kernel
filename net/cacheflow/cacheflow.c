@@ -55,6 +55,9 @@ int cacheflow_ipi_usec_thresh __read_mostly = 64;
 EXPORT_SYMBOL(cacheflow_ipi_usec_thresh);
 int cacheflow_elephant_flow_thresh __read_mostly = 256;
 
+int cacheflow_pp_anneal_size __read_mostly = 256;
+EXPORT_SYMBOL(cacheflow_pp_anneal_size);
+
 int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);

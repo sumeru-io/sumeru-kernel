@@ -42,9 +42,9 @@ struct netmem_empty_mini_array_global_cache {
 /* Size array to fit within two cachelines minus the count field */
 #define CF_PP_MINI_ARRAY_METADATA_SIZE				8
 #define CF_PP_MINI_ARRAY_SIZE 					(((2 * L1_CACHE_BYTES)) / sizeof(netmem_ref))
-#define CF_PP_FULL_MINI_ARRAY_CACHE_SIZE			16
-#define CF_PP_MINI_ARRAY_REFILL_BATCH_SIZE			(CF_PP_FULL_MINI_ARRAY_CACHE_SIZE / 2)
-#define CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_SIZE			(CF_PP_FULL_MINI_ARRAY_CACHE_SIZE * 2)
+#define DEFAULT_CF_PP_FULL_MINI_ARRAY_CACHE_SIZE		256
+#define DEFAULT_CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_SIZE		(DEFAULT_CF_PP_FULL_MINI_ARRAY_CACHE_SIZE * 2)
+#define CF_PP_MINI_ARRAY_REFILL_BATCH_SIZE			8
 
 struct netmem_mini_array {
 	netmem_ref array[CF_PP_MINI_ARRAY_SIZE];
@@ -59,14 +59,16 @@ struct netmem_partial_mini_array {
 struct cacheflow_pp_alloc_cache {
 	struct netmem_partial_mini_array* partial_array;
 
-	struct netmem_mini_array* full_mini_array_cache[CF_PP_FULL_MINI_ARRAY_CACHE_SIZE];
+	struct netmem_mini_array** full_mini_array_cache;
+	u32 full_mini_array_cache_size;
 #ifdef CONFIG_CACHEFLOW_WARM_BUFFER
 	u32 full_mini_array_tail;
 	u32 full_mini_array_head;
 #endif
 	u32 full_mini_array_count;
 
-	struct netmem_mini_array* empty_mini_array_cache[CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_SIZE];
+	struct netmem_mini_array** empty_mini_array_cache;
+	u32 empty_mini_array_cache_size;
 	u32 empty_mini_array_count;
 };
 
@@ -89,6 +91,7 @@ struct cacheflow_page_pool_params {
 	struct_group_tagged(cacheflow_page_pool_params_fast, fast,
 		unsigned int	order;
 		unsigned int	pool_size;
+		unsigned int	anneal_size;
 		int		nid;
 		struct device	*dev;
 		struct napi_struct *napi;
