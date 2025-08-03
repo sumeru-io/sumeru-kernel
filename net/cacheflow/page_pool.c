@@ -409,32 +409,12 @@ cacheflow_page_pool_push_full_mini_array(struct cacheflow_page_pool *pool, struc
 	pool->alloc.full_mini_array_count++;
 }
 
-static inline void cacheflow_recycle_page(struct cacheflow_page_pool *pool, netmem_ref netmem)
-{
-	if (is_cacheflow_steer_page_clear_enabled()) {
-		void *addr = netmem_address(netmem);
-		void *base = addr;
-		BUG_ON(addr == NULL);
-
-		// size_t page_size = PAGE_SIZE << pool->p.order;
-		size_t page_size = 9000;
-		while (addr < (void *)((unsigned long)base + page_size - 8 * L1_CACHE_BYTES)) {
-			*(int *)addr = 0;
-			*(int *)(addr + 2 * L1_CACHE_BYTES) = 0;
-			*(int *)(addr + 4 * L1_CACHE_BYTES) = 0;
-			*(int *)(addr + 6 * L1_CACHE_BYTES) = 0;
-			addr += 8 * L1_CACHE_BYTES;
-		}
-	}
-}
-
 static inline void
 cacheflow_page_pool_put_full_mini_array(struct cacheflow_page_pool *pool,
 				   struct netmem_mini_array *mini_array)
 {
 	int i;
 	for (i = 0; i < CF_PP_MINI_ARRAY_SIZE; i++) {
-		cacheflow_recycle_page(pool, mini_array->array[i]);
 		trace_skb_cacheflow_memory_location(mini_array->array[i], NETMEM_LOCATION_POOL);
 	}
 

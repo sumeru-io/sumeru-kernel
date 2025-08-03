@@ -17,8 +17,6 @@
 
 struct static_key_false cacheflow_steer_enable __read_mostly;
 EXPORT_SYMBOL(cacheflow_steer_enable);
-struct static_key_false cacheflow_steer_page_clear __read_mostly;
-EXPORT_SYMBOL(cacheflow_steer_page_clear);
 
 atomic_t cacheflow_id_counter = ATOMIC_INIT(0);
 

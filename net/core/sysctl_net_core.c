@@ -480,13 +480,6 @@ static struct ctl_table net_core_table[] = {
 		.proc_handler	= proc_do_static_key,
 	},
 	{
-		.procname	= "cacheflow_steer_page_clear",
-		.data 		= &cacheflow_steer_page_clear.key,
-		.maxlen		= sizeof(cacheflow_steer_page_clear),
-		.mode		= 0644,
-		.proc_handler	= proc_do_static_key,
-	},
-	{
 		.procname	= "cacheflow_schedule",
 		.data		= &cacheflow_schedule,
 		.maxlen		= sizeof(int),
