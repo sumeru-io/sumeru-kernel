@@ -124,6 +124,9 @@ static int mlx5e_cacheflow_alloc_rx_wqes(struct mlx5e_cacheflow_rq *rq, u16 ix,
 
 	mini_array = cacheflow_page_pool_get_full_mini_array(rq->page_pool, GFP_ATOMIC | __GFP_NOWARN);
 
+	if (unlikely(!mini_array))
+		return 0;
+
 	for (i = 0; i < min(CF_PP_MINI_ARRAY_SIZE, wqe_bulk); i++) {
 		int j = mlx5_wq_cyc_ctr2ix(wq, ix + i);
 		struct mlx5e_rx_wqe_cyc *wqe;

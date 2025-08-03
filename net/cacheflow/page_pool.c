@@ -197,9 +197,9 @@ cacheflow_page_pool_get_empty_mini_array(struct cacheflow_page_pool *pool)
 	if (likely(pool->alloc.empty_mini_array_count > 0)) {
 		mini_array = pool->alloc.empty_mini_array_cache
 				     [pool->alloc.empty_mini_array_count - 1];
+		pool->alloc.empty_mini_array_count--;
 		pool->alloc.empty_mini_array_cache
 			[pool->alloc.empty_mini_array_count] = NULL;
-		pool->alloc.empty_mini_array_count--;
 		kasan_mempool_unpoison_object(
 			mini_array, kmem_cache_size(netmem_mini_array_cache));
 
@@ -1291,7 +1291,6 @@ static int cacheflow_page_pool_release(struct cacheflow_page_pool *pool)
 
 	inflight = cacheflow_page_pool_inflight(pool, true);
 
-	pr_info("cacheflow: release the page pool %p, inflight %d, alloc %d, array %d, ring %d, oob free %d, hold %d, release %d\n", pool, inflight, pool->allocated_pages, pool->array_pages, pool->ring_pages, atomic_read(&pool->oob_recycle_cnt), pool->pages_state_hold_cnt, atomic_read(&pool->pages_state_release_cnt));
 	if (!inflight)
 		__cacheflow_page_pool_destroy(pool);
 
