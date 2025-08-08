@@ -732,8 +732,6 @@ static int mlx5e_cacheflow_th_init(struct mlx5e_cacheflow_th *th, int cpu,
 	th->cqe_ring = item_ring_create(
 		8192, sizeof(struct mlx5e_cacheflow_cqe), GFP_KERNEL);
 
-	mlx5e_cacheflow_th_debugfs_init(th);
-
 	return 0;
 }
 
@@ -796,8 +794,6 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	c->rq_tracker = rq_tracker;
 	c->vector_ix = READ_ONCE(cacheflow_thread) ? 0 : vector;
 
-	mlx5e_cacheflow_debugfs_init(c);
-
 	mlx5e_cacheflow_build_params(c, cparams, params);
 	mlx5e_cacheflow_print_params(cparams);
 
@@ -851,7 +847,6 @@ static void mlx5e_cacheflow_th_destroy(struct mlx5e_cacheflow_th *th)
 {
 	netif_napi_del(&th->napi);
 	item_ring_destroy(th->cqe_ring);
-	mlx5e_cacheflow_th_debugfs_destroy(th);
 }
 
 void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
@@ -867,8 +862,6 @@ void mlx5e_cacheflow_close(struct mlx5e_cacheflow *c)
 
 	if (c->rq_tracker)
 		mlx5e_cacheflow_rq_tracker_destroy(c->rq_tracker);
-
-	mlx5e_cacheflow_debugfs_destroy(c);
 
 	kvfree(c->th_array);
 	kvfree(c);

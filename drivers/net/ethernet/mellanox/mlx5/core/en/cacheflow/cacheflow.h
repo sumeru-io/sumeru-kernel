@@ -88,7 +88,6 @@ struct mlx5e_cacheflow {
 	int cpu;
 
 	struct mlx5e_cacheflow_rq_tracker *rq_tracker;
-	struct dentry *debugfs_dir;
 };
 
 enum mlx5e_cacheflow_cqe_owner {
@@ -121,8 +120,6 @@ struct mlx5e_cacheflow_th {
 	struct item_ring *cqe_ring;
 	u64 inserted;
 	u64 missed;
-
-	struct dentry *debugfs_dir;
 };
 
 int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
@@ -144,10 +141,5 @@ void mlx5e_cacheflow_destroy_rq(struct mlx5e_cacheflow_rq *rq);
 int mlx5e_cacheflow_flush_rq(struct mlx5e_cacheflow_rq *rq, int curr_state);
 void mlx5e_cacheflow_activate_rq(struct mlx5e_cacheflow_rq *rq);
 void mlx5e_cacheflow_deactivate_rq(struct mlx5e_cacheflow_rq *rq);
-
-void mlx5e_cacheflow_debugfs_init(struct mlx5e_cacheflow *c);
-void mlx5e_cacheflow_debugfs_destroy(struct mlx5e_cacheflow *c);
-void mlx5e_cacheflow_th_debugfs_init(struct mlx5e_cacheflow_th *th);
-void mlx5e_cacheflow_th_debugfs_destroy(struct mlx5e_cacheflow_th *th);
 
 #endif
