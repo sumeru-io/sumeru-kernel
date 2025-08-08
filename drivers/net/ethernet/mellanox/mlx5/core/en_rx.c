@@ -2861,8 +2861,11 @@ static struct sk_buff * mlx5e_cacheflow_skb_from_cqe(struct mlx5e_cacheflow_rq *
 				     mxbuf.xdp.data - mxbuf.xdp.data_meta);
 
 
-	if (unlikely(!skb))
+	if (unlikely(!skb)) {
+		cacheflow_page_pool_put_page(rq->page_pool, page, -1, true);
+
 		return NULL;
+	}
 
 	skb_mark_for_recycle(skb);
 
