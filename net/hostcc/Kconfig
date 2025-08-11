@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# HostCC configuration
+#
+
+config HOSTCC
+	bool "Host Congestion Control (HostCC)"
+	depends on NET && INET && X86_64
+	select NETFILTER
+	select NETFILTER_NETLINK
+	select NETFILTER_XTABLES
+	help
+	  HostCC is a host-based congestion control mechanism that monitors
+	  system congestion signals (PCIe bandwidth, IIO occupancy) and
+	  provides feedback to the network stack through ECN marking and
+	  local response mechanisms.
+
+	  HostCC operates by:
+	  - Monitoring PCIe bandwidth utilization
+	  - Tracking IIO (Integrated I/O) occupancy levels
+	  - Implementing local response mechanisms (MBA throttling)
+	  - Providing network response through ECN marking
+
+	  This is useful for data center environments where host-level
+	  congestion can impact network performance.
+
+	  Say Y if you want to enable HostCC functionality.
+	  Say N if you don't need host-based congestion control.
+
+if HOSTCC
+
+config HOSTCC_LOGGING
+	bool "Enable HostCC logging support"
+	default y
+	help
+	  Enable detailed logging for HostCC measurements and actions.
+	  This includes logging of PCIe bandwidth, IIO occupancy levels,
+	  and congestion control actions taken.
+
+	  Logging data can be accessed through sysfs interfaces.
+
+	  Say Y to enable logging (recommended for debugging and monitoring).
+	  Say N to disable logging (slightly better performance).
+
+config HOSTCC_DEBUG
+	bool "Enable HostCC debug support"
+	default n
+	help
+	  Enable debug output for HostCC operations.
+	  This will generate additional kernel log messages about
+	  HostCC operations and state changes.
+
+	  Say Y only if you are debugging HostCC issues.
+	  Say N for production use.
+
+endif # HOSTCC

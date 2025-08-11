@@ -1,0 +1,231 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * HostCC local response implementation
+ *
+ * Based on HostCC implementation from original research paper
+ * Original author: Saksham Agarwal
+ * Original code: https://github.com/Terabit-Ethernet/hostCC
+ * 
+ * Note: Original code had no explicit license
+ * Used as research baseline under academic fair use
+ *
+ * Modified for built-in kernel integration
+ * Copyright (C) 2025 Minhu Wang, Tsinghua University
+ */
+
+#include "hostcc.h"
+#include "hostcc-signals.h"
+#include "hostcc-local-response.h"
+#include "hostcc-sysfs.h"
+#include "intel-cascadelake-params.h"
+#include <asm/tsc.h>
+
+/* All measurement variables are now declared in hostcc-signals.h */
+
+/* Local static variables (only used in this file) */
+static struct pid *app_pid_struct = NULL;
+
+void update_mba_msr_register(void)
+{
+	uint32_t low = 0;
+	uint32_t high = 0;
+	uint64_t msr_num = PQOS_MSR_MBA_MASK_START + hostcc_mba_cos_id;
+	int i;
+	
+	/* Reset MBA on all configured cores for all levels */
+	for (i = 0; i < hostcc_mba_level_1_core_count; i++) {
+		wrmsr_on_cpu(hostcc_mba_level_1_cores[i], msr_num, low, high);
+	}
+	for (i = 0; i < hostcc_mba_level_2_core_count; i++) {
+		wrmsr_on_cpu(hostcc_mba_level_2_cores[i], msr_num, low, high);
+	}
+	for (i = 0; i < hostcc_mba_level_3_core_count; i++) {
+		wrmsr_on_cpu(hostcc_mba_level_3_cores[i], msr_num, low, high);
+	}
+}
+
+// helper function to send SIGCONT/SIGSTOP signals to processes
+static int send_signal_to_pid(int proc_pid, int signal)
+{
+	if (app_pid_struct != NULL) {
+		rcu_read_lock();
+		kill_pid(app_pid_struct, signal, 1);
+		rcu_read_unlock();
+	}
+	return 0;
+}
+
+void init_mba_process_scheduler(void)
+{
+	app_pid = hostcc_mem_contender_pid;
+	printk("HostCC: MLC PID: %u\n", app_pid);
+	app_pid_task = pid_task(find_get_pid(app_pid), PIDTYPE_PID);
+	app_pid_struct = find_vpid(app_pid);
+	if (app_pid_task == NULL) {
+		printk(KERN_INFO "Cannot find task");
+	} else {
+		printk(KERN_INFO "Found task");
+		struct sched_param param = { .sched_priority = 99 };
+		int result =
+			sched_setscheduler(app_pid_task, SCHED_FIFO, &param);
+		if (result == -1) {
+			printk(KERN_ALERT
+			       "Failed to set scheduling policy and priority\n");
+		}
+	}
+}
+
+void update_mba_process_scheduler(void)
+{
+	WARN_ON(!(latest_mba_val <= 4));
+	if (latest_mba_val == 4) {
+		send_signal_to_pid(app_pid, SIGSTOP);
+	} else {
+		send_signal_to_pid(app_pid, SIGCONT);
+	}
+}
+
+void increase_mba_val(void)
+{
+	uint64_t msr_num = PQOS_MSR_MBA_MASK_START + hostcc_mba_cos_id;
+	u32 low = hostcc_mba_val_high & 0xFFFFFFFF;
+	u32 high = (uint64_t)hostcc_mba_val_high >> 32;
+	int i;
+
+	int max_level = 3; // Three MBA levels
+	if (hostcc_use_process_scheduler) {
+		max_level++; // Allow one more level for SIGSTOP
+	}
+
+	if (latest_mba_val >= max_level) {
+		return; // Already at maximum throttling
+	}
+
+	latest_mba_val++;
+
+	/* Apply MBA throttling to cores progressively by level */
+	switch (latest_mba_val) {
+	case 1:
+		/* Level 1: Throttle all cores in level 1 array */
+		for (i = 0; i < hostcc_mba_level_1_core_count; i++) {
+			wrmsr_on_cpu(hostcc_mba_level_1_cores[i], msr_num, low, high);
+		}
+		break;
+	case 2:
+		/* Level 2: Throttle all cores in level 2 array */
+		for (i = 0; i < hostcc_mba_level_2_core_count; i++) {
+			wrmsr_on_cpu(hostcc_mba_level_2_cores[i], msr_num, low, high);
+		}
+		break;
+	case 3:
+		/* Level 3: Throttle all cores in level 3 array */
+		for (i = 0; i < hostcc_mba_level_3_core_count; i++) {
+			wrmsr_on_cpu(hostcc_mba_level_3_cores[i], msr_num, low, high);
+		}
+		break;
+	case 4:
+		/* Level 4: Use process scheduler (SIGSTOP) */
+		if (hostcc_use_process_scheduler) {
+			update_mba_process_scheduler();
+		}
+		break;
+	default:
+		WARN_ON(!(false));
+		break;
+	}
+}
+
+void decrease_mba_val(void)
+{
+	uint64_t cur_tsc_val = hostcc_read_tsc();
+	/* Use kernel's calibrated TSC frequency for accurate timing */
+	uint64_t elapsed_us = hostcc_get_elapsed_us(last_reduced_tsc, cur_tsc_val);
+	
+	if (elapsed_us < SLACK_TIME_US) {
+		return;
+	}
+	uint64_t msr_num = PQOS_MSR_MBA_MASK_START + hostcc_mba_cos_id;
+	uint32_t low = hostcc_mba_val_low & 0xFFFFFFFF;
+	uint32_t high = (uint64_t)hostcc_mba_val_low >> 32;
+	int i;
+
+	if (latest_mba_val <= 0) {
+		return; // Already at minimum throttling
+	}
+
+	/* Remove MBA throttling based on current level */
+	switch (latest_mba_val) {
+	case 1:
+		/* Removing level 1: Reset throttling on level 1 cores */
+		for (i = 0; i < hostcc_mba_level_1_core_count; i++) {
+			wrmsr_on_cpu(hostcc_mba_level_1_cores[i], msr_num, low, high);
+		}
+		last_reduced_tsc = hostcc_read_tsc();
+		break;
+	case 2:
+		/* Removing level 2: Reset throttling on level 2 cores */
+		for (i = 0; i < hostcc_mba_level_2_core_count; i++) {
+			wrmsr_on_cpu(hostcc_mba_level_2_cores[i], msr_num, low, high);
+		}
+		last_reduced_tsc = hostcc_read_tsc();
+		break;
+	case 3:
+		/* Removing level 3: Reset throttling on level 3 cores */
+		for (i = 0; i < hostcc_mba_level_3_core_count; i++) {
+			wrmsr_on_cpu(hostcc_mba_level_3_cores[i], msr_num, low, high);
+		}
+		last_reduced_tsc = hostcc_read_tsc();
+		break;
+	case 4:
+		/* Coming down from SIGSTOP level */
+		if (hostcc_use_process_scheduler) {
+			update_mba_process_scheduler(); // Should send SIGCONT
+		}
+		last_reduced_tsc = hostcc_read_tsc();
+		break;
+	default:
+		WARN_ON(!(false));
+		break;
+	}
+
+	latest_mba_val--;
+}
+
+void host_local_response(void)
+{
+	if (hostcc_mode == 0) {
+		// Rx side logic
+		if ((smoothed_avg_pcie_bw) <
+		    (hostcc_target_pcie_thresh << 10)) {
+			if (latest_measured_avg_occ_wr >
+			    hostcc_target_iio_wr_thresh) {
+				increase_mba_val();
+			}
+		}
+
+		if ((smoothed_avg_pcie_bw) >
+		    (hostcc_target_pcie_thresh << 10)) {
+			if (latest_measured_avg_occ_wr <
+			    hostcc_target_iio_wr_thresh) {
+				decrease_mba_val();
+			}
+		}
+	} else {
+		//Tx side logic
+		if ((smoothed_avg_pcie_bw_rd) <
+		    (hostcc_target_pcie_thresh << 10)) {
+			if (latest_measured_avg_occ_rd >
+			    hostcc_target_iio_rd_thresh) {
+				increase_mba_val();
+			}
+		}
+
+		if ((smoothed_avg_pcie_bw_rd) >
+		    (hostcc_target_pcie_thresh << 10)) {
+			if (latest_measured_avg_occ_rd <
+			    hostcc_target_iio_rd_thresh) {
+				decrease_mba_val();
+			}
+		}
+	}
+}
