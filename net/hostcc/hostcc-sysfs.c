@@ -30,7 +30,7 @@ int hostcc_enable_local_response = 1;
 int hostcc_mode = 0; /* 0 = Rx, 1 = Tx */
 
 /* Runtime control parameters */
-int hostcc_enable = 1; /* Global enable/disable for HostCC */
+int hostcc_enable = 0; /* Global enable/disable for HostCC - start disabled */
 int hostcc_enable_logging = 1; /* Enable/disable logging */
 
 char hostcc_nic_interface[16] = "ens2f1";
@@ -294,7 +294,31 @@ HOSTCC_ATTR_SIMPLE(pcie_core, hostcc_pcie_core)
 HOSTCC_ATTR_SIMPLE(pcie_logging, hostcc_pcie_logging)
 HOSTCC_ATTR_SIMPLE(ecn_logging, hostcc_ecn_logging)
 HOSTCC_ATTR_SIMPLE(log_size, hostcc_log_size)
-HOSTCC_ATTR_SIMPLE(enable, hostcc_enable)
+/* Custom enable/disable handler */
+static ssize_t enable_show(struct kobject *kobj,
+			   struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", hostcc_enable);
+}
+
+static ssize_t enable_store(struct kobject *kobj,
+			    struct kobj_attribute *attr,
+			    const char *buf, size_t count)
+{
+	int val, ret;
+
+	if (sscanf(buf, "%d", &val) == 1 && (val == 0 || val == 1)) {
+		ret = hostcc_set_enable(val);
+		if (ret) {
+			pr_err("HostCC: Failed to %s: %d\n",
+			       val ? "enable" : "disable", ret);
+			return ret;
+		}
+		return count;
+	}
+	return -EINVAL;
+}
+
 HOSTCC_ATTR_SIMPLE(enable_logging, hostcc_enable_logging)
 
 /* Sysfs attributes */

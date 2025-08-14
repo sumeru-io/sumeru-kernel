@@ -35,6 +35,10 @@ struct task_struct *app_pid_task = NULL;
 static struct workqueue_struct *poll_iio_queue, *poll_pcie_queue;
 static struct work_struct poll_iio, poll_pcie;
 
+/* Forward declarations for enable/disable functions */
+static int hostcc_start(void);
+static void hostcc_stop(void);
+
 static void poll_iio_init(void)
 {
 	/* Initialize the log */
@@ -171,6 +175,84 @@ static void thread_fun_poll_pcie(struct work_struct *work)
 	}
 }
 
+/* Start/Stop functions */
+static int hostcc_start(void)
+{
+	int ret = 0;
+
+	/* Start IIO occupancy measurement */
+	poll_iio_queue = alloc_workqueue("hostcc_iio", WQ_HIGHPRI | WQ_CPU_INTENSIVE, 0);
+	if (!poll_iio_queue) {
+		pr_err("HostCC: Failed to create IIO workqueue\n");
+		return -ENOMEM;
+	}
+
+	INIT_WORK(&poll_iio, thread_fun_poll_iio);
+	poll_iio_init();
+	queue_work_on(hostcc_iio_core, poll_iio_queue, &poll_iio);
+
+	/* Start PCIe bandwidth measurement */
+	poll_pcie_queue = alloc_workqueue("hostcc_pcie", WQ_HIGHPRI | WQ_CPU_INTENSIVE, 0);
+	if (!poll_pcie_queue) {
+		pr_err("HostCC: Failed to create PCIe workqueue\n");
+		ret = -ENOMEM;
+		goto err_iio;
+	}
+
+	INIT_WORK(&poll_pcie, thread_fun_poll_pcie);
+	poll_pcie_init();
+	queue_work_on(hostcc_pcie_core, poll_pcie_queue, &poll_pcie);
+
+	/* Start netfilter hooks */
+	ret = nf_init();
+	if (ret) {
+		pr_err("HostCC: Failed to initialize netfilter hooks\n");
+		goto err_pcie;
+	}
+
+	pr_info("HostCC: HostCC started successfully\n");
+	return 0;
+
+err_pcie:
+	poll_pcie_exit();
+err_iio:
+	poll_iio_exit();
+	return ret;
+}
+
+static void hostcc_stop(void)
+{
+	/* Stop netfilter hooks first */
+	nf_exit();
+
+	/* Stop worker threads and clean up */
+	poll_iio_exit();
+	poll_pcie_exit();
+
+	pr_info("HostCC: HostCC stopped\n");
+}
+
+/* Main enable/disable handler called from sysfs */
+int hostcc_set_enable(int enable)
+{
+	int ret = 0;
+
+	if (enable && !hostcc_enable) {
+		hostcc_enable = 1;
+		ret = hostcc_start();
+		if (ret) {
+			pr_err("HostCC: Failed to start HostCC\n");
+			hostcc_enable = 0; /* Rollback */
+			return ret;
+		}
+	} else if (!enable && hostcc_enable) {
+		hostcc_enable = 0;
+		hostcc_stop();
+	}
+
+	return 0;
+}
+
 static int __init hostcc_init(void)
 {
 	int ret;
@@ -184,73 +266,9 @@ static int __init hostcc_init(void)
 		return ret;
 	}
 
-	/* Start IIO occupancy measurement */
-	poll_iio_queue =
-		alloc_workqueue("hostcc_iio", WQ_HIGHPRI | WQ_CPU_INTENSIVE, 0);
-	if (!poll_iio_queue) {
-		pr_err("HostCC: Failed to create IIO workqueue\n");
-		ret = -ENOMEM;
-		goto err_sysfs;
-	}
-
-	INIT_WORK(&poll_iio, thread_fun_poll_iio);
-	poll_iio_init();
-	queue_work_on(hostcc_iio_core, poll_iio_queue, &poll_iio);
-
-	/* Start PCIe bandwidth measurement */
-	poll_pcie_queue = alloc_workqueue("hostcc_pcie",
-					  WQ_HIGHPRI | WQ_CPU_INTENSIVE, 0);
-	if (!poll_pcie_queue) {
-		pr_err("HostCC: Failed to create PCIe workqueue\n");
-		ret = -ENOMEM;
-		goto err_iio;
-	}
-
-	INIT_WORK(&poll_pcie, thread_fun_poll_pcie);
-	poll_pcie_init();
-	queue_work_on(hostcc_pcie_core, poll_pcie_queue, &poll_pcie);
-
-	/* Start ECN marking */
-	ret = nf_init();
-	if (ret) {
-		pr_err("HostCC: Failed to initialize netfilter hooks\n");
-		goto err_pcie;
-	}
-
-	pr_info("HostCC: Initialization completed successfully\n");
+	pr_info("HostCC: Initialization completed successfully (disabled by default)\n");
+	pr_info("HostCC: Use /sys/kernel/hostcc/enable to enable functionality\n");
 	return 0;
-
-err_pcie:
-	poll_pcie_exit();
-err_iio:
-	poll_iio_exit();
-err_sysfs:
-	hostcc_sysfs_cleanup();
-	return ret;
 }
 
-static void __exit hostcc_exit(void)
-{
-	pr_info("HostCC: Shutting down Host Congestion Control\n");
-
-	/* Signal termination to worker threads */
-	hostcc_enable_logging = 0;
-	msleep(5000); /* Allow logging to finish */
-	hostcc_enable = 0;
-
-	/* Clean up netfilter hooks */
-	nf_exit();
-
-	/* Stop worker threads and clean up */
-	poll_iio_exit();
-	poll_pcie_exit();
-
-	/* Clean up sysfs interface */
-	hostcc_sysfs_cleanup();
-
-	pr_info("HostCC: Shutdown completed\n");
-}
-
-/* For built-in subsystems, we use subsys_initcall instead of module_init */
 subsys_initcall(hostcc_init);
-/* Exit function is only called during shutdown, no module_exit needed */

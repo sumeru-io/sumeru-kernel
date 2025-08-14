@@ -77,4 +77,7 @@ extern int hostcc_enable_logging;
 int hostcc_sysfs_init(void);
 void hostcc_sysfs_cleanup(void);
 
+/* Core enable/disable functionality */
+int hostcc_set_enable(int enable);
+
 #endif /* HOSTCC_SYSFS_H */
