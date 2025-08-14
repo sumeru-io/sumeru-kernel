@@ -767,9 +767,19 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 	}
 
 	for (vector = 0; vector < mlx5_comp_vectors_max(mdev); vector++) {
-		if (mlx5_comp_vector_get_cpu(mdev, vector) == get_cacheflow_steer_core())
+		int vector_cpu = mlx5_comp_vector_get_cpu(mdev, vector);
+		err = mlx5_comp_irqn_get(mdev, vector, &irq);
+		if (err)
+			continue;
+		pr_info("cacheflow: vector %d ==> core %d, irq %d\n", vector, vector_cpu, irq);
+	}
+
+	for (vector = 0; vector < mlx5_comp_vectors_max(mdev); vector++) {
+		int vector_cpu = mlx5_comp_vector_get_cpu(mdev, vector);
+		if (vector_cpu == get_cacheflow_steer_core())
 			break;
 	}
+
 	if (vector == mlx5_comp_vectors_max(mdev)) {
 		pr_err("cacheflow: no vector found for core %d\n",
 			get_cacheflow_steer_core());
@@ -809,8 +819,8 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 		netif_napi_add(netdev, &c->napi,
 			       mlx5e_cacheflow_bh_napi_poll);
 		netif_napi_set_irq(&c->napi, irq);
-		pr_info("cacheflow: add NAPI %d (irq) on core %d, vector %d, res: %s\n",
-			c->napi.napi_id, get_cacheflow_steer_core(), vector, "succeed");
+		pr_info("cacheflow: add NAPI %d (irq %d) on core %d, vector %d, res: %s\n",
+			c->napi.napi_id, irq, get_cacheflow_steer_core(), vector, "succeed");
 	}
 
 	err = mlx5e_cacheflow_open_queues(c, cparams);
