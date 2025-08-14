@@ -48,6 +48,8 @@ struct log_entry_pcie {
 	char ktime[32]; //latest measured time delta in us
 	int cpu; //current cpu
 	uint32_t mba_val; // latest MBA value (from 0 to 4, increasing value denotes lower CPU-Memory Bandwidth)
+	uint64_t cur_cum_occ_wr;
+	uint64_t prev_cum_occ_wr;
 	uint32_t m_avg_occ; //latest measured avg IIO occupancy
 	uint32_t s_avg_pcie_bw; //smoothed average PCIe bandwidth
 	uint32_t avg_pcie_bw; //latest PCIe bandwidth sample
