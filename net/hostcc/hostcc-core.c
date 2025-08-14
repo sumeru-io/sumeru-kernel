@@ -89,6 +89,14 @@ static void thread_fun_poll_iio(struct work_struct *work)
 		budget--;
 	}
 
+	if (hostcc_enable_logging && hostcc_iio_logging) {
+		if (hostcc_mode == HOSTCC_MODE_RX) {
+			dump_iio_wr_log();
+		} else {
+			dump_iio_rd_log();
+		}
+	}
+
 	if (hostcc_enable) {
 		queue_work_on(cpu, poll_iio_queue, &poll_iio);
 	}
@@ -152,6 +160,10 @@ static void thread_fun_poll_pcie(struct work_struct *work)
 		}
 
 		budget--;
+	}
+
+	if (hostcc_enable_logging && hostcc_pcie_logging) {
+		dump_pcie_log();
 	}
 
 	if (hostcc_enable) {
