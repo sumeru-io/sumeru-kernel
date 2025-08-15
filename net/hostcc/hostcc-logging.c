@@ -155,6 +155,8 @@ void dump_iio_wr_log(void)
 
 extern uint64_t prev_cum_occ_wr;
 extern uint64_t cur_cum_occ_wr;
+extern uint64_t prev_cum_frc;
+extern uint64_t cur_cum_frc;
 
 void update_log_pcie(int c)
 {
@@ -165,10 +167,6 @@ void update_log_pcie(int c)
 	LOG_PCIE[log_index_pcie % LOG_SIZE_DEFAULT].mba_val = latest_mba_val;
 	LOG_PCIE[log_index_pcie % LOG_SIZE_DEFAULT].m_avg_occ =
 		latest_measured_avg_occ_wr;
-	LOG_PCIE[log_index_pcie % LOG_SIZE_DEFAULT].cur_cum_occ_wr =
-		cur_cum_occ_wr;
-	LOG_PCIE[log_index_pcie % LOG_SIZE_DEFAULT].prev_cum_occ_wr =
-		prev_cum_occ_wr;
 	LOG_PCIE[log_index_pcie % LOG_SIZE_DEFAULT].m_avg_occ_rd =
 		latest_measured_avg_occ_rd;
 	LOG_PCIE[log_index_pcie % LOG_SIZE_DEFAULT].s_avg_pcie_bw =
@@ -183,6 +181,12 @@ void update_log_pcie(int c)
 		LOG_PCIE[log_index_pcie % LOG_SIZE_DEFAULT].task_state =
 			app_pid_task ? READ_ONCE(app_pid_task->__state) : 0;
 	}
+	LOG_PCIE[log_index_pcie % LOG_SIZE_DEFAULT].cur_cum_occ_wr =
+		cur_cum_occ_wr;
+	LOG_PCIE[log_index_pcie % LOG_SIZE_DEFAULT].prev_cum_occ_wr =
+		prev_cum_occ_wr;
+	LOG_PCIE[log_index_pcie % LOG_SIZE_DEFAULT].prev_cum_frc = prev_cum_frc;
+	LOG_PCIE[log_index_pcie % LOG_SIZE_DEFAULT].cur_cum_frc = cur_cum_frc;
 	log_index_pcie++;
 }
 
@@ -200,6 +204,8 @@ void init_pcie_log(void)
 		LOG_PCIE[i].s_avg_pcie_bw = 0;
 		LOG_PCIE[i].cur_cum_occ_wr = 0;
 		LOG_PCIE[i].prev_cum_occ_wr = 0;
+		LOG_PCIE[i].prev_cum_frc = 0;
+		LOG_PCIE[i].cur_cum_frc = 0;
 		LOG_PCIE[i].task_state = 0xFFFF;
 		i++;
 	}
@@ -209,13 +215,14 @@ void dump_pcie_log(void)
 {
 	int i = 0;
 	while (i < LOG_SIZE_DEFAULT) {
-		trace_printk("PCIE:%d,%lld,%lld,%d,%d,%d,%d,%d,%d,%d,%d,%u,%llu,%llu\n", i,
+		trace_printk("PCIE:%d,%lld,%lld,%d,%d,%d,%d,%d,%d,%d,%d,%d,%llu,%llu,%llu,%llu\n", i,
 		       LOG_PCIE[i].l_tsc, LOG_PCIE[i].td_ns, LOG_PCIE[i].cpu,
 		       LOG_PCIE[i].mba_val, LOG_PCIE[i].m_avg_occ,
 		       LOG_PCIE[i].avg_pcie_bw, LOG_PCIE[i].s_avg_pcie_bw,
 		       LOG_PCIE[i].m_avg_occ_rd, LOG_PCIE[i].avg_pcie_bw_rd,
 		       LOG_PCIE[i].s_avg_pcie_bw_rd, LOG_PCIE[i].task_state,
-		       LOG_PCIE[i].cur_cum_occ_wr, LOG_PCIE[i].prev_cum_occ_wr);
+		       LOG_PCIE[i].cur_cum_occ_wr, LOG_PCIE[i].prev_cum_occ_wr,
+		       LOG_PCIE[i].cur_cum_frc, LOG_PCIE[i].prev_cum_frc);
 		i++;
 	}
 }
