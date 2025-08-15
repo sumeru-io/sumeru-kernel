@@ -27,7 +27,7 @@ uint64_t smoothed_avg_occ_rd = 0;
 uint64_t latest_time_delta_iio_rd_ns = 0;
 uint64_t cur_rdtsc_iio_wr = 0;
 uint64_t latest_avg_occ_wr = 0;
-uint64_t smoothed_avg_occ_wr;
+uint64_t smoothed_avg_occ_wr = 0;
 uint64_t latest_time_delta_iio_wr_ns = 0;
 uint64_t cur_rdtsc_mba = 0;
 uint64_t latest_time_delta_mba_ns = 0;
@@ -110,7 +110,7 @@ void update_iio_rd_occ(void)
 	/* Convert TSC cycles to nanoseconds using kernel's TSC frequency */
 	extern unsigned int tsc_khz;
 	latest_time_delta_iio_rd_ns =
-		((cur_rdtsc_iio_rd - prev_rdtsc_iio_rd) * 1000000ULL) / tsc_khz;
+		((cur_rdtsc_iio_rd - prev_rdtsc_iio_rd) * 465000ULL) / tsc_khz;
 	if (latest_time_delta_iio_rd_ns > 0) {
 		latest_avg_occ_rd = (cur_cum_occ_rd - prev_cum_occ_rd) /
 				    (latest_time_delta_iio_rd_ns);
@@ -224,7 +224,7 @@ void sample_counters_pcie_bw(int c)
 void update_pcie_bw(void)
 {
 	/* Convert TSC cycles to nanoseconds using kernel's TSC frequency */
-	latest_time_delta_mba_ns = ((cur_rdtsc_mba - prev_rdtsc_mba) * 1000000ULL) / tsc_khz;
+	latest_time_delta_mba_ns = ((cur_rdtsc_mba - prev_rdtsc_mba) * 935000ULL) / tsc_khz;
 	if (latest_time_delta_mba_ns > 0) {
 		// latest_measured_avg_pcie_bw = (uint32_t)((((float)(cur_cum_frc - prev_cum_frc)) / ((float)(latest_time_delta_ns)) ) * 32);
 		if (hostcc_mode == HOSTCC_MODE_RX) {
