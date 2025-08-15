@@ -109,17 +109,14 @@ void update_iio_rd_occ(void)
 {
 	/* Convert TSC cycles to nanoseconds using kernel's TSC frequency */
 	extern unsigned int tsc_khz;
-	latest_time_delta_iio_rd_ns =
-		((cur_rdtsc_iio_rd - prev_rdtsc_iio_rd) * 935000ULL) / tsc_khz;
-	if (latest_time_delta_iio_rd_ns > 0) {
-		latest_avg_occ_rd = (cur_cum_occ_rd - prev_cum_occ_rd) /
-				    (latest_time_delta_iio_rd_ns);
-		// ((occ[i] - occ[i-1]) / (((time_us[i+1] - time_us[i])) * 1e-6 * freq));
-		// IIO counter operates at thee frequency of 1000MHz
-		if (latest_avg_occ_rd >= 0) {
-			smoothed_avg_occ_rd = ((7 * smoothed_avg_occ_rd) +
-					       (latest_avg_occ_rd << 10)) >>
-					      3;
+	if ((cur_rdtsc_iio_rd > prev_rdtsc_iio_rd) && (cur_cum_occ_rd >= prev_cum_occ_rd)) {
+		latest_time_delta_iio_rd_ns = ((cur_rdtsc_iio_rd - prev_rdtsc_iio_rd) * 935000ULL) / tsc_khz;
+		if (latest_time_delta_iio_rd_ns > 0) {
+			latest_avg_occ_rd = (cur_cum_occ_rd - prev_cum_occ_rd) /
+					    (latest_time_delta_iio_rd_ns);
+			// ((occ[i] - occ[i-1]) / (((time_us[i+1] - time_us[i])) * 1e-6 * freq));
+			// IIO counter operates at thee frequency of 1000MHz
+			smoothed_avg_occ_rd = ((7 * smoothed_avg_occ_rd) + (latest_avg_occ_rd << 10)) >> 3;
 		}
 	}
 }
@@ -168,17 +165,15 @@ void sample_counters_iio_wr(int c)
 void update_iio_wr_occ(void)
 {
 	/* Convert TSC cycles to nanoseconds using kernel's TSC frequency */
-	latest_time_delta_iio_wr_ns =
-		((cur_rdtsc_iio_wr - prev_rdtsc_iio_wr) * 465000ULL) / tsc_khz;
-	if (latest_time_delta_iio_wr_ns > 0) {
-		latest_avg_occ_wr = (cur_cum_occ_wr - prev_cum_occ_wr) /
-				    (latest_time_delta_iio_wr_ns);
-		// ((occ[i] - occ[i-1]) / (((time_us[i+1] - time_us[i])) * 1e-6 * freq));
-		// IRP counter operates at the frequency of 500MHz
-		if (latest_avg_occ_wr > 0) {
-			smoothed_avg_occ_wr = ((7 * smoothed_avg_occ_wr) +
-					       (latest_avg_occ_wr << 10)) >>
-					      3;
+
+	if ((cur_rdtsc_iio_wr > prev_rdtsc_iio_wr) && (cur_cum_occ_wr >= prev_cum_occ_wr)) {
+		latest_time_delta_iio_wr_ns = ((cur_rdtsc_iio_wr - prev_rdtsc_iio_wr) * 465000ULL) / tsc_khz;
+		if (latest_time_delta_iio_wr_ns > 0) {
+			latest_avg_occ_wr = (cur_cum_occ_wr - prev_cum_occ_wr) /
+					    (latest_time_delta_iio_wr_ns);
+			// ((occ[i] - occ[i-1]) / (((time_us[i+1] - time_us[i])) * 1e-6 * freq));
+			// IRP counter operates at the frequency of 500MHz
+			smoothed_avg_occ_wr = ((7 * smoothed_avg_occ_wr) + (latest_avg_occ_wr << 10)) >> 3;
 		}
 	}
 }
@@ -224,27 +219,29 @@ void sample_counters_pcie_bw(int c)
 void update_pcie_bw(void)
 {
 	/* Convert TSC cycles to nanoseconds using kernel's TSC frequency */
-	latest_time_delta_mba_ns = ((cur_rdtsc_mba - prev_rdtsc_mba) * 935000ULL) / tsc_khz;
-	if (latest_time_delta_mba_ns > 0) {
+	if (cur_rdtsc_mba > prev_rdtsc_mba) {
 		// latest_measured_avg_pcie_bw = (uint32_t)((((float)(cur_cum_frc - prev_cum_frc)) / ((float)(latest_time_delta_ns)) ) * 32);
-		if (hostcc_mode == HOSTCC_MODE_RX) {
-			latest_avg_pcie_bw = (cur_cum_frc - prev_cum_frc) /
-					     (latest_time_delta_mba_ns >> 5);
-			if (latest_avg_pcie_bw < 150) {
-				smoothed_avg_pcie_bw =
-					((255 * smoothed_avg_pcie_bw) +
-					 (latest_avg_pcie_bw << 10)) >>
-					8;
-			}
-		} else {
-			latest_avg_pcie_bw_rd =
-				(cur_cum_frc_rd - prev_cum_frc_rd) /
-				(latest_time_delta_mba_ns >> 5);
-			if (latest_avg_pcie_bw_rd < 150) {
-				smoothed_avg_pcie_bw_rd =
-					((255 * smoothed_avg_pcie_bw_rd) +
-					 (latest_avg_pcie_bw_rd << 10)) >>
-					8;
+		latest_time_delta_mba_ns = ((cur_rdtsc_mba - prev_rdtsc_mba) * 935000ULL) / tsc_khz;
+		if (latest_time_delta_mba_ns > 0) {
+			if ((hostcc_mode == HOSTCC_MODE_RX) && (cur_cum_frc >= prev_cum_frc)) {
+				latest_avg_pcie_bw = (cur_cum_frc - prev_cum_frc) /
+						     (latest_time_delta_mba_ns >> 5);
+				if (latest_avg_pcie_bw < 150) {
+					smoothed_avg_pcie_bw =
+						((255 * smoothed_avg_pcie_bw) +
+						 (latest_avg_pcie_bw << 10)) >>
+						8;
+				}
+			} else if ((hostcc_mode == HOSTCC_MODE_TX) && (cur_cum_frc_rd >= prev_cum_frc_rd)) {
+				latest_avg_pcie_bw_rd =
+					(cur_cum_frc_rd - prev_cum_frc_rd) /
+					(latest_time_delta_mba_ns >> 5);
+				if (latest_avg_pcie_bw_rd < 150) {
+					smoothed_avg_pcie_bw_rd =
+						((255 * smoothed_avg_pcie_bw_rd) +
+						 (latest_avg_pcie_bw_rd << 10)) >>
+						8;
+				}
 			}
 		}
 	}
