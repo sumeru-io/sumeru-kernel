@@ -175,7 +175,7 @@ void update_iio_wr_occ(void)
 				    (latest_time_delta_iio_wr_ns >> 1);
 		// ((occ[i] - occ[i-1]) / (((time_us[i+1] - time_us[i])) * 1e-6 * freq));
 		// IRP counter operates at the frequency of 500MHz
-		if (latest_avg_occ_wr > 10) {
+		if (latest_avg_occ_wr > 0) {
 			smoothed_avg_occ_wr = ((7 * smoothed_avg_occ_wr) +
 					       (latest_avg_occ_wr << 10)) >>
 					      3;
