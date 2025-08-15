@@ -110,7 +110,7 @@ void update_iio_rd_occ(void)
 	/* Convert TSC cycles to nanoseconds using kernel's TSC frequency */
 	extern unsigned int tsc_khz;
 	latest_time_delta_iio_rd_ns =
-		((cur_rdtsc_iio_rd - prev_rdtsc_iio_rd) * 465000ULL) / tsc_khz;
+		((cur_rdtsc_iio_rd - prev_rdtsc_iio_rd) * 935000ULL) / tsc_khz;
 	if (latest_time_delta_iio_rd_ns > 0) {
 		latest_avg_occ_rd = (cur_cum_occ_rd - prev_cum_occ_rd) /
 				    (latest_time_delta_iio_rd_ns);
@@ -169,10 +169,10 @@ void update_iio_wr_occ(void)
 {
 	/* Convert TSC cycles to nanoseconds using kernel's TSC frequency */
 	latest_time_delta_iio_wr_ns =
-		((cur_rdtsc_iio_wr - prev_rdtsc_iio_wr) * 1000000ULL) / tsc_khz;
+		((cur_rdtsc_iio_wr - prev_rdtsc_iio_wr) * 465000ULL) / tsc_khz;
 	if (latest_time_delta_iio_wr_ns > 0) {
 		latest_avg_occ_wr = (cur_cum_occ_wr - prev_cum_occ_wr) /
-				    (latest_time_delta_iio_wr_ns >> 1);
+				    (latest_time_delta_iio_wr_ns);
 		// ((occ[i] - occ[i-1]) / (((time_us[i+1] - time_us[i])) * 1e-6 * freq));
 		// IRP counter operates at the frequency of 500MHz
 		if (latest_avg_occ_wr > 0) {
