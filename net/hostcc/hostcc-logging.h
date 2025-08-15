@@ -39,6 +39,8 @@ struct log_entry_iio_wr {
 	uint64_t td_ns; //latest measured time delta in us
 	uint64_t avg_occ; //latest measured avg IIO occupancy
 	uint64_t s_avg_occ; //latest calculated smoothed occupancy
+	uint64_t cur_cum_occ_wr;
+	uint64_t prev_cum_occ_wr;
 	int cpu; //current cpu
 };
 

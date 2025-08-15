@@ -106,6 +106,9 @@ void dump_iio_rd_log(void)
 	}
 }
 
+extern uint64_t cur_cum_occ_wr;
+extern uint64_t prev_cum_occ_wr;
+
 void update_log_iio_wr(int c)
 {
 	LOG_IIO_WR[log_index_iio_wr % LOG_SIZE_DEFAULT].l_tsc =
@@ -116,6 +119,8 @@ void update_log_iio_wr(int c)
 		latest_avg_occ_wr;
 	LOG_IIO_WR[log_index_iio_wr % LOG_SIZE_DEFAULT].s_avg_occ =
 		(smoothed_avg_occ_wr >> 10);
+	LOG_IIO_WR[log_index_iio_wr % LOG_SIZE_DEFAULT].cur_cum_occ_wr = cur_cum_occ_wr;
+	LOG_IIO_WR[log_index_iio_wr % LOG_SIZE_DEFAULT].prev_cum_occ_wr = prev_cum_occ_wr;
 	LOG_IIO_WR[log_index_iio_wr % LOG_SIZE_DEFAULT].cpu = c;
 	log_index_iio_wr++;
 }
@@ -129,6 +134,8 @@ void init_iio_wr_log(void)
 		LOG_IIO_WR[i].avg_occ = 0;
 		LOG_IIO_WR[i].s_avg_occ = 0;
 		LOG_IIO_WR[i].cpu = 65;
+		LOG_IIO_WR[i].cur_cum_occ_wr = 0;
+		LOG_IIO_WR[i].prev_cum_occ_wr = 0;
 		i++;
 	}
 }
@@ -137,10 +144,11 @@ void dump_iio_wr_log(void)
 {
 	int i = 0;
 	while (i < LOG_SIZE_DEFAULT) {
-		trace_printk("IIO:%d,%lld,%lld,%lld,%lld,%d\n", i,
+		trace_printk("IIO:%d,%lld,%lld,%lld,%lld,%d,%llu,%llu\n", i,
 		       LOG_IIO_WR[i].l_tsc, LOG_IIO_WR[i].td_ns,
 		       LOG_IIO_WR[i].avg_occ, LOG_IIO_WR[i].s_avg_occ,
-		       LOG_IIO_WR[i].cpu);
+		       LOG_IIO_WR[i].cpu, LOG_IIO_WR[i].cur_cum_occ_wr,
+		       LOG_IIO_WR[i].prev_cum_occ_wr);
 		i++;
 	}
 }

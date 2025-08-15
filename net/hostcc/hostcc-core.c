@@ -23,6 +23,7 @@
 #include "hostcc-network-response.h"
 #include "hostcc-logging.h"
 #include "hostcc-sysfs.h"
+#include "intel-cascadelake-params.h"
 
 /* Global variables shared across HostCC modules */
 uint32_t latest_mba_val = 0;
@@ -76,7 +77,8 @@ static void thread_fun_poll_iio(struct work_struct *work)
 	int cpu = hostcc_iio_core;
 	uint32_t budget = WORKER_BUDGET;
 
-	trace_printk("HostCC: Sampling IIO Occupancy measurement\n");
+	trace_printk("HostCC: Sampling IIO Occupancy measurement: MSR %08lX, tsc kHz: %u\n", IRP_MSR_PMON_CTR_BASE + (0x20 * hostcc_nic_iio_stack) +
+	IIO_WR_COUNTER_OFFSET, tsc_khz);
 
 	while (budget) {
 		if (hostcc_mode == HOSTCC_MODE_RX) {
