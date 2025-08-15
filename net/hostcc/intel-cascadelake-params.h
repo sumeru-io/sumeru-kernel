@@ -5,7 +5,7 @@
 // IIO write occupancy
 #define IRP_MSR_PMON_CTL_BASE 0x0A5BL
 #define IRP_MSR_PMON_CTR_BASE 0x0A59L
-#define IRP_OCC_VAL 0x0040040F
+#define IRP_OCC_VAL 0x0040010F
 #define IIO_WR_COUNTER_OFFSET 0
 // IIO read occupancy
 #define IIO_MSR_PMON_CTL_BASE 0x0A48L
@@ -16,9 +16,9 @@
 // MSR locations for PCIe bandwidth measurements
 // Based on lspci analysis: Mellanox NIC on Bus 0x3a -> IIO Stack 2, Socket 0
 #define IIO_PCIE_1_PORT_0_BW_IN \
-	0x0B40 // IIO Stack 2, Port 0 ingress (Mellanox ConnectX-5)
+	0x0B20 // IIO Stack 2, Port 0 ingress (Mellanox ConnectX-5)
 #define IIO_PCIE_1_PORT_0_BW_OUT \
-	0x0B44 // IIO Stack 2, Port 0 egress (Mellanox ConnectX-5)
+	0x0B24 // IIO Stack 2, Port 0 egress (Mellanox ConnectX-5)
 
 // Other stacks for reference:
 // IIO Stack 0: 0x0B00 (ingress), 0x0B04 (egress) - for chipset devices
