@@ -76,6 +76,8 @@ static void thread_fun_poll_iio(struct work_struct *work)
 	int cpu = hostcc_iio_core;
 	uint32_t budget = WORKER_BUDGET;
 
+	trace_printk("HostCC: Sampling IIO Occupancy measurement\n");
+
 	while (budget) {
 		if (hostcc_mode == HOSTCC_MODE_RX) {
 			sample_counters_iio_wr(cpu); /* sample counters */

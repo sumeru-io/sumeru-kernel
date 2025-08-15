@@ -60,7 +60,7 @@ void dump_nf_log(void)
 {
 	int i = 0;
 	while (i < LOG_SIZE_DEFAULT) {
-		printk("NF:%d,%lld,%lld,%lld,%d,%d\n", i, LOG_NF[i].l_tsc,
+		trace_printk("NF:%d,%lld,%lld,%lld,%d,%d\n", i, LOG_NF[i].l_tsc,
 		       LOG_NF[i].td_ns, LOG_NF[i].m_avg_occ, LOG_NF[i].cpu,
 		       LOG_NF[i].dat_len);
 		i++;
@@ -98,7 +98,7 @@ void dump_iio_rd_log(void)
 {
 	int i = 0;
 	while (i < LOG_SIZE_DEFAULT) {
-		printk("IIORD:%d,%lld,%lld,%lld,%lld,%d\n", i,
+		trace_printk("IIORD:%d,%lld,%lld,%lld,%lld,%d\n", i,
 		       LOG_IIO_RD[i].l_tsc, LOG_IIO_RD[i].td_ns,
 		       LOG_IIO_RD[i].avg_occ_rd, LOG_IIO_RD[i].s_avg_occ_rd,
 		       LOG_IIO_RD[i].cpu);
@@ -137,7 +137,7 @@ void dump_iio_wr_log(void)
 {
 	int i = 0;
 	while (i < LOG_SIZE_DEFAULT) {
-		printk("IIO:%d,%lld,%lld,%lld,%lld,%d\n", i,
+		trace_printk("IIO:%d,%lld,%lld,%lld,%lld,%d\n", i,
 		       LOG_IIO_WR[i].l_tsc, LOG_IIO_WR[i].td_ns,
 		       LOG_IIO_WR[i].avg_occ, LOG_IIO_WR[i].s_avg_occ,
 		       LOG_IIO_WR[i].cpu);
@@ -201,7 +201,7 @@ void dump_pcie_log(void)
 {
 	int i = 0;
 	while (i < LOG_SIZE_DEFAULT) {
-		printk("PCIE:%d,%lld,%lld,%d,%d,%d,%d,%d,%d,%d,%d,%u,%llu,%llu\n", i,
+		trace_printk("PCIE:%d,%lld,%lld,%d,%d,%d,%d,%d,%d,%d,%d,%u,%llu,%llu\n", i,
 		       LOG_PCIE[i].l_tsc, LOG_PCIE[i].td_ns, LOG_PCIE[i].cpu,
 		       LOG_PCIE[i].mba_val, LOG_PCIE[i].m_avg_occ,
 		       LOG_PCIE[i].avg_pcie_bw, LOG_PCIE[i].s_avg_pcie_bw,
