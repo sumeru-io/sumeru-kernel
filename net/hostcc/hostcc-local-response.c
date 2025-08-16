@@ -26,21 +26,40 @@ static struct pid *app_pid_struct = NULL;
 
 static void throttle_mba_cores(int cpu)
 {
+	int err;
 	uint64_t assoc_val;
-	rdmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, &assoc_val);
-	wrmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, (assoc_val & ~(0x3FFULL)) | hostcc_mba_cos_id);
+	err = rdmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, &assoc_val);
+	if (err) {
+		pr_err("HostCC: failed to read MBA MSR register %x, error: %d\n", PQOS_MSR_ASSOC, err);
+	}
+	err = wrmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, (assoc_val & ~(0x3FFULL)) | hostcc_mba_cos_id);
+	if (err) {
+		pr_err("HostCC: failed to write MBA MSR register %x, error: %d\n", PQOS_MSR_ASSOC, err);
+	}
 }
 
 static void unthrottle_mba_cores(int cpu)
 {
+	int err;
 	uint64_t assoc_val;
-	rdmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, &assoc_val);
-	wrmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, assoc_val & ~(0x3FFULL));
+	err = rdmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, &assoc_val);
+	if (err) {
+		pr_err("HostCC: failed to read MBA MSR register %x, error: %d\n", PQOS_MSR_ASSOC, err);
+	}
+	err = wrmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, assoc_val & ~(0x3FFULL));
+	if (err) {
+		pr_err("HostCC: failed to write MBA MSR register %x, error: %d\n", PQOS_MSR_ASSOC, err);
+	}
 }
 
 void init_mba_msr_register(void)
 {
-	wrmsrl_on_cpu(hostcc_mba_level_1_cores[0], PQOS_MSR_MBA_MASK_START + hostcc_mba_cos_id, hostcc_mba_val_high);
+	int err;
+	pr_info("HostCC: init MBA MSR register, use CLOS %d (value: %d)\n", hostcc_mba_cos_id, hostcc_mba_val_high);
+	err = wrmsrl_on_cpu(hostcc_mba_level_1_cores[0], PQOS_MSR_MBA_MASK_START + hostcc_mba_cos_id, hostcc_mba_val_high);
+	if (err) {
+		pr_err("HostCC: failed to write MBA MSR register, error: %d\n", err);
+	}
 }
 
 void update_mba_msr_register(void)
@@ -103,6 +122,8 @@ void increase_mba_val(void)
 
 	latest_mba_val++;
 
+	trace_printk("HostCC: increase MBA val to %d\n", latest_mba_val);
+
 	/* Apply MBA throttling to cores progressively by level */
 	switch (latest_mba_val) {
 	case 1:
@@ -149,6 +170,8 @@ void decrease_mba_val(void)
 	if (latest_mba_val <= 0) {
 		return; // Already at minimum throttling
 	}
+
+	trace_printk("HostCC: decrease MBA val to %d\n", latest_mba_val);
 
 	/* Remove MBA throttling based on current level */
 	switch (latest_mba_val) {

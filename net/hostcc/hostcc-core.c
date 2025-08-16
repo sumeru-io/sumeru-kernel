@@ -243,6 +243,7 @@ int hostcc_set_enable(int enable)
 	int ret = 0;
 
 	if (enable && !hostcc_enable) {
+		pr_info("HostCC: Starting HostCC\n");
 		hostcc_enable = 1;
 		ret = hostcc_start();
 		if (ret) {
@@ -251,6 +252,7 @@ int hostcc_set_enable(int enable)
 			return ret;
 		}
 	} else if (!enable && hostcc_enable) {
+		pr_info("HostCC: Stopping HostCC\n");
 		hostcc_enable = 0;
 		hostcc_stop();
 	}
