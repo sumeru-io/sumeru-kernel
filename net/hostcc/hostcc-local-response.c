@@ -94,17 +94,11 @@ static int send_signal_to_pid(int proc_pid, int signal)
 	return 0;
 }
 
-void init_mba_process_scheduler(void)
-{}
+void init_mba_process_scheduler(void) {}
 
-void update_mba_process_scheduler(void)
+void update_mba_process_scheduler(void) 
 {
-	WARN_ON(!(latest_mba_val <= 4));
-	if (latest_mba_val == 4) {
-		send_signal_to_pid(READ_ONCE(hostcc_mem_contender_pid), SIGSTOP);
-	} else {
-		send_signal_to_pid(READ_ONCE(hostcc_mem_contender_pid), SIGCONT);
-	}
+	send_signal_to_pid(READ_ONCE(hostcc_mem_contender_pid), SIGCONT);
 }
 
 void increase_mba_val(void)
@@ -120,9 +114,9 @@ void increase_mba_val(void)
 		return; // Already at maximum throttling
 	}
 
-	latest_mba_val++;
+	trace_printk("HostCC: increase MBA val, cur: %d\n", latest_mba_val);
 
-	trace_printk("HostCC: increase MBA val to %d\n", latest_mba_val);
+	latest_mba_val++;
 
 	/* Apply MBA throttling to cores progressively by level */
 	switch (latest_mba_val) {
@@ -147,7 +141,7 @@ void increase_mba_val(void)
 	case 4:
 		/* Level 4: Use process scheduler (SIGSTOP) */
 		if (hostcc_use_process_scheduler) {
-			update_mba_process_scheduler();
+			send_signal_to_pid(READ_ONCE(hostcc_mem_contender_pid), SIGSTOP);
 		}
 		break;
 	default:
@@ -171,7 +165,7 @@ void decrease_mba_val(void)
 		return; // Already at minimum throttling
 	}
 
-	trace_printk("HostCC: decrease MBA val to %d\n", latest_mba_val);
+	trace_printk("HostCC: decrease MBA val, cur: %d\n", latest_mba_val);
 
 	/* Remove MBA throttling based on current level */
 	switch (latest_mba_val) {
@@ -199,7 +193,7 @@ void decrease_mba_val(void)
 	case 4:
 		/* Coming down from SIGSTOP level */
 		if (hostcc_use_process_scheduler) {
-			update_mba_process_scheduler(); // Should send SIGCONT
+			send_signal_to_pid(READ_ONCE(hostcc_mem_contender_pid), SIGCONT);
 		}
 		last_reduced_tsc = hostcc_read_tsc();
 		break;
