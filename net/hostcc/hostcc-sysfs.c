@@ -37,11 +37,11 @@ char hostcc_nic_interface[16] = "ens2f1";
 int hostcc_nic_local_socket = 0;
 int hostcc_nic_iio_stack = 2;
 /* MBA core lists for each throttling level */
-int hostcc_mba_level_1_cores[HOSTCC_MAX_MBA_CORES] = {29, 0}; /* Default: core 29 */
+int hostcc_mba_level_1_cores[HOSTCC_MAX_MBA_CORES] = {0};
 int hostcc_mba_level_1_core_count = 1;
-int hostcc_mba_level_2_cores[HOSTCC_MAX_MBA_CORES] = {30, 0}; /* Default: core 30 */
+int hostcc_mba_level_2_cores[HOSTCC_MAX_MBA_CORES] = {0};
 int hostcc_mba_level_2_core_count = 1;
-int hostcc_mba_level_3_cores[HOSTCC_MAX_MBA_CORES] = {31, 0}; /* Default: core 31 */
+int hostcc_mba_level_3_cores[HOSTCC_MAX_MBA_CORES] = {0};
 int hostcc_mba_level_3_core_count = 1;
 int hostcc_mba_val_high = 90;
 int hostcc_mba_val_low = 0;

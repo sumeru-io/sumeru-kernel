@@ -32,7 +32,7 @@ static void throttle_mba_cores(int cpu)
 	if (err) {
 		pr_err("HostCC: failed to read MBA MSR register %x, error: %d\n", PQOS_MSR_ASSOC, err);
 	}
-	err = wrmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, (assoc_val & ~(0x3FFULL)) | hostcc_mba_cos_id);
+	err = wrmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, (assoc_val & (0x00000000FFFFFFFFULL)) | ((uint64_t)hostcc_mba_cos_id << 32));
 	if (err) {
 		pr_err("HostCC: failed to write MBA MSR register %x, error: %d\n", PQOS_MSR_ASSOC, err);
 	}
@@ -46,7 +46,7 @@ static void unthrottle_mba_cores(int cpu)
 	if (err) {
 		pr_err("HostCC: failed to read MBA MSR register %x, error: %d\n", PQOS_MSR_ASSOC, err);
 	}
-	err = wrmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, assoc_val & ~(0x3FFULL));
+	err = wrmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, assoc_val & (0x00000000FFFFFFFFULL));
 	if (err) {
 		pr_err("HostCC: failed to write MBA MSR register %x, error: %d\n", PQOS_MSR_ASSOC, err);
 	}
