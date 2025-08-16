@@ -768,14 +768,6 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 
 	for (vector = 0; vector < mlx5_comp_vectors_max(mdev); vector++) {
 		int vector_cpu = mlx5_comp_vector_get_cpu(mdev, vector);
-		err = mlx5_comp_irqn_get(mdev, vector, &irq);
-		if (err)
-			continue;
-		pr_info("cacheflow: vector %d ==> core %d, irq %d\n", vector, vector_cpu, irq);
-	}
-
-	for (vector = 0; vector < mlx5_comp_vectors_max(mdev); vector++) {
-		int vector_cpu = mlx5_comp_vector_get_cpu(mdev, vector);
 		if (vector_cpu == get_cacheflow_steer_core())
 			break;
 	}

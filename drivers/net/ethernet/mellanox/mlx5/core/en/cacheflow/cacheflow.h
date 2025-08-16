@@ -60,7 +60,7 @@ struct mlx5e_cacheflow_rq {
 };
 
 #define CACHEFLOW_MAX_BUDGET 64
-#define CACHEFLOW_MAX_CPU_NUM 32
+#define CACHEFLOW_MAX_CPU_NUM 64
 
 struct mlx5e_cacheflow {
 	struct mlx5e_cacheflow_rq rq;
