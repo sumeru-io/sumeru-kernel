@@ -27,5 +27,6 @@
 
 // MSR location for MBA
 #define PQOS_MSR_MBA_MASK_START 0xD50L
+#define PQOS_MSR_ASSOC 0xC8F
 
 #endif

@@ -25,23 +25,40 @@
 /* Local static variables (only used in this file) */
 static struct pid *app_pid_struct = NULL;
 
+static void throttle_mba_cores(int cpu)
+{
+	uint64_t assoc_val;
+	rdmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, &assoc_val);
+	wrmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, (assoc_val & ~(0x3FFULL)) | hostcc_mba_cos_id);
+}
+
+static void unthrottle_mba_cores(int cpu)
+{
+	uint64_t assoc_val;
+	rdmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, &assoc_val);
+	wrmsrl_on_cpu(cpu, PQOS_MSR_ASSOC, assoc_val & ~(0x3FFULL));
+}
+
+void init_mba_msr_register(void)
+{
+	wrmsrl_on_cpu(hostcc_mba_level_1_cores[0], PQOS_MSR_MBA_MASK_START + hostcc_mba_cos_id, hostcc_mba_val_high);
+}
+
 void update_mba_msr_register(void)
 {
-	uint32_t low = 0;
-	uint32_t high = 0;
-	uint64_t msr_num = PQOS_MSR_MBA_MASK_START + hostcc_mba_cos_id;
 	int i;
 	
 	/* Reset MBA on all configured cores for all levels */
 	for (i = 0; i < hostcc_mba_level_1_core_count; i++) {
-		wrmsr_on_cpu(hostcc_mba_level_1_cores[i], msr_num, low, high);
+		unthrottle_mba_cores(hostcc_mba_level_1_cores[i]);
 	}
 	for (i = 0; i < hostcc_mba_level_2_core_count; i++) {
-		wrmsr_on_cpu(hostcc_mba_level_2_cores[i], msr_num, low, high);
+		unthrottle_mba_cores(hostcc_mba_level_2_cores[i]);
 	}
 	for (i = 0; i < hostcc_mba_level_3_core_count; i++) {
-		wrmsr_on_cpu(hostcc_mba_level_3_cores[i], msr_num, low, high);
+		unthrottle_mba_cores(hostcc_mba_level_3_cores[i]);
 	}
+	wrmsrl(PQOS_MSR_MBA_MASK_START + hostcc_mba_cos_id, hostcc_mba_val_low);
 }
 
 // helper function to send SIGCONT/SIGSTOP signals to processes
@@ -87,9 +104,6 @@ void update_mba_process_scheduler(void)
 
 void increase_mba_val(void)
 {
-	uint64_t msr_num = PQOS_MSR_MBA_MASK_START + hostcc_mba_cos_id;
-	u32 low = hostcc_mba_val_high & 0xFFFFFFFF;
-	u32 high = (uint64_t)hostcc_mba_val_high >> 32;
 	int i;
 
 	int max_level = 3; // Three MBA levels
@@ -108,19 +122,19 @@ void increase_mba_val(void)
 	case 1:
 		/* Level 1: Throttle all cores in level 1 array */
 		for (i = 0; i < hostcc_mba_level_1_core_count; i++) {
-			wrmsr_on_cpu(hostcc_mba_level_1_cores[i], msr_num, low, high);
+			throttle_mba_cores(hostcc_mba_level_1_cores[i]);
 		}
 		break;
 	case 2:
 		/* Level 2: Throttle all cores in level 2 array */
 		for (i = 0; i < hostcc_mba_level_2_core_count; i++) {
-			wrmsr_on_cpu(hostcc_mba_level_2_cores[i], msr_num, low, high);
+			throttle_mba_cores(hostcc_mba_level_2_cores[i]);
 		}
 		break;
 	case 3:
 		/* Level 3: Throttle all cores in level 3 array */
 		for (i = 0; i < hostcc_mba_level_3_core_count; i++) {
-			wrmsr_on_cpu(hostcc_mba_level_3_cores[i], msr_num, low, high);
+			throttle_mba_cores(hostcc_mba_level_3_cores[i]);
 		}
 		break;
 	case 4:
@@ -144,9 +158,6 @@ void decrease_mba_val(void)
 	if (elapsed_us < SLACK_TIME_US) {
 		return;
 	}
-	uint64_t msr_num = PQOS_MSR_MBA_MASK_START + hostcc_mba_cos_id;
-	uint32_t low = hostcc_mba_val_low & 0xFFFFFFFF;
-	uint32_t high = (uint64_t)hostcc_mba_val_low >> 32;
 	int i;
 
 	if (latest_mba_val <= 0) {
@@ -158,21 +169,21 @@ void decrease_mba_val(void)
 	case 1:
 		/* Removing level 1: Reset throttling on level 1 cores */
 		for (i = 0; i < hostcc_mba_level_1_core_count; i++) {
-			wrmsr_on_cpu(hostcc_mba_level_1_cores[i], msr_num, low, high);
+			unthrottle_mba_cores(hostcc_mba_level_1_cores[i]);
 		}
 		last_reduced_tsc = hostcc_read_tsc();
 		break;
 	case 2:
 		/* Removing level 2: Reset throttling on level 2 cores */
 		for (i = 0; i < hostcc_mba_level_2_core_count; i++) {
-			wrmsr_on_cpu(hostcc_mba_level_2_cores[i], msr_num, low, high);
+			unthrottle_mba_cores(hostcc_mba_level_2_cores[i]);
 		}
 		last_reduced_tsc = hostcc_read_tsc();
 		break;
 	case 3:
 		/* Removing level 3: Reset throttling on level 3 cores */
 		for (i = 0; i < hostcc_mba_level_3_core_count; i++) {
-			wrmsr_on_cpu(hostcc_mba_level_3_cores[i], msr_num, low, high);
+			unthrottle_mba_cores(hostcc_mba_level_3_cores[i]);
 		}
 		last_reduced_tsc = hostcc_read_tsc();
 		break;

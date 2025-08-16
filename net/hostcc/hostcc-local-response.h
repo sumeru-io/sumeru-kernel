@@ -45,6 +45,7 @@ static inline uint64_t hostcc_read_tsc(void)
 void update_mba_msr_register(void);
 void update_mba_process_scheduler(void);
 void init_mba_process_scheduler(void);
+void init_mba_msr_register(void);
 void increase_mba_val(void);
 void decrease_mba_val(void);
 void host_local_response(void);

@@ -77,8 +77,8 @@ static void thread_fun_poll_iio(struct work_struct *work)
 	int cpu = hostcc_iio_core;
 	uint32_t budget = WORKER_BUDGET;
 
-	trace_printk("HostCC: Sampling IIO Occupancy measurement: MSR %08lX, tsc kHz: %u\n", IRP_MSR_PMON_CTR_BASE + (0x20 * hostcc_nic_iio_stack) +
-	IIO_WR_COUNTER_OFFSET, tsc_khz);
+	trace_printk("HostCC: Sampling IIO Occupancy measurement: MSR %08lX, cpu: %d, tsc kHz: %u\n", IRP_MSR_PMON_CTR_BASE + (0x20 * hostcc_nic_iio_stack) +
+	IIO_WR_COUNTER_OFFSET, cpu, tsc_khz);
 
 	while (budget) {
 		if (hostcc_mode == HOSTCC_MODE_RX) {
@@ -115,6 +115,7 @@ static void poll_pcie_init(void)
 	if (hostcc_use_process_scheduler) {
 		init_mba_process_scheduler();
 	}
+	init_mba_msr_register();
 	/* Initialize the log */
 	pr_info("HostCC: Starting PCIe Bandwidth Measurement");
 	init_pcie_log();
