@@ -33,7 +33,6 @@ uint64_t cur_rdtsc_mba = 0;
 uint64_t latest_time_delta_mba_ns = 0;
 uint32_t latest_avg_pcie_bw = 0;
 uint32_t latest_avg_pcie_bw_rd = 0;
-uint32_t app_pid = 0;
 uint64_t last_reduced_tsc = 0;
 
 /* Netfilter measurement variables */

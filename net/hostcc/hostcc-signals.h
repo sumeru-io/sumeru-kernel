@@ -41,7 +41,6 @@ extern uint64_t cur_rdtsc_mba;
 extern uint64_t latest_time_delta_mba_ns;
 extern uint32_t latest_avg_pcie_bw;
 extern uint32_t latest_avg_pcie_bw_rd;
-extern uint32_t app_pid;
 extern uint64_t last_reduced_tsc;
 
 /* Netfilter measurement variables */

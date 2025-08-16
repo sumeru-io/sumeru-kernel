@@ -13,7 +13,6 @@
  * Copyright (C) 2025 Minhu Wang, Tsinghua University
  */
 
-#include "hostcc.h"
 #include "hostcc-signals.h"
 #include "hostcc-local-response.h"
 #include "hostcc-sysfs.h"
@@ -58,47 +57,34 @@ void update_mba_msr_register(void)
 	for (i = 0; i < hostcc_mba_level_3_core_count; i++) {
 		unthrottle_mba_cores(hostcc_mba_level_3_cores[i]);
 	}
-	wrmsrl(PQOS_MSR_MBA_MASK_START + hostcc_mba_cos_id, hostcc_mba_val_low);
+	wrmsrl_on_cpu(hostcc_mba_level_1_cores[0], PQOS_MSR_MBA_MASK_START + hostcc_mba_cos_id, hostcc_mba_val_low);
 }
 
 // helper function to send SIGCONT/SIGSTOP signals to processes
 static int send_signal_to_pid(int proc_pid, int signal)
 {
-	if (app_pid_struct != NULL) {
+	if (proc_pid != 0) {
+		trace_printk("HostCC: send %d to MLC PID: %u\n", signal, proc_pid);
 		rcu_read_lock();
-		kill_pid(app_pid_struct, signal, 1);
+		app_pid_struct = find_vpid(proc_pid);
+		if (app_pid_struct) {
+			kill_pid(app_pid_struct, signal, 1);
+		}
 		rcu_read_unlock();
 	}
 	return 0;
 }
 
 void init_mba_process_scheduler(void)
-{
-	app_pid = hostcc_mem_contender_pid;
-	printk("HostCC: MLC PID: %u\n", app_pid);
-	app_pid_task = pid_task(find_get_pid(app_pid), PIDTYPE_PID);
-	app_pid_struct = find_vpid(app_pid);
-	if (app_pid_task == NULL) {
-		printk(KERN_INFO "Cannot find task");
-	} else {
-		printk(KERN_INFO "Found task");
-		struct sched_param param = { .sched_priority = 99 };
-		int result =
-			sched_setscheduler(app_pid_task, SCHED_FIFO, &param);
-		if (result == -1) {
-			printk(KERN_ALERT
-			       "Failed to set scheduling policy and priority\n");
-		}
-	}
-}
+{}
 
 void update_mba_process_scheduler(void)
 {
 	WARN_ON(!(latest_mba_val <= 4));
 	if (latest_mba_val == 4) {
-		send_signal_to_pid(app_pid, SIGSTOP);
+		send_signal_to_pid(READ_ONCE(hostcc_mem_contender_pid), SIGSTOP);
 	} else {
-		send_signal_to_pid(app_pid, SIGCONT);
+		send_signal_to_pid(READ_ONCE(hostcc_mem_contender_pid), SIGCONT);
 	}
 }
 
