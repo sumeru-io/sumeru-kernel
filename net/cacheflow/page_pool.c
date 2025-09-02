@@ -293,6 +293,7 @@ cacheflow_page_pool_alloc_full_mini_array(struct cacheflow_page_pool *pool, gfp_
 						   PAGE_POOL_UNALLOC,
 						   PAGE_POOL_ARRAY);
 
+		mini_array->count = CF_PP_MINI_ARRAY_SIZE;
 		return mini_array;
 	} else {
 		nr_pages = alloc_pages_bulk_array_node(
@@ -334,6 +335,7 @@ cacheflow_page_pool_alloc_full_mini_array(struct cacheflow_page_pool *pool, gfp_
 							PAGE_POOL_UNALLOC,
 							PAGE_POOL_ARRAY);
 
+			mini_array->count = CF_PP_MINI_ARRAY_SIZE;
 			return mini_array;
 		}
 	}
@@ -539,8 +541,8 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 	INIT_DELAYED_WORK(&pool->usage_track_work, cacheflow_usage_print);
 	schedule_delayed_work(&pool->usage_track_work, HZ);
 
-	pool->alloc.partial_array = (struct netmem_partial_mini_array *)cacheflow_page_pool_get_empty_mini_array(pool);
-	pool->alloc.partial_array->count = 0;
+	pool->alloc.partial_array = cacheflow_page_pool_get_empty_mini_array(pool);
+	netmem_mini_array_init(pool->alloc.partial_array);
 
 	ptr_ring_init(&pool->recycle_ring, 1024, GFP_KERNEL);
 
@@ -559,8 +561,7 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 			       sizeof(struct netmem_mini_array));
 			kasan_mempool_poison_object(stub->mini_array_cache[i]);
 		}
-		stub->mini_array = (struct netmem_partial_mini_array *)
-			stub->mini_array_cache[--stub->mini_array_cache_count];
+		stub->mini_array = stub->mini_array_cache[--stub->mini_array_cache_count];
 		kasan_mempool_unpoison_object(
 			stub->mini_array,
 			kmem_cache_size(netmem_mini_array_cache));
@@ -714,18 +715,17 @@ netmem_ref cacheflow_page_pool_alloc_netmem(struct cacheflow_page_pool *pool,
 		return 0;
 	}
 
-	if (likely(pool->alloc.partial_array->count > 0)) {
-		netmem = pool->alloc.partial_array->array[--pool->alloc.partial_array->count];
+	if (likely(!netmem_mini_array_is_empty(pool->alloc.partial_array))) {
+		netmem = netmem_mini_array_pop(pool->alloc.partial_array);
 		cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_ARRAY, PAGE_POOL_ALLOC);
 		return netmem;
 	} 
 
 	if (likely(mini_array = cacheflow_page_pool_get_full_mini_array(pool, gfp))) {
-		cacheflow_page_pool_put_empty_mini_array(pool, (struct netmem_mini_array *)pool->alloc.partial_array);
-		netmem = mini_array->array[CF_PP_MINI_ARRAY_SIZE - 1];
+		cacheflow_page_pool_put_empty_mini_array(pool, pool->alloc.partial_array);
+		netmem = netmem_mini_array_pop(mini_array);
 		cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_ARRAY, PAGE_POOL_ALLOC);
-		pool->alloc.partial_array = (struct netmem_partial_mini_array *)mini_array;
-		pool->alloc.partial_array->count = CF_PP_MINI_ARRAY_SIZE - 1;
+		pool->alloc.partial_array = mini_array;
 		return netmem;
 	}
 
@@ -861,19 +861,19 @@ cacheflow_page_pool_recycle_in_cache(netmem_ref netmem,
 	}
 
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
-	if (unlikely(pool->alloc.partial_array->count > (CF_PP_MINI_ARRAY_SIZE - 1) ||
+	if (unlikely(pool->alloc.partial_array->count > CF_PP_MINI_ARRAY_SIZE ||
 		     pool->alloc.partial_array->count < 0))
 		BUG();
 #endif
 
-	if (pool->alloc.partial_array->count == CF_PP_MINI_ARRAY_SIZE - 1) {
-		mini_array = (struct netmem_mini_array *)pool->alloc.partial_array;
-		mini_array->array[CF_PP_MINI_ARRAY_SIZE - 1] = netmem;
+	if (netmem_mini_array_remaining_space(pool->alloc.partial_array) == 1) {
+		mini_array = pool->alloc.partial_array;
+		netmem_mini_array_push(mini_array, netmem);
 		cacheflow_page_pool_push_full_mini_array(pool, mini_array);
-		pool->alloc.partial_array = (struct netmem_partial_mini_array *)cacheflow_page_pool_get_empty_mini_array(pool);
-		pool->alloc.partial_array->count = 0;
+		pool->alloc.partial_array = cacheflow_page_pool_get_empty_mini_array(pool);
+		netmem_mini_array_init(pool->alloc.partial_array);
 	} else {
-		pool->alloc.partial_array->array[pool->alloc.partial_array->count++] = netmem;
+		netmem_mini_array_push(pool->alloc.partial_array, netmem);
 	}
 
 	cacheflow_page_pool_account_usage(pool, netmem, PAGE_POOL_ALLOC,
@@ -992,9 +992,9 @@ cacheflow_page_pool_put_netmem_to_recycle_ring(struct cacheflow_page_pool *pool,
 		goto out;
 	}
 
-	if (unlikely(stub->mini_array->count == CF_PP_MINI_ARRAY_SIZE - 1)) {
-		mini_array = (struct netmem_mini_array *)stub->mini_array;
-		mini_array->array[CF_PP_MINI_ARRAY_SIZE - 1] = netmem;
+	if (netmem_mini_array_remaining_space(stub->mini_array) == 1) {
+		mini_array = stub->mini_array;
+		netmem_mini_array_push(mini_array, netmem);
 
 		if (unlikely(ptr_ring_produce_any(
 			    &pool->recycle_ring,
@@ -1028,13 +1028,13 @@ cacheflow_page_pool_put_netmem_to_recycle_ring(struct cacheflow_page_pool *pool,
 			}
 		}
 
-		stub->mini_array = (struct netmem_partial_mini_array *)stub->mini_array_cache[--stub->mini_array_cache_count];
+		stub->mini_array = stub->mini_array_cache[--stub->mini_array_cache_count];
 		kasan_mempool_unpoison_object(
 			stub->mini_array,
 			kmem_cache_size(netmem_mini_array_cache));
-		stub->mini_array->count = 0;
+		netmem_mini_array_init(stub->mini_array);
 	} else {
-		stub->mini_array->array[stub->mini_array->count++] = netmem;
+		netmem_mini_array_push(stub->mini_array, netmem);
 	}
 
 out:
@@ -1180,10 +1180,9 @@ cacheflow_page_pool_empty_alloc_cache(struct cacheflow_page_pool *pool)
 
 		for (i = 0; i < pool->alloc.partial_array->count; i++) {
 			cacheflow_page_pool_return_page(pool, pool->alloc.partial_array->array[i]);
-			pool->alloc.partial_array->array[i] = 0;
 		}
-		pool->alloc.partial_array->count = 0;
-		cacheflow_page_pool_put_empty_mini_array(pool, (struct netmem_mini_array *)pool->alloc.partial_array);
+		netmem_mini_array_init(pool->alloc.partial_array);
+		cacheflow_page_pool_put_empty_mini_array(pool, pool->alloc.partial_array);
 		pool->alloc.partial_array = NULL;
 	}
 
@@ -1233,7 +1232,7 @@ cacheflow_page_pool_scrub_recycle_ring(struct cacheflow_page_pool *pool)
 					PAGE_POOL_ALLOC, PAGE_POOL_UNALLOC);
 				stub->mini_array->array[i] = 0;
 			}
-			stub->mini_array->count = 0;
+			netmem_mini_array_init(stub->mini_array);
 			kmem_cache_free(netmem_mini_array_cache,
 					stub->mini_array);
 			stub->mini_array = NULL;

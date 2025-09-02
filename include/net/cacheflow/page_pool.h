@@ -12,6 +12,7 @@
 
 #include <net/net_debug.h>
 #include <net/netmem.h>
+#include <net/cacheflow/netmem_array.h>
 
 /*
  * Fast allocation side cache array/stack
@@ -30,34 +31,13 @@
 
 extern struct kmem_cache *netmem_mini_array_cache;
 
-#define CF_PP_EMPTY_MINI_ARRAY_GLBOAL_CACHE_SIZE 1024
 
-struct netmem_empty_mini_array_global_cache {
-	struct netmem_mini_array *array[CF_PP_EMPTY_MINI_ARRAY_GLBOAL_CACHE_SIZE];
-	u32 count;
-	spinlock_t lock;
-};
-
-
-/* Size array to fit within two cachelines minus the count field */
-#define CF_PP_MINI_ARRAY_METADATA_SIZE				8
-#define CF_PP_MINI_ARRAY_SIZE 					(((2 * L1_CACHE_BYTES)) / sizeof(netmem_ref))
 #define DEFAULT_CF_PP_FULL_MINI_ARRAY_CACHE_SIZE		256
 #define DEFAULT_CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_SIZE		(DEFAULT_CF_PP_FULL_MINI_ARRAY_CACHE_SIZE * 2)
 #define CF_PP_MINI_ARRAY_REFILL_BATCH_SIZE			8
 
-struct netmem_mini_array {
-	netmem_ref array[CF_PP_MINI_ARRAY_SIZE];
-} ____cacheline_aligned_in_smp;
-
-struct netmem_partial_mini_array {
-	netmem_ref array[CF_PP_MINI_ARRAY_SIZE - 1];
-	int count;
-	int flags;
-} ____cacheline_aligned_in_smp;
-
 struct cacheflow_pp_alloc_cache {
-	struct netmem_partial_mini_array* partial_array;
+	struct netmem_mini_array* partial_array;
 
 	struct netmem_mini_array** full_mini_array_cache;
 	u32 full_mini_array_cache_size;
@@ -118,7 +98,7 @@ struct cacheflow_page_pool_proc {
 
 struct cacheflow_page_pool_recycle_stub {
 	struct cacheflow_page_pool *pool;
-	struct netmem_partial_mini_array *mini_array;
+	struct netmem_mini_array *mini_array;
 
 	struct netmem_mini_array *mini_array_cache[CACHEFLOW_TH_EMPTY_MINI_ARRAY_CACHE_SIZE];
 	int mini_array_cache_count;
