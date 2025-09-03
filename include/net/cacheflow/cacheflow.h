@@ -13,6 +13,9 @@
 extern struct static_key_false cacheflow_steer_enable;
 extern atomic_t cacheflow_id_counter;
 
+/* Maximum number of CPU cores supported by CacheFlow */
+#define CACHEFLOW_MAX_CORES 128
+
 extern int cacheflow_steer_core;
 extern int cacheflow_thread;
 extern int cacheflow_stack_cores[NR_CPUS];

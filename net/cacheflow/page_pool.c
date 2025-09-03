@@ -162,13 +162,15 @@ cacheflow_page_pool_put_empty_mini_array(struct cacheflow_page_pool *pool,
 
 	if (pool->alloc.empty_mini_array_count ==
 	    pool->alloc.empty_mini_array_cache_size) {
-		pool->alloc.empty_mini_array_count -= pool->alloc.full_mini_array_cache_size;
-		for (i = 0; i < pool->alloc.full_mini_array_cache_size; i++)
+		/* Recycle half the cache for both backends */
+		int recycle_count = pool->alloc.empty_mini_array_cache_size / 2;
+		pool->alloc.empty_mini_array_count -= recycle_count;
+		for (i = 0; i < recycle_count; i++)
 			kasan_mempool_unpoison_object(
 				pool->alloc.empty_mini_array_cache[pool->alloc.empty_mini_array_count + i],
 				kmem_cache_size(netmem_mini_array_cache));
 
-		cacheflow_page_pool_free_empty_mini_array_bulk(pool->alloc.empty_mini_array_cache + pool->alloc.empty_mini_array_count, pool->alloc.full_mini_array_cache_size);
+		cacheflow_page_pool_free_empty_mini_array_bulk(pool->alloc.empty_mini_array_cache + pool->alloc.empty_mini_array_count, recycle_count);
 	}
 	pool->alloc
 		.empty_mini_array_cache[pool->alloc.empty_mini_array_count++] =
@@ -208,57 +210,100 @@ cacheflow_page_pool_get_empty_mini_array(struct cacheflow_page_pool *pool)
 	return NULL;
 }
 
-static inline struct netmem_mini_array *
+#ifndef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
+struct netmem_mini_array *
 cacheflow_page_pool_pop_full_mini_array(struct cacheflow_page_pool *pool)
 {
 	struct netmem_mini_array *mini_array = NULL;
+	
+	/* First try to get from hot cache */
 	if (likely(pool->alloc.full_mini_array_count)) {
-#ifdef CONFIG_CACHEFLOW_WARM_BUFFER
-		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_head];
-		pool->alloc.full_mini_array_head = (pool->alloc.full_mini_array_head + 1) % pool->alloc.full_mini_array_cache_size;
-#else
 		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count - 1];
 		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count - 1] = NULL;
-#endif
 		pool->alloc.full_mini_array_count--;
+		trace_cacheflow_queue_depth(pool->alloc.full_mini_array_count);
+		return mini_array;
 	}
-	trace_cacheflow_queue_depth(pool->alloc.full_mini_array_count);
-	return mini_array;
+	
+	/* Fallback to pool stack for actual allocation */
+	return __ptr_stack_pop(&pool->stack);
 }
+#endif
 
 static inline struct netmem_mini_array *
 cacheflow_page_pool_refill_full_mini_array(struct cacheflow_page_pool *pool)
 {
-	struct ptr_stack *r = &pool->stack;
 	struct netmem_mini_array *mini_array;
 
-	/* Quicker fallback, avoid locks when ring is empty */
-	if (ptr_stack_empty(r))
-		return 0;
-
-	do {
-		mini_array = (struct netmem_mini_array *)ptr_stack_pop(r);
-
-		if (unlikely(!mini_array))
-			break;
-
+	/* Try to get recycled mini array from unified backend */
+	mini_array = cacheflow_get_full_mini_array(pool);
+	if (mini_array) {
 		cacheflow_page_pool_account_usages(pool, mini_array->array,
-						   CF_PP_MINI_ARRAY_SIZE,
-						   PAGE_POOL_RING,
-						   PAGE_POOL_ARRAY);
+					   CF_PP_MINI_ARRAY_SIZE,
+					   PAGE_POOL_RING,
+					   PAGE_POOL_ARRAY);
+	}
 
-#ifdef CONFIG_CACHEFLOW_WARM_BUFFER
-		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_tail] = mini_array;
-		pool->alloc.full_mini_array_tail = (pool->alloc.full_mini_array_tail + 1) % pool->alloc.full_mini_array_cache_size;
-#else
-		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count] = mini_array;
-#endif
-		pool->alloc.full_mini_array_count++;
-	} while (pool->alloc.full_mini_array_count <
-		 CF_PP_MINI_ARRAY_REFILL_BATCH_SIZE);
-
-	return cacheflow_page_pool_pop_full_mini_array(pool);
+	return mini_array;
 }
+
+#ifdef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
+/**
+ * cacheflow_anneal_queue_dequeue_full_mini_array - Get mini array from anneal queue
+ * @pool: Page pool instance
+ *
+ * Thread-safe function that gets a mini array from the anneal queue system.
+ * The anneal queue uses internal locking, so this function can be called
+ * from multiple contexts safely.
+ *
+ * Return: Mini array pointer or NULL if none available
+ */
+struct netmem_mini_array *
+cacheflow_anneal_queue_dequeue_full_mini_array(struct cacheflow_page_pool *pool)
+{
+	struct netmem_mini_array *mini_array;
+	
+	if (unlikely(!pool))
+		return NULL;
+	
+	/* First try anneal queue (per-core + global load balancing) */
+	mini_array = anneal_queue_dequeue(&pool->alloc.anneal_queue);
+	if (mini_array)
+		return mini_array;
+	
+	/* Fallback to pool stack for actual allocation */
+	return __ptr_stack_pop(&pool->stack);
+}
+
+/**
+ * cacheflow_anneal_queue_enqueue_full_mini_array - Add mini array to anneal queue
+ * @pool: Page pool instance
+ * @mini_array: Mini array to enqueue for cooling
+ *
+ * Thread-safe function that adds a mini array to the anneal queue system.
+ * The anneal queue uses internal locking, so this function can be called
+ * from multiple contexts safely.
+ */
+void cacheflow_anneal_queue_enqueue_full_mini_array(struct cacheflow_page_pool *pool, struct netmem_mini_array *mini_array)
+{
+	int ret;
+	
+	if (unlikely(!pool || !mini_array))
+		return;
+	
+	/* Set core ID for annealing based on current CPU */
+	mini_array->core = smp_processor_id();
+	
+	/* Try to add to anneal queue first (per-core cooling + global load balancing) */
+	ret = anneal_queue_enqueue(&pool->alloc.anneal_queue, mini_array);
+	if (ret != 0) {
+		/* Anneal queue is full, fallback to pool stack */
+		if (__ptr_stack_push(&pool->stack, mini_array) != 0) {
+			pr_warn_ratelimited("cacheflow: all caches full, dropping buffer\n");
+		}
+	}
+}
+#endif
 
 static struct page *
 __cacheflow_page_pool_alloc_page_order(struct cacheflow_page_pool *pool,
@@ -349,10 +394,11 @@ release:
 	return NULL;
 }
 
-static void
+#ifndef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
+void
 cacheflow_page_pool_recycle_full_mini_array(struct cacheflow_page_pool *pool)
 {
-	int i, j, ret;
+	int i;
 	int free_n = pool->alloc.full_mini_array_count / 2;
 	struct netmem_mini_array *mini_array;
 
@@ -363,53 +409,42 @@ cacheflow_page_pool_recycle_full_mini_array(struct cacheflow_page_pool *pool)
 #endif
 
 	for (i = 0; i < free_n; i++) {
-#ifdef CONFIG_CACHEFLOW_WARM_BUFFER
-		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_head];
-		pool->alloc.full_mini_array_head = (pool->alloc.full_mini_array_head + 1) % pool->alloc.full_mini_array_cache_size;
-#else
 		mini_array = pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count - 1];
 		pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count - 1] = NULL;
-#endif
 		pool->alloc.full_mini_array_count--;
-		ret = __ptr_stack_push(&pool->stack,
-				       (__force void *)mini_array);
+		/* Set core ID for annealing based on current CPU */
+		mini_array->core = smp_processor_id();
 
-		if (likely(!ret)) {
-			cacheflow_page_pool_account_usages(
-				pool, mini_array->array, CF_PP_MINI_ARRAY_SIZE,
-				PAGE_POOL_ARRAY, PAGE_POOL_RING);
-		} else {
-			cacheflow_page_pool_account_usages(
-				pool, mini_array->array, CF_PP_MINI_ARRAY_SIZE,
-				PAGE_POOL_ARRAY, PAGE_POOL_UNALLOC);
-
-			for (j = 0; j < CF_PP_MINI_ARRAY_SIZE; j++) {
-				cacheflow_page_pool_return_page(
-					pool, mini_array->array[j]);
-				mini_array->array[j] = 0;
-			}
-
-			cacheflow_page_pool_put_empty_mini_array(pool,
-								 mini_array);
+		/* Use pool stack for recycling when anneal is disabled */
+		if (__ptr_stack_push(&pool->stack, mini_array) != 0) {
+			/* Pool stack is full, free the mini array */
+			cacheflow_page_pool_put_full_mini_array(pool, mini_array);
 		}
+		cacheflow_page_pool_account_usages(
+			pool, mini_array->array, CF_PP_MINI_ARRAY_SIZE,
+			PAGE_POOL_ARRAY, PAGE_POOL_RING);
 	}
 }
+#endif
 
-static inline void
+#ifndef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
+void
 cacheflow_page_pool_push_full_mini_array(struct cacheflow_page_pool *pool, struct netmem_mini_array *mini_array)
 {
 	if (unlikely(pool->alloc.full_mini_array_count >=
-		     pool->alloc.full_mini_array_cache_size))
+		     pool->alloc.full_mini_array_cache_size)) {
+		/* Hot cache is full, try pool stack */
+		if (__ptr_stack_push(&pool->stack, mini_array) == 0)
+			return; /* Successfully added to pool stack */
+		
+		/* Pool stack is also full, recycle oldest from hot cache */
 		cacheflow_page_pool_recycle_full_mini_array(pool);
+	}
 
-#ifdef CONFIG_CACHEFLOW_WARM_BUFFER
-	pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_tail] = mini_array;
-	pool->alloc.full_mini_array_tail = (pool->alloc.full_mini_array_tail + 1) % pool->alloc.full_mini_array_cache_size;
-#else
 	pool->alloc.full_mini_array_cache[pool->alloc.full_mini_array_count] = mini_array;
-#endif
 	pool->alloc.full_mini_array_count++;
 }
+#endif
 
 static inline void
 cacheflow_page_pool_put_full_mini_array(struct cacheflow_page_pool *pool,
@@ -424,7 +459,7 @@ cacheflow_page_pool_put_full_mini_array(struct cacheflow_page_pool *pool,
 					   CF_PP_MINI_ARRAY_SIZE, PAGE_POOL_ALLOC,
 					   PAGE_POOL_ARRAY);
 
-	cacheflow_page_pool_push_full_mini_array(pool, mini_array);
+	cacheflow_put_full_mini_array(pool, mini_array);
 }
 
 
@@ -481,6 +516,7 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 	if (!pool->p.max_len)
 		return -EINVAL;
 
+#ifndef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
 	pool->alloc.full_mini_array_cache_size = ((anneal_size + CF_PP_MINI_ARRAY_SIZE - 1) / CF_PP_MINI_ARRAY_SIZE);
 	pool->alloc.empty_mini_array_cache_size = pool->alloc.full_mini_array_cache_size * 2;
 
@@ -489,11 +525,15 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 		pr_err("Failed to allocate full_mini_array_cache\n");
 		return -ENOMEM;
 	}
-
+#else
+	pool->alloc.empty_mini_array_cache_size = DEFAULT_CF_PP_EMPTY_MINI_ARRAY_FREE_CACHE_SIZE;
+#endif
 
 	pool->alloc.empty_mini_array_cache = kcalloc(pool->alloc.empty_mini_array_cache_size, sizeof(struct netmem_mini_array *), GFP_KERNEL);
 	if (!pool->alloc.empty_mini_array_cache) {
+#ifndef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
 		kfree(pool->alloc.full_mini_array_cache);
+#endif
 		pr_err("Failed to allocate empty_mini_array_cache\n");
 		return -ENOMEM;
 	}
@@ -501,7 +541,9 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 	pool->recycle_stub =
 		alloc_percpu(struct cacheflow_page_pool_recycle_stub);
 	if (!pool->recycle_stub) {
+#ifndef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
 		kfree(pool->alloc.full_mini_array_cache);
+#endif
 		kfree(pool->alloc.empty_mini_array_cache);
 		pr_err("Failed to allocate per-cpu recycle_stub\n");
 		return -ENOMEM;
@@ -510,15 +552,20 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 #ifdef CONFIG_PAGE_POOL_STATS
 	pool->recycle_stats = alloc_percpu(struct page_pool_recycle_stats);
 	if (!pool->recycle_stats) {
+#ifndef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
 		kfree(pool->alloc.full_mini_array_cache);
+#endif
 		kfree(pool->alloc.empty_mini_array_cache);
 		free_percpu(pool->recycle_stub);
 		return -ENOMEM;
 	}
 #endif
 
-	if (ptr_stack_init(&pool->stack, ring_qsize, GFP_KERNEL) < 0) {
+	/* Initialize pool stack for actual page allocation/deallocation */
+	if (ptr_stack_init(&pool->stack, pool->p.pool_size, GFP_KERNEL) < 0) {
+#ifndef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
 		kfree(pool->alloc.full_mini_array_cache);
+#endif
 		kfree(pool->alloc.empty_mini_array_cache);
 		free_percpu(pool->recycle_stub);
 #ifdef CONFIG_PAGE_POOL_STATS
@@ -567,13 +614,53 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 			kmem_cache_size(netmem_mini_array_cache));
 	}
 
+#ifdef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
+	/* Initialize anneal queue for per-core cooling */
+	anneal_queue_init(&pool->alloc.anneal_queue, anneal_size);
+#endif
+
 	return 0;
 }
 
 static void cacheflow_page_pool_uninit(struct cacheflow_page_pool *pool)
 {
+	/* Clean up pool stack */
 	ptr_stack_cleanup(&pool->stack, NULL);
-
+	
+	/* Clean up recycle ring */
+	ptr_ring_cleanup(&pool->recycle_ring, NULL);
+	
+#ifdef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
+	/* Clean up anneal queue - drain any remaining buffers */
+	struct netmem_mini_array *mini_array;
+	int cleanup_count = 0;
+	const int max_cleanup = 1000;  /* Prevent infinite loops */
+	
+	while ((mini_array = anneal_queue_dequeue(&pool->alloc.anneal_queue)) && 
+	       cleanup_count < max_cleanup) {
+		int j;
+		/* Account for pages being freed */
+		cacheflow_page_pool_account_usages(
+			pool, mini_array->array, CF_PP_MINI_ARRAY_SIZE,
+			PAGE_POOL_ARRAY, PAGE_POOL_UNALLOC);
+		
+		/* Free individual pages */
+		for (j = 0; j < CF_PP_MINI_ARRAY_SIZE; j++) {
+			if (mini_array->array[j]) {
+				cacheflow_page_pool_return_page(pool, mini_array->array[j]);
+				mini_array->array[j] = 0;  /* netmem_ref is integer type */
+			}
+		}
+		
+		/* Free the mini array itself */
+		cacheflow_page_pool_put_empty_mini_array(pool, mini_array);
+		cleanup_count++;
+	}
+	
+	if (cleanup_count >= max_cleanup)
+		pr_warn("cacheflow: anneal queue cleanup incomplete, %d items processed\n", cleanup_count);
+#endif
+	
 	put_device(pool->p.dev);
 
 #ifdef CONFIG_PAGE_POOL_STATS
@@ -746,10 +833,7 @@ struct netmem_mini_array *cacheflow_page_pool_get_full_mini_array(struct cachefl
 {
 	struct netmem_mini_array *mini_array = NULL;
 
-	mini_array = cacheflow_page_pool_pop_full_mini_array(pool);
-
-	if (unlikely(!mini_array))
-		mini_array = cacheflow_page_pool_refill_full_mini_array(pool);
+	mini_array = cacheflow_get_full_mini_array(pool);
 
 	if (unlikely(!mini_array))
 		mini_array = cacheflow_page_pool_alloc_full_mini_array(pool, gfp);
@@ -869,7 +953,7 @@ cacheflow_page_pool_recycle_in_cache(netmem_ref netmem,
 	if (netmem_mini_array_remaining_space(pool->alloc.partial_array) == 1) {
 		mini_array = pool->alloc.partial_array;
 		netmem_mini_array_push(mini_array, netmem);
-		cacheflow_page_pool_push_full_mini_array(pool, mini_array);
+		cacheflow_put_full_mini_array(pool, mini_array);
 		pool->alloc.partial_array = cacheflow_page_pool_get_empty_mini_array(pool);
 		netmem_mini_array_init(pool->alloc.partial_array);
 	} else {
@@ -1085,7 +1169,7 @@ static void cacheflow_page_pool_empty_ring(struct cacheflow_page_pool *pool)
 	struct netmem_mini_array *mini_array;
 	int i;
 
-	while ((mini_array = ptr_stack_pop_bh(&pool->stack))) {
+	while ((mini_array = cacheflow_get_full_mini_array(pool))) {
 		cacheflow_page_pool_account_usages(pool, mini_array->array,
 						   CF_PP_MINI_ARRAY_SIZE,
 						   PAGE_POOL_RING,
@@ -1117,13 +1201,13 @@ static void __cacheflow_page_pool_destroy(struct cacheflow_page_pool *pool)
 {
 #ifdef CONFIG_NET_CACHEFLOW_DEBUG
 	if (pool->allocated_pages || pool->array_pages || pool->ring_pages ||
-	    pool->alloc.full_mini_array_count ||
+	    cacheflow_get_cache_count(pool) ||
 	    pool->alloc.empty_mini_array_count || pool->alloc.partial_array) {
 		pr_err("page_pool: accounting error, allocated_pages=%u, array_pages=%u, ring_pages=%u\n",
 		       pool->allocated_pages, pool->array_pages,
 		       pool->ring_pages);
-		pr_err("page_pool: full_mini_array_count=%u, empty_mini_array_count=%u, mini_array=%p\n",
-			pool->alloc.full_mini_array_count, pool->alloc.empty_mini_array_count, pool->alloc.partial_array);
+		pr_err("page_pool: recycled_count=%u, empty_mini_array_count=%u, mini_array=%p\n",
+			cacheflow_get_cache_count(pool), pool->alloc.empty_mini_array_count, pool->alloc.partial_array);
 		pr_err("page_pool: hold_cnt=%u, inflight=%u\n",
 			pool->pages_state_hold_cnt, atomic_read(&pool->pages_state_release_cnt));
 		BUG();
@@ -1134,7 +1218,9 @@ static void __cacheflow_page_pool_destroy(struct cacheflow_page_pool *pool)
 
 	free_percpu(pool->recycle_stub);
 
+#ifndef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
 	kfree(pool->alloc.full_mini_array_cache);
+#endif
 	kfree(pool->alloc.empty_mini_array_cache);
 
 	if (pool->disconnect)
@@ -1190,7 +1276,7 @@ cacheflow_page_pool_empty_alloc_cache(struct cacheflow_page_pool *pool)
 	 * no-longer in use, and page_pool_alloc_pages() cannot be
 	 * call concurrently.
 	 */
-	while ((mini_array = cacheflow_page_pool_pop_full_mini_array(pool))) {
+	while ((mini_array = cacheflow_get_full_mini_array(pool))) {
 		cacheflow_page_pool_empty_mini_array(pool, mini_array);
 	}
 }
