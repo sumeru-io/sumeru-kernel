@@ -801,7 +801,7 @@ int mlx5e_cacheflow_open(struct mlx5e_priv *priv, struct mlx5e_params *params,
 
 	if (READ_ONCE(cacheflow_thread)) {
 		netif_cacheflow_napi_add_weight(netdev, &c->napi,
-						mlx5e_cacheflow_bh_napi_poll, 16,
+						mlx5e_cacheflow_bh_napi_poll, READ_ONCE(cacheflow_napi_weight),
 						get_cacheflow_steer_core());
 		pr_info("cacheflow: add NAPI %d (kthread) on core %d, vector %d, res: %s\n",
 			c->napi.napi_id, get_cacheflow_steer_core(), vector,
