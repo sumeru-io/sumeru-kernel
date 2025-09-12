@@ -585,6 +585,13 @@ static struct ctl_table net_core_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec
 	},
+	{
+		.procname	= "cacheflow_pool_size",
+		.data		= &cacheflow_pool_size,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec
+	},
 #endif
 #ifdef CONFIG_BPF_JIT
 	{
