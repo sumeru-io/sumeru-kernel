@@ -16,6 +16,7 @@
 #include <linux/min_heap.h>
 #include <net/cacheflow/netmem_array.h>
 #include <net/cacheflow/anneal_queue.h>
+#include <trace/events/cacheflow.h>
 
 /*
  * Heap callback functions for max heap behavior
@@ -190,6 +191,10 @@ int anneal_queue_enqueue(struct anneal_queue *aq, struct netmem_mini_array *mini
 	
 	aq->total_count++;
 	
+	/* Trace the enqueue operation */
+	trace_cacheflow_anneal_queue_enqueue((void *)aq, (void *)mini_array, core_id, 
+					     core_queue->count, aq->total_count);
+	
 	/* Update or insert in heap using backpointer pattern */
 	if (core_queue->heap_idx != INVALID_HEAP_IDX) {
 		/* Core already in heap - O(1) update using backpointer */
@@ -246,6 +251,10 @@ struct netmem_mini_array *anneal_queue_dequeue(struct anneal_queue *aq)
 	mini_array = anneal_core_queue_dequeue(core_queue);
 	if (mini_array) {
 		aq->total_count--;
+		
+		/* Trace the dequeue operation */
+		trace_cacheflow_anneal_queue_dequeue((void *)aq, (void *)mini_array, core_id,
+						     core_queue->count, aq->total_count);
 		
 		/* Update heap */
 		if (core_queue->count == 0) {

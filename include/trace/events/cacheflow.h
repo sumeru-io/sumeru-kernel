@@ -127,6 +127,64 @@ TRACE_EVENT(
 );
 
 TRACE_EVENT(
+	cacheflow_anneal_queue_enqueue,
+
+	TP_PROTO(void *aq, void *mini_array, u16 core_id, u32 queue_depth, u32 total_depth),
+
+	TP_ARGS(aq, mini_array, core_id, queue_depth, total_depth),
+
+	TP_STRUCT__entry(
+		__field(void *, aq)
+		__field(void *, mini_array)
+		__field(u16, core_id)
+		__field(u32, queue_depth)
+		__field(u32, total_depth)
+	),
+
+	TP_fast_assign(
+		__entry->aq = aq;
+		__entry->mini_array = mini_array;
+		__entry->core_id = core_id;
+		__entry->queue_depth = queue_depth;
+		__entry->total_depth = total_depth;
+	),
+
+	TP_printk("anneal_queue=%p mini_array=%p core_id=%u queue_depth=%u total_depth=%u",
+		__entry->aq, __entry->mini_array, __entry->core_id,
+		__entry->queue_depth, __entry->total_depth
+	)
+);
+
+TRACE_EVENT(
+	cacheflow_anneal_queue_dequeue,
+
+	TP_PROTO(void *aq, void *mini_array, u16 core_id, u32 queue_depth, u32 total_depth),
+
+	TP_ARGS(aq, mini_array, core_id, queue_depth, total_depth),
+
+	TP_STRUCT__entry(
+		__field(void *, aq)
+		__field(void *, mini_array)
+		__field(u16, core_id)
+		__field(u32, queue_depth)
+		__field(u32, total_depth)
+	),
+
+	TP_fast_assign(
+		__entry->aq = aq;
+		__entry->mini_array = mini_array;
+		__entry->core_id = core_id;
+		__entry->queue_depth = queue_depth;
+		__entry->total_depth = total_depth;
+	),
+
+	TP_printk("anneal_queue=%p mini_array=%p core_id=%u queue_depth=%u total_depth=%u",
+		__entry->aq, __entry->mini_array, __entry->core_id,
+		__entry->queue_depth, __entry->total_depth
+	)
+);
+
+TRACE_EVENT(
 	cacheflow_rate_est,
 
 	TP_PROTO(const struct sock *sk, u64 sock_cookie),
