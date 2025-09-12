@@ -68,7 +68,7 @@ int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk)
 	u32 thresh = READ_ONCE(cacheflow_thresh);
 	u32 target = READ_ONCE(cacheflow_target);
 	u32 allocated_pages = READ_ONCE(pool->allocated_pages);
-	u32 free_pages = READ_ONCE(pool->ring_pages) + READ_ONCE(pool->array_pages);
+	u32 free_pages = READ_ONCE(pool->cache_pages);
 	u32 remaining_pages =
 		target > allocated_pages ? target - allocated_pages : 0;
 	int mark = 0;

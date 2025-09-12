@@ -39,15 +39,8 @@ extern struct kmem_cache *netmem_mini_array_cache;
 struct cacheflow_pp_alloc_cache {
 	struct netmem_mini_array* partial_array;
 
-#ifndef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
-	/* Simple LIFO cache when anneal queue is disabled */
-	struct netmem_mini_array** full_mini_array_cache;
-	u32 full_mini_array_cache_size;
-	u32 full_mini_array_count;
-#else
-	/* Advanced per-core buffer annealing system */
+
 	struct anneal_queue anneal_queue ____cacheline_aligned_in_smp;
-#endif
 
 	struct netmem_mini_array** empty_mini_array_cache;
 	u32 empty_mini_array_cache_size;
@@ -122,8 +115,7 @@ struct cacheflow_page_pool {
 	unsigned long defer_start;
 	unsigned long defer_warn;
 
-	u32 array_pages;
-	u32 ring_pages;
+	u32 cache_pages;
 	u32 allocated_pages;
 
 	struct delayed_work usage_track_work;
@@ -238,51 +230,40 @@ void cacheflow_page_pool_recycle_full_mini_array(struct cacheflow_page_pool *poo
 struct netmem_mini_array *cacheflow_anneal_queue_dequeue_full_mini_array(struct cacheflow_page_pool *pool);
 void cacheflow_anneal_queue_enqueue_full_mini_array(struct cacheflow_page_pool *pool, struct netmem_mini_array *mini_array);
 
+/* Core page pool functions */
+void cacheflow_page_pool_return_page(struct cacheflow_page_pool *pool, netmem_ref netmem);
+void cacheflow_page_pool_put_empty_mini_array(struct cacheflow_page_pool *pool, struct netmem_mini_array *mini_array);
+
+void cacheflow_page_pool_empty_mini_array(struct cacheflow_page_pool *pool,
+				     struct netmem_mini_array *mini_array);
+
 /* Unified interface - chooses backend based on CONFIG */
 static inline struct netmem_mini_array *cacheflow_get_full_mini_array(struct cacheflow_page_pool *pool)
 {
-#ifdef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
-	return cacheflow_anneal_queue_dequeue_full_mini_array(pool);
-#else
-	return cacheflow_page_pool_pop_full_mini_array(pool);
-#endif
+	if (pool->p.anneal_size > 0)
+		return cacheflow_anneal_queue_dequeue_full_mini_array(pool);
+	else
+		return __ptr_stack_pop(&pool->stack);
 }
 
 static inline void cacheflow_put_full_mini_array(struct cacheflow_page_pool *pool, struct netmem_mini_array *mini_array)
 {
-#ifdef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
-	cacheflow_anneal_queue_enqueue_full_mini_array(pool, mini_array);
-#else
-	cacheflow_page_pool_push_full_mini_array(pool, mini_array);
-#endif
-}
-
-static inline bool cacheflow_is_cache_full(struct cacheflow_page_pool *pool)
-{
-#ifdef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
-	/* Anneal queue has global overflow handling, never "full" */
-	return false;
-#else
-	return pool->alloc.full_mini_array_count >= pool->alloc.full_mini_array_cache_size;
-#endif
-}
-
-static inline bool cacheflow_is_cache_empty(struct cacheflow_page_pool *pool)
-{
-#ifdef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
-	return anneal_queue_is_empty(&pool->alloc.anneal_queue);
-#else
-	return pool->alloc.full_mini_array_count == 0;
-#endif
+	if (pool->p.anneal_size > 0)
+		cacheflow_anneal_queue_enqueue_full_mini_array(pool, mini_array);
+	else {
+		if (__ptr_stack_push(&pool->stack, mini_array) != 0) {
+			/* Stack is full, free the mini array back to system */
+			cacheflow_page_pool_empty_mini_array(pool, mini_array);
+		}
+	}
 }
 
 static inline u32 cacheflow_get_cache_count(struct cacheflow_page_pool *pool)
 {
-#ifdef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
-	return anneal_queue_count(&pool->alloc.anneal_queue);
-#else
-	return pool->alloc.full_mini_array_count;
-#endif
+	if (pool->p.anneal_size > 0)
+		return anneal_queue_count(&pool->alloc.anneal_queue);
+	else
+		return __ptr_stack_count(&pool->stack);
 }
 
 #endif /* __CACHEFLOW_PAGE_POOL_H */

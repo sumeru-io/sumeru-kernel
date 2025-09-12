@@ -316,6 +316,63 @@
  }
  
  /*---------------------------------------------------------------------------*/
+ /* Count Operations                                                          */
+ /*---------------------------------------------------------------------------*/
+
+/* Internal function to get the current count of elements in the stack.
+ * Callers must hold the stack lock.
+ */
+static inline int __ptr_stack_count(struct ptr_stack *s)
+{
+	return s->top;
+}
+
+static inline int ptr_stack_count(struct ptr_stack *s)
+{
+	int ret;
+
+	spin_lock(&s->lock);
+	ret = __ptr_stack_count(s);
+	spin_unlock(&s->lock);
+
+	return ret;
+}
+
+static inline int ptr_stack_count_irq(struct ptr_stack *s)
+{
+	int ret;
+
+	spin_lock_irq(&s->lock);
+	ret = __ptr_stack_count(s);
+	spin_unlock_irq(&s->lock);
+
+	return ret;
+}
+
+static inline int ptr_stack_count_any(struct ptr_stack *s)
+{
+	unsigned long flags;
+	int ret;
+
+	spin_lock_irqsave(&s->lock, flags);
+	ret = __ptr_stack_count(s);
+	spin_unlock_irqrestore(&s->lock, flags);
+
+	return ret;
+}
+
+static inline int ptr_stack_count_bh(struct ptr_stack *s)
+{
+	int ret;
+
+	spin_lock_bh(&s->lock);
+	ret = __ptr_stack_count(s);
+	spin_unlock_bh(&s->lock);
+
+	return ret;
+}
+
+ /*---------------------------------------------------------------------------*/
  /* Empty Checks                                                              */
  /*---------------------------------------------------------------------------*/
  

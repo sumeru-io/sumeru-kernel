@@ -11,10 +11,7 @@
 #include <linux/min_heap.h>
 #include <net/page_pool/helpers.h>
 #include <net/cacheflow/cacheflow.h>
-
-#ifdef CONFIG_NET_CACHEFLOW_BUFFER_ANNEAL
 #include <net/cacheflow/anneal_queue.h>
-#endif
 
 /* Size array to fit within two cachelines minus the metadata fields */
 #define CF_PP_MINI_ARRAY_METADATA_SIZE				8

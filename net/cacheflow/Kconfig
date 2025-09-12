@@ -19,17 +19,4 @@ config NET_CACHEFLOW_DEBUG
   	help
       This option enables debug information for CacheFlow buffer management.
 
-config CACHEFLOW_WARM_BUFFER
-	default y
-	bool "Enable CacheFlow's warm buffer"
-	help
-	  This option enables warm buffer optimizations of CacheFlow.
-
-config NET_CACHEFLOW_BUFFER_ANNEAL
-	default y
-	bool "Enable CacheFlow buffer annealing system"
-	help
-	  This option enables the advanced per-core L2 buffer annealing.
-	  
-	  If unsure, say Y.
 endif
