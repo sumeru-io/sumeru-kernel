@@ -396,7 +396,7 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 		anneal_size = pool->p.anneal_size;
 
 	/* Sanity limit mem that can be pinned down */
-	if (ring_qsize > 32768)
+	if (ring_qsize > 1048576)
 		return -E2BIG;
 
 	if (anneal_size > 8192)
@@ -466,7 +466,7 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 	pool->alloc.partial_array = cacheflow_page_pool_get_empty_mini_array(pool);
 	netmem_mini_array_init(pool->alloc.partial_array);
 
-	ptr_ring_init(&pool->recycle_ring, 1024, GFP_KERNEL);
+	ptr_ring_init(&pool->recycle_ring, ring_qsize, GFP_KERNEL);
 
 	for_each_possible_cpu(cpu) {
 		struct cacheflow_page_pool_recycle_stub *stub;
