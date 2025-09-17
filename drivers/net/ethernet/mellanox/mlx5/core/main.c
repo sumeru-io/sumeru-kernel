@@ -103,6 +103,10 @@ int cacheflow_rq_tracker = 1;
 module_param_named(cacheflow_rq_tracker, cacheflow_rq_tracker, uint, 0644);
 MODULE_PARM_DESC(cacheflow_rq_tracker, "cacheflow rq tracker. Valid range 0 - 1");
 
+int cacheflow_quantile_report_ms = 1000;
+module_param_named(cacheflow_quantile_report_ms, cacheflow_quantile_report_ms, uint, 0644);
+MODULE_PARM_DESC(cacheflow_quantile_report_ms, "cacheflow ring depth DDSketch percentile report interval (ms). Valid range 100 - 60000");
+
 static u32 sw_owner_id[4];
 #define MAX_SW_VHCA_ID (BIT(__mlx5_bit_sz(cmd_hca_cap_2, sw_vhca_id)) - 1)
 static DEFINE_IDA(sw_vhca_ida);

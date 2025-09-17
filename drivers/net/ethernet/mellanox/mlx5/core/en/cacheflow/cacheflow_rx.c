@@ -51,10 +51,10 @@ static void mlx5e_cacheflow_handle_rx_cqe(struct mlx5e_cacheflow_rq *rq,
 	cqe_bcnt = be32_to_cpu(cqe->byte_cnt);
 
 	if (cacheflow->rq_tracker) {		
-		cacheflow_id = mlx5e_cacheflow_rq_tracker_update(cacheflow->rq_tracker,						  
+		cacheflow_id = mlx5e_cacheflow_rq_tracker_update(cacheflow->rq_tracker,		
+						ktime_get_real_ns(),				  
 						mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time, rq->clock,
-					       get_cqe_ts(cqe)),
-						ktime_get_real_ns());
+					       get_cqe_ts(cqe)));
 	}
 
 	memcpy(&cacheflow_cqe->cqe, cqe, sizeof(struct mlx5_cqe64));

@@ -191,6 +191,22 @@ TRACE_EVENT(mlx5e_cacheflow_th_ipi_raised,
 		  __entry->cpu, __entry->work_done, __entry->budget, __entry->cqe_fifo_len)
 );
 
+TRACE_EVENT(mlx5e_cacheflow_rq_depth,
+	TP_PROTO(u64 cacheflow_id, u32 depth),
+	TP_ARGS(cacheflow_id, depth),
+	TP_STRUCT__entry(
+		__field(u64, cacheflow_id)
+		__field(u32, depth)
+	),
+	TP_fast_assign(
+		__entry->cacheflow_id = cacheflow_id;
+		__entry->depth = depth;
+	),
+	TP_printk("cacheflow_id=%llu depth=%u",
+		  __entry->cacheflow_id,
+		  __entry->depth)
+);
+
 #endif /* _MLX5_CACHEFLOW_TP_H_ */
 
 /* This part must be outside protection */

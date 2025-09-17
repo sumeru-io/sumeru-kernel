@@ -358,7 +358,64 @@ TRACE_EVENT(
 		"qlen=%u",
 		__entry->qlen
 	)
-)
+);
+
+TRACE_EVENT(ddsketch_add,
+	TP_PROTO(u64 trace_id, u32 value, s32 index, u16 bucket_idx, u32 bucket_count, u64 total_count),
+	TP_ARGS(trace_id, value, index, bucket_idx, bucket_count, total_count),
+	TP_STRUCT__entry(
+		__field(u64, trace_id)
+		__field(u32, value)
+		__field(s32, index)
+		__field(u16, bucket_idx)
+		__field(u32, bucket_count)
+		__field(u64, total_count)
+	),
+	TP_fast_assign(
+		__entry->trace_id = trace_id;
+		__entry->value = value;
+		__entry->index = index;
+		__entry->bucket_idx = bucket_idx;
+		__entry->bucket_count = bucket_count;
+		__entry->total_count = total_count;
+	),
+	TP_printk("trace_id=%llu value=%u index=%d bucket_idx=%u bucket_count=%u total_count=%llu",
+		  __entry->trace_id,
+		  __entry->value,
+		  __entry->index,
+		  __entry->bucket_idx,
+		  __entry->bucket_count,
+		  __entry->total_count)
+);
+
+TRACE_EVENT(ddsketch_percentile,
+	TP_PROTO(u64 trace_id, u32 percentile, u64 target_rank, u32 result, u16 num_buckets, u64 total_count),
+	TP_ARGS(trace_id, percentile, target_rank, result, num_buckets, total_count),
+	TP_STRUCT__entry(
+		__field(u64, trace_id)
+		__field(u32, percentile)
+		__field(u64, target_rank)
+		__field(u32, result)
+		__field(u16, num_buckets)
+		__field(u64, total_count)
+	),
+	TP_fast_assign(
+		__entry->trace_id = trace_id;
+		__entry->percentile = percentile;
+		__entry->target_rank = target_rank;
+		__entry->result = result;
+		__entry->num_buckets = num_buckets;
+		__entry->total_count = total_count;
+	),
+	TP_printk("trace_id=%llu p%u.%u target_rank=%llu result=%u buckets=%u total=%llu",
+		  __entry->trace_id,
+		  __entry->percentile / 10,
+		  __entry->percentile % 10,
+		  __entry->target_rank,
+		  __entry->result,
+		  __entry->num_buckets,
+		  __entry->total_count)
+);
 
 #endif /* _TRACE_CACHEFLOW_H */
 

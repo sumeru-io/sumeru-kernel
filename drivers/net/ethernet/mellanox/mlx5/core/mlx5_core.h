@@ -48,6 +48,7 @@ extern uint cacheflow_channel_descriptor;
 extern uint cacheflow_dim_pkts;
 extern uint cacheflow_dim_usec;
 extern int cacheflow_rq_tracker;
+extern int cacheflow_quantile_report_ms;
 
 #define mlx5_core_dbg(__dev, format, ...)				\
 	dev_dbg((__dev)->device, "%s:%d:(pid %d): " format,		\

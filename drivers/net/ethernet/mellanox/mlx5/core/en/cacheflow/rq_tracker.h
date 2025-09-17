@@ -4,7 +4,11 @@
 
 #include <linux/ktime.h>
 #include <linux/item_deque.h>
-#include <trace/events/skb.h>
+#include <linux/timer.h>
+#include <linux/workqueue.h>
+
+#include "diag/cacheflow_tracepoint.h"
+#include "mlx5_core.h"
 
 struct mlx5e_cacheflow_rq_tracker_entry {
 	ktime_t received;
@@ -18,6 +22,8 @@ struct mlx5e_cacheflow_rq_tracker {
 	ssize_t monitor_total;
 	ssize_t monitor_n;
 	u64	cacheflow_id;
+
+
 };
 
 static inline int
@@ -41,11 +47,13 @@ mlx5e_cacheflow_rq_tracker_update(struct mlx5e_cacheflow_rq_tracker *tracker,
 
 	tracker->cacheflow_id++;
 
-	trace_skb_ring_timestamp(tracker->cacheflow_id, 0,
-		received, processed);
+	/* Trace queue depth for bpftrace analysis */
+	trace_mlx5e_cacheflow_rq_depth(tracker->cacheflow_id, tracker->size);
 
 	return tracker->cacheflow_id;
 }
+
+
 
 static inline struct mlx5e_cacheflow_rq_tracker *
 mlx5e_cacheflow_rq_tracker_create(ssize_t size)
@@ -66,6 +74,7 @@ mlx5e_cacheflow_rq_tracker_create(ssize_t size)
 		kvfree(tracker);
 		return NULL;
 	}
+
 
 	return tracker;
 }
