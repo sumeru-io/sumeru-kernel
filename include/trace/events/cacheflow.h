@@ -422,7 +422,7 @@ TRACE_EVENT(
 
 	TP_PROTO(u32 buffer_usage, u32 cos_id, u32 old_ways, u32 new_ways),
 
-	TP_ARGS(buffer_usage, old_ways, new_ways, cos_id),
+	TP_ARGS(buffer_usage, cos_id, old_ways, new_ways),
 
 	TP_STRUCT__entry(
 		__field(u32, buffer_usage)
