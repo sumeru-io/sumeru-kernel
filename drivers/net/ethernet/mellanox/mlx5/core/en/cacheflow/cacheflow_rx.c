@@ -189,6 +189,8 @@ int mlx5e_cacheflow_bh_napi_poll(struct napi_struct *napi, int budget)
 	busy |= work_done == budget;
 	busy |= mlx5e_cacheflow_post_rx_wqes(rq);
 
+	cacheflow_try_cache_boost(c->rq.page_pool);
+
 	if (busy) {
 		work_done = budget;
 		goto out;

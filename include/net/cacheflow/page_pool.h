@@ -236,6 +236,7 @@ void cacheflow_anneal_queue_enqueue_full_mini_array(struct cacheflow_page_pool *
 /* Core page pool functions */
 void cacheflow_page_pool_return_page(struct cacheflow_page_pool *pool, netmem_ref netmem);
 void cacheflow_page_pool_put_empty_mini_array(struct cacheflow_page_pool *pool, struct netmem_mini_array *mini_array);
+void cacheflow_try_cache_boost(struct cacheflow_page_pool *pool);
 
 void cacheflow_page_pool_empty_mini_array(struct cacheflow_page_pool *pool,
 				     struct netmem_mini_array *mini_array);
