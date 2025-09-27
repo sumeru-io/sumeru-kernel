@@ -43,6 +43,13 @@ extern int cacheflow_napi_weight;
 
 extern int cacheflow_pool_size;
 
+extern int cacheflow_cache_boost;
+extern int cacheflow_cache_cos;
+extern int cacheflow_cache_min_ways;
+extern int cacheflow_cache_max_ways;
+extern int cacheflow_cache_boost_interval_us;
+extern int cacheflow_buffer_quantum;
+
 enum {
 	NETMEM_LOCATION_POOL = 0,
 	NETMEM_LOCATION_RING = 1,
@@ -50,6 +57,12 @@ enum {
 	NETMEM_LOCATION_STACK = 3,
 	NETMEM_LOCATION_SOCKET = 4,
 	NETMEM_LOCATION_RECYCLE = 5,
+};
+
+enum cacheflow_boost_decision {
+	CACHEFLOW_CACHE_SHRINK = -1,
+	CACHEFLOW_CACHE_KEEP = 0,
+	CACHEFLOW_CACHE_BOOST = 1,
 };
 
 
@@ -72,6 +85,7 @@ enum sk_cacheflow_flag {
 
 int cacheflow_should_mark(struct cacheflow_page_pool *pool, struct sock *sk);
 int cacheflow_should_ack(struct sock *sk);
+int cacheflow_should_boost(struct cacheflow_page_pool *pool);
 int cacheflow_schedule_priority(struct cacheflow_page_pool *pool, struct sock *sk);
 
 static inline bool is_cacheflow_steer_enabled(void)
@@ -94,6 +108,12 @@ static inline int get_cacheflow_ipi_usec_thresh(void) {
 static inline int get_cacheflow_elephant_flow_thresh(void) {
 	return READ_ONCE(cacheflow_elephant_flow_thresh);
 }
+
+/* Cache boost function prototypes */
+void cacheflow_cache_up(u32 buffer_usage);
+void cacheflow_cache_down(u32 buffer_usage);
+u32 cacheflow_cache_get_current_ways(void);
+int cacheflow_cache_set_ways(u32 target_ways, u32 buffer_usage);
 
 static inline void cacheflow_track_page_move(struct sk_buff *skb, int location)
 {

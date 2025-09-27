@@ -118,6 +118,9 @@ struct cacheflow_page_pool {
 	u32 cache_pages;
 	u32 allocated_pages;
 
+	/* Cache boost rate limiting */
+	u64 last_cache_boost_ns;
+
 	struct delayed_work usage_track_work;
 
 	struct page_pool_proc *proc;

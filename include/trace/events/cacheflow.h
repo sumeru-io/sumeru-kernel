@@ -417,6 +417,73 @@ TRACE_EVENT(ddsketch_percentile,
 		  __entry->total_count)
 );
 
+TRACE_EVENT(
+	cacheflow_cache_state,
+
+	TP_PROTO(u32 buffer_usage, u32 cos_id, u32 old_ways, u32 new_ways),
+
+	TP_ARGS(buffer_usage, old_ways, new_ways, cos_id),
+
+	TP_STRUCT__entry(
+		__field(u32, buffer_usage)
+		__field(u32, cos_id)
+		__field(u32, old_ways)
+		__field(u32, new_ways)
+	),
+
+	TP_fast_assign(
+		__entry->buffer_usage = buffer_usage;
+		__entry->cos_id = cos_id;
+		__entry->old_ways = old_ways;
+		__entry->new_ways = new_ways;
+	),
+
+	TP_printk("buffer_usage=%u cos=%u cache_ways=%u->%u",
+		  __entry->buffer_usage, __entry->cos_id, __entry->old_ways,
+		  __entry->new_ways)
+);
+
+TRACE_EVENT(
+	cacheflow_cache_boost_decision,
+
+	TP_PROTO(const struct cacheflow_page_pool *pool, u32 allocated_pages,
+		 u32 current_ways, u32 max_ways, u32 min_ways,
+		 u32 estimated_usage_kb, u32 current_cache_kb, int decision),
+
+	TP_ARGS(pool, allocated_pages, current_ways, max_ways, min_ways,
+		estimated_usage_kb, current_cache_kb, decision),
+
+	TP_STRUCT__entry(
+		__field(const struct cacheflow_page_pool *, pool)
+		__field(u32, allocated_pages)
+		__field(u32, current_ways)
+		__field(u32, max_ways)
+		__field(u32, min_ways)
+		__field(u32, estimated_usage_kb)
+		__field(u32, current_cache_kb)
+		__field(int, decision)
+	),
+
+	TP_fast_assign(
+		__entry->pool = pool;
+		__entry->allocated_pages = allocated_pages;
+		__entry->current_ways = current_ways;
+		__entry->max_ways = max_ways;
+		__entry->min_ways = min_ways;
+		__entry->estimated_usage_kb = estimated_usage_kb;
+		__entry->current_cache_kb = current_cache_kb;
+		__entry->decision = decision;
+	),
+
+	TP_printk("pool=%p allocated_pages=%u current_ways=%u max_ways=%u min_ways=%u estimated_usage_kb=%u current_cache_kb=%u decision=%s",
+		  __entry->pool, __entry->allocated_pages, __entry->current_ways,
+		  __entry->max_ways, __entry->min_ways, __entry->estimated_usage_kb,
+		  __entry->current_cache_kb,
+		  __entry->decision == 1 ? "BOOST" :
+		  __entry->decision == -1 ? "SHRINK" : "KEEP")
+);
+
+
 #endif /* _TRACE_CACHEFLOW_H */
 
 /* This part must be outside protection */

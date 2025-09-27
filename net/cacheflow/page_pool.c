@@ -79,6 +79,26 @@ static void cacheflow_print_page_pool_stats(struct cacheflow_page_pool *pool)
 		pool->allocated_pages, pool->cache_pages);
 }
 
+/**
+ * cacheflow_try_cache_boost - Evaluate and apply cache boost decision
+ * @pool: page pool to evaluate
+ *
+ * Evaluates cache boost decision and applies MSR changes if needed.
+ * Updates the rate limiting timestamp only when actual MSR writes occur.
+ */
+static void cacheflow_try_cache_boost(struct cacheflow_page_pool *pool)
+{
+	int boost_decision = cacheflow_should_boost(pool);
+
+	if (boost_decision == CACHEFLOW_CACHE_BOOST) {
+		cacheflow_cache_up(pool->allocated_pages);
+		pool->last_cache_boost_ns = ktime_get_ns();
+	} else if (boost_decision == CACHEFLOW_CACHE_SHRINK) {
+		cacheflow_cache_down(pool->allocated_pages);
+		pool->last_cache_boost_ns = ktime_get_ns();
+	}
+}
+
 static inline int
 cacheflow_page_pool_account_usages(struct cacheflow_page_pool *pool,
 				   netmem_ref *netmem, int n, int old_state,
@@ -117,6 +137,15 @@ cacheflow_page_pool_account_usages(struct cacheflow_page_pool *pool,
 			trace_cacheflow_page_pool_page_move(
 				pool, netmem[i], old_state, new_state,
 				pool->allocated_pages, pool->cache_pages);
+		}
+	}
+
+	/* Rate-limited cache boost evaluation on allocated_pages changes */
+	if (new_state == PAGE_POOL_ALLOC || old_state == PAGE_POOL_ALLOC) {
+		u64 now = ktime_get_ns();
+		u32 interval_us = READ_ONCE(cacheflow_cache_boost_interval_us);
+		if (now - pool->last_cache_boost_ns >= (interval_us * 1000ULL)) {
+			cacheflow_try_cache_boost(pool);
 		}
 	}
 
@@ -459,6 +488,7 @@ cacheflow_page_pool_init(struct cacheflow_page_pool *pool,
 
 	pool->cache_pages = 0;
 	pool->allocated_pages = 0;
+	pool->last_cache_boost_ns = 0;
 
 	INIT_DELAYED_WORK(&pool->usage_track_work, cacheflow_usage_print);
 	schedule_delayed_work(&pool->usage_track_work, HZ);

@@ -1,2 +1,2 @@
 # SPDX-License-Identifier: GPL-2.0
-obj-$(CONFIG_NET_CACHEFLOW) := cacheflow.o page_pool.o anneal_queue.o
+obj-$(CONFIG_NET_CACHEFLOW) := cacheflow.o page_pool.o anneal_queue.o cache_boost.o
