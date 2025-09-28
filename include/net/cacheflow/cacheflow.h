@@ -48,6 +48,8 @@ extern int cacheflow_cache_cos;
 extern int cacheflow_cache_min_ways;
 extern int cacheflow_cache_max_ways;
 extern int cacheflow_cache_boost_interval_us;
+extern int cacheflow_cache_expand_left;
+extern int cacheflow_cache_boost_factor;
 extern int cacheflow_buffer_quantum;
 
 enum {

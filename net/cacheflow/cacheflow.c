@@ -80,6 +80,10 @@ EXPORT_SYMBOL(cacheflow_buffer_quantum);
 
 int cacheflow_cache_boost_interval_us __read_mostly = 100;
 EXPORT_SYMBOL(cacheflow_cache_boost_interval_us);
+int cacheflow_cache_expand_left __read_mostly = 0;
+EXPORT_SYMBOL(cacheflow_cache_expand_left);
+int cacheflow_cache_boost_factor __read_mostly = 32;
+EXPORT_SYMBOL(cacheflow_cache_boost_factor);
 
 /* Cache way size in KB, initialized once during boot */
 static u32 cacheflow_cache_way_size_kb __read_mostly = 0;
@@ -190,6 +194,7 @@ int cacheflow_should_boost(struct cacheflow_page_pool *pool)
 	u32 current_cache_kb = 0;
 	u32 quantum = 0;
 	u64 estimated_usage_kb = 0;
+	u32 boost_factor = READ_ONCE(cacheflow_cache_boost_factor);
 	int decision;
 
 	/* Cache boost disabled */
@@ -206,7 +211,7 @@ int cacheflow_should_boost(struct cacheflow_page_pool *pool)
 
 	/* Check if we should boost */
 	if (current_ways < max_ways) {
-		if (estimated_usage_kb > (current_cache_kb >> 1)) {
+		if (estimated_usage_kb > ((u64)current_cache_kb * boost_factor >> 6)) {
 			decision = CACHEFLOW_CACHE_BOOST;
 			goto trace_and_return;
 		}
@@ -215,7 +220,7 @@ int cacheflow_should_boost(struct cacheflow_page_pool *pool)
 	/* Check if we should shrink */
 	if (current_ways > min_ways) {
 		u32 shrink_cache_kb = (current_ways - 1) * way_size_kb;
-		if (estimated_usage_kb < (shrink_cache_kb >> 1)) {
+		if (estimated_usage_kb < ((u64)shrink_cache_kb * boost_factor >> 6)) {
 			decision = CACHEFLOW_CACHE_SHRINK;
 			goto trace_and_return;
 		}

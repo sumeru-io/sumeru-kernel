@@ -39,6 +39,9 @@ static inline u32 cacheflow_cache_cbm_to_ways(u64 cbm)
  *
  * Add one contiguous cache way to the existing mask.
  * Maintains contiguous bit requirement of Intel CAT.
+ * Expansion direction controlled by cacheflow_cache_expand_left:
+ * 0 = expand right first (toward lower bits), then left
+ * 1 = expand left first (toward higher bits), then right
  *
  * Return: New CBM with one additional way, or original if can't add
  */
@@ -46,6 +49,7 @@ static u64 cacheflow_cache_add_way(u64 cbm)
 {
 	u64 new_cbm;
 	int rightmost_bit, leftmost_bit;
+	int expand_left = READ_ONCE(cacheflow_cache_expand_left);
 
 	if (!cbm)
 		return 0x1; /* Start with first way */
@@ -54,16 +58,26 @@ static u64 cacheflow_cache_add_way(u64 cbm)
 	rightmost_bit = __ffs64(cbm);
 	leftmost_bit = 63 - __builtin_clzll(cbm);
 
-	/* Try to extend right (toward lower bits) */
-	if (rightmost_bit > 0) {
-		new_cbm = cbm | (1ULL << (rightmost_bit - 1));
-		return new_cbm;
-	}
-
-	/* Try to extend left (toward higher bits) */
-	if (leftmost_bit < 63) {
-		new_cbm = cbm | (1ULL << (leftmost_bit + 1));
-		return new_cbm;
+	if (expand_left) {
+		/* Expand left first (toward higher bits), then right */
+		if (leftmost_bit < 63) {
+			new_cbm = cbm | (1ULL << (leftmost_bit + 1));
+			return new_cbm;
+		}
+		if (rightmost_bit > 0) {
+			new_cbm = cbm | (1ULL << (rightmost_bit - 1));
+			return new_cbm;
+		}
+	} else {
+		/* Expand right first (toward lower bits), then left */
+		if (rightmost_bit > 0) {
+			new_cbm = cbm | (1ULL << (rightmost_bit - 1));
+			return new_cbm;
+		}
+		if (leftmost_bit < 63) {
+			new_cbm = cbm | (1ULL << (leftmost_bit + 1));
+			return new_cbm;
+		}
 	}
 
 	/* Can't add more ways */
